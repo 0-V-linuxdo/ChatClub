@@ -221,7 +221,9 @@ let composerCaretClaimOptions = null;
 let overlayCaretLoadPinUntil = 0;
 let overlayCaretFrameBlurPins = [];
 let overlayCaretReacquiring = false;
+let overlayCaretFrameGrace = 0;
 const OVERLAY_CARET_FRAME_POINTER_MS = 1000;
+const OVERLAY_CARET_FRAME_GRACE_MS = 100;
 const OVERLAY_CARET_PIN_FOLLOW_MAX = 3;
 const OVERLAY_CARET_LOAD_PIN_MS = 2500;
 const OVERLAY_CARET_FRAME_BLUR_WINDOW_MS = 1000;
@@ -277,41 +279,18 @@ function setOverlayCaretFrameInert(frame, value) {
   if (typeof frame.removeAttribute === "function") frame.removeAttribute("inert");
 }
 
-function overlayCaretExemptComposerIsland(node) {
-  if (!node) return true;
-  try {
-    if (node.id === "composer-center-host" || node.getAttribute?.("id") === "composer-center-host") return true;
-    if (
-      node.classList?.contains?.("app-shell")
-      || node.classList?.contains?.("prompt-shell")
-      || node.classList?.contains?.("topbar")
-    ) return true;
-  } catch {}
-  return false;
-}
-
-export function syncComposerWorkspaceIslandInert() {
-  const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
-  const islandInert = Boolean(overlaySearchCaretComposer() && !modalOpen);
-  let nodes = [];
-  try { nodes = [...(document.querySelectorAll?.(".main-grid, .chat-card") || [])]; } catch {}
-  for (const node of nodes) {
-    if (overlayCaretExemptComposerIsland(node)) continue;
-    setOverlayCaretFrameInert(node, islandInert);
-  }
-}
-
+// The composer claim never inerts chat-frames or the workspace: inert only blocks the user's clicks,
+// scrolling, and hover (a site-isolated child can still focus itself), and the leave signal for a
+// click inside the frame is the child shield's trusted-pointer report, not a parent hit test.
 function syncOverlayCaretFrameInert() {
   const modalOpen = Boolean(typeof document.querySelector === "function" && document.querySelector(".modal"));
   const pageClaimed = overlaySearchCaret?.mode === "page";
-  const composerClaimed = overlaySearchCaretComposer();
   let frames = [];
   try { frames = [...(document.querySelectorAll?.("iframe.chat-frame") || [])]; } catch {}
   for (const frame of frames) {
-    if (!modalOpen && !pageClaimed && !composerClaimed && overlayCaretFrameIsLoading(frame)) continue;
-    setOverlayCaretFrameInert(frame, modalOpen || pageClaimed || composerClaimed);
+    if (!modalOpen && !pageClaimed && overlayCaretFrameIsLoading(frame)) continue;
+    setOverlayCaretFrameInert(frame, modalOpen || pageClaimed);
   }
-  syncComposerWorkspaceIslandInert();
 }
 
 
@@ -384,6 +363,35 @@ function scheduleOverlayCaretPinFollow(remaining) {
   });
 }
 
+function cancelOverlayCaretFrameGrace() {
+  if (!overlayCaretFrameGrace) return;
+  try {
+    if (typeof clearTimeout === "function") clearTimeout(overlayCaretFrameGrace);
+  } catch {}
+  overlayCaretFrameGrace = 0;
+}
+
+// The composer waits this long after focus left for a chat-frame before reclaiming: a child `pointer`
+// report (user click) lands 1–4 ms after the parent focusout in the steady state and ~40 ms cold
+// (Chromium 149, 2026-09-10); a child `stolen` report short-circuits the wait.
+function scheduleOverlayCaretFrameGrace() {
+  cancelOverlayCaretPinFollow();
+  if (overlayCaretFrameGrace) return;
+  if (typeof setTimeout !== "function") {
+    scheduleOverlayCaretPinFollow(OVERLAY_CARET_PIN_FOLLOW_MAX);
+    return;
+  }
+  overlayCaretFrameGrace = setTimeout(() => {
+    overlayCaretFrameGrace = 0;
+    if (!overlaySearchCaret && !composerCaretIntent) return;
+    pinOverlaySearchCaret(OVERLAY_CARET_PIN_FOLLOW_MAX);
+  }, OVERLAY_CARET_FRAME_GRACE_MS);
+}
+
+function overlayCaretAmbiguousSteal(active) {
+  return !active || active === document.body || active === document.documentElement || overlayCaretIsFrame(active);
+}
+
 function notifyOverlayCaretLease(kind, iframe) {
   const handler = overlayCaretLeaseHandler;
   if (!handler) return;
@@ -441,6 +449,7 @@ function bindComposerCaretOwner() {
 
 function clearOverlaySearchCaret(invokeLeave = true) {
   cancelOverlayCaretPinFollow();
+  cancelOverlayCaretFrameGrace();
   const owner = overlaySearchCaret;
   if (!owner && !composerCaretIntent) return;
   const wasLease = owner?.mode === "page" || owner?.composer === true || composerCaretIntent;
@@ -526,7 +535,20 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     return false;
   }
   const active = document.activeElement;
-  if (overlayCaretPinHolds(field)) return true;
+  if (overlayCaretPinHolds(field)) {
+    cancelOverlayCaretFrameGrace();
+    return true;
+  }
+  if (overlayCaretIsFrame(active) && overlayCaretRecentFramePointer() && (owner.composer || owner.mode === "page")) {
+    clearOverlaySearchCaret(true);
+    return false;
+  }
+  // While the composer waits for a possible child pointer report, an ambiguous destination (frame,
+  // body, nothing) is still ours; a concrete element decides the leave/steal question right now.
+  if (overlayCaretFrameGrace) {
+    if (overlayCaretAmbiguousSteal(active)) return true;
+    cancelOverlayCaretFrameGrace();
+  }
   if (owner.composing?.()) return false;
   const panel = owner.panel || overlaySearchCaretPanel(field);
   if (overlaySearchCaretShouldLeave(active, field, panel, owner)) {
@@ -556,30 +578,83 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
   return false;
 }
 
+// Focus entering a chat-frame is either the user's click (the child shield reports it a task later,
+// the parent never sees that pointerdown) or a steal; the composer waits out the pointer grace so the
+// report can turn it into a leave. A focusout with no relatedTarget is deferred the same way because
+// a site-isolated child taking focus may not name the frame. Other destinations keep the synchronous reclaim.
+function overlayCaretDeferFramePin(owner, node) {
+  if (!(owner?.composer || composerCaretIntent)) return false;
+  if (node && !overlayCaretIsFrame(node)) return false;
+  scheduleOverlayCaretFrameGrace();
+  return true;
+}
+
 function onOverlaySearchCaretFocusIn(event) {
   if (!overlaySearchCaret && !composerCaretIntent) return;
-  const field = (bindComposerCaretOwner() || overlaySearchCaret)?.field;
+  const owner = bindComposerCaretOwner() || overlaySearchCaret;
+  const field = owner?.field;
   const target = event?.target;
   if (target === field || field?.contains?.(target)) return;
+  if (overlayCaretDeferFramePin(owner, target)) return;
   pinOverlaySearchCaret();
 }
 
 function onOverlaySearchCaretFocusOut(event) {
   if (!overlaySearchCaret && !composerCaretIntent) return;
-  const field = (bindComposerCaretOwner() || overlaySearchCaret)?.field;
+  const owner = bindComposerCaretOwner() || overlaySearchCaret;
+  const field = owner?.field;
   if (!field) {
     pinOverlaySearchCaret();
     return;
   }
   if (event?.target !== field && !field?.contains?.(event?.target)) return;
-  if (!event?.relatedTarget || overlayCaretIsFrame(event.relatedTarget)) pinOverlaySearchCaret();
+  if (event?.relatedTarget && !overlayCaretIsFrame(event.relatedTarget)) return;
+  if (overlayCaretDeferFramePin(owner, event?.relatedTarget)) return;
+  pinOverlaySearchCaret();
 }
 
-function onOverlayPageCaretStolen(event) {
+function overlayCaretFrameForSource(source) {
+  if (!source) return null;
+  let frames = [];
+  try { frames = [...(document.querySelectorAll?.("iframe.chat-frame") || [])]; } catch {}
+  for (const frame of frames) {
+    let win = null;
+    try { win = frame.contentWindow; } catch {}
+    if (win && win === source) return frame;
+  }
+  return null;
+}
+
+// A trusted pointer on a chat-frame (its wrap in this document, or inside the child as reported by
+// the shield) is the user choosing the site: stamp it so the frame focus reads as a leave, drop the
+// claim, and hand the browsing context to the frame when a re-pin already yanked it back. Calling
+// frame.focus() while the frame already holds it would blur the child's editor (Chromium 149).
+function leaveOverlayCaretForFrame(frame) {
+  overlayCaretFramePointerAt = Date.now();
+  cancelOverlayCaretPinFollow();
+  cancelOverlayCaretFrameGrace();
+  if (overlaySearchCaretMode() !== "page" && !overlaySearchCaretComposer()) return;
+  clearOverlaySearchCaret(true);
+  if (document.activeElement === frame) return;
+  try { frame.focus?.(); } catch {}
+}
+
+function onOverlayPageCaretMessage(event) {
   const data = event?.data;
-  if (!data || data.source !== PAGE_CARET_MESSAGE_SOURCE || data.action !== "stolen") return;
+  if (!data || data.source !== PAGE_CARET_MESSAGE_SOURCE) return;
+  const frame = overlayCaretFrameForSource(event.source);
+  if (!frame) return;
+  if (data.action === "pointer") {
+    // Frames are inert under a typed modal, so no click can have reached the child there.
+    if (typeof document.querySelector === "function" && document.querySelector(".modal")) return;
+    leaveOverlayCaretForFrame(frame);
+    return;
+  }
+  if (data.action !== "stolen") return;
   if (overlaySearchCaretMode() !== "page" && !overlaySearchCaretComposer()) return;
   if (overlaySearchCaretComposer()) armComposerLoadPin();
+  // The child proved this was a programmatic steal; do not wait out the pointer grace.
+  cancelOverlayCaretFrameGrace();
   pinOverlaySearchCaret();
 }
 
@@ -587,10 +662,7 @@ function onOverlayCaretPointerDown(event) {
   if (event?.isTrusted !== true) return;
   const frame = overlayCaretFrameFromTarget(event.target);
   if (!frame) return;
-  overlayCaretFramePointerAt = Date.now();
-  if (overlaySearchCaretMode() !== "page" && !overlaySearchCaretComposer()) return;
-  clearOverlaySearchCaret(true);
-  try { frame.focus?.(); } catch {}
+  leaveOverlayCaretForFrame(frame);
 }
 
 // The parent window blurs when a child frame becomes the focused frame. hasFocus() false means the
@@ -605,7 +677,12 @@ function onOverlayCaretWindowBlur() {
   // A site that refocuses itself on every blur would otherwise ping-pong with the owner each frame.
   if (overlayCaretFrameBlurPins.length >= OVERLAY_CARET_FRAME_BLUR_MAX) return;
   overlayCaretFrameBlurPins.push(now);
-  if (overlaySearchCaretComposer()) armComposerLoadPin();
+  if (overlaySearchCaretComposer()) {
+    // The composer's window blur is the same frame switch its focusout saw: wait for a child report.
+    armComposerLoadPin();
+    scheduleOverlayCaretFrameGrace();
+    return;
+  }
   cancelOverlayCaretPinFollow();
   scheduleOverlayCaretPinFollow(OVERLAY_CARET_PIN_FOLLOW_MAX);
 }
@@ -617,7 +694,7 @@ function ensureOverlaySearchCaretListeners() {
   document.addEventListener("focusout", onOverlaySearchCaretFocusOut, true);
   document.addEventListener("pointerdown", onOverlayCaretPointerDown, true);
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    window.addEventListener("message", onOverlayPageCaretStolen);
+    window.addEventListener("message", onOverlayPageCaretMessage);
     window.addEventListener("blur", onOverlayCaretWindowBlur);
   }
 }
@@ -627,6 +704,9 @@ export function claimOverlaySearchCaret(field, options = {}) {
   const previous = overlaySearchCaret;
   const previousLease = previous?.mode === "page" || previous?.composer === true || composerCaretIntent;
   cancelOverlayCaretPinFollow();
+  cancelOverlayCaretFrameGrace();
+  // A fresh claim means the user came back from the frame; an older frame click is no longer a leave.
+  overlayCaretFramePointerAt = 0;
   overlaySearchCaret = {
     field,
     panel: options.panel || overlaySearchCaretPanel(field),
@@ -685,19 +765,17 @@ function syncChatFrameModalInert(active) {
   const frames = document.querySelectorAll?.("iframe.chat-frame");
   if (!frames?.length) return;
   const pageClaimed = overlaySearchCaretMode() === "page";
-  const composerClaimed = overlaySearchCaretComposer();
   for (const frame of frames) {
     if (active) delete frame.dataset?.promptFocusRestoreGeneration;
     if (
       !active
       && !pageClaimed
-      && !composerClaimed
       && (
         frame.dataset?.frameLoadPending === "1"
         || frame.closest?.(".chat-card")?.classList?.contains?.("frame-loading")
       )
     ) continue;
-    setNodeInert(frame, active || pageClaimed || composerClaimed);
+    setNodeInert(frame, active || pageClaimed);
   }
 }
 
@@ -711,7 +789,6 @@ function syncModalBackgroundInert() {
     setNodeInert(child, active && !isModalInertExempt(child, liveBackdrop));
   }
   syncChatFrameModalInert(active);
-  syncComposerWorkspaceIslandInert();
 }
 
 function syncModalScrollLock() {

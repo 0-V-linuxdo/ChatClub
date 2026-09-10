@@ -34,7 +34,9 @@ const byteBudgets = Object.freeze({
   "content/delete.js": 266_697,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
-  "content/preload.js": 224_445,
+  // Exact cost after the document_start shield reports trusted pointerdown to the
+  // parent and re-focuses the clicked element on a late handback.
+  "content/preload.js": 225_636,
   "content/summary-userscripts-main.js": 230_894,
   "content/summary-userscripts.js": 161_108
 });
@@ -42,8 +44,9 @@ const byteBudgets = Object.freeze({
 // the isolated content contract.
 const aggregateByteBudget = 801_706;
 // Exact all-bundle closure after MAIN-world page-caret document_start
-// bootstrap plus the isolated command-contract growth.
-const allBundlesByteBudget = 1_590_194;
+// bootstrap plus the isolated command-contract growth, then the shield's
+// trusted-pointer report and late-handback refocus.
+const allBundlesByteBudget = 1_591_385;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

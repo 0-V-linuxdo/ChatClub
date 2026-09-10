@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "a266692262f877c64045a3a58be5fa03cc9533b94063adc2fc07a45bfbdb4ed0";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "851a087e7e996c9602e8fd57a74837513255bdc53698608efbf494d09353f169";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "5171c9cd90643aa6b804056aee088e9597712f080ad9afab55e86ab9d634e795";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.5171c9cd90643aa6b804056aee088e9597712f080ad9afab55e86ab9d634e795";
-  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "6c5eea57e8226df6ec45759aca8e825e0dcfa659e9767ec91411b70a9c35ce5f", "implementationSha256": "361ccf6b3ba72a7abea2b0a32dde1bbda6abe1cca5c197d71e4dbaae3784af5d", "implementationVersion": "2026.07.16.2+bundle.361ccf6b3ba72a7abea2b0a32dde1bbda6abe1cca5c197d71e4dbaae3784af5d" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dfb172186e328bb3159d9d02a87c8226fdc695e3247fc21ea4c379fec5795304";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dfb172186e328bb3159d9d02a87c8226fdc695e3247fc21ea4c379fec5795304";
+  var CONTENT_RUNTIME_PRELOAD_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preload.js", "entryPath": "content-src/preload.js", "sourceSha256": "1ac352e7fd92f644f36bc86de3b4b80abd3171893c564fbb97b0af2c02f6df49", "implementationSha256": "bb8c7e1b135df037bba9a6238b5ffef9f5ce13ca4432a764375207cefd97e016", "implementationVersion": "2026.07.16.2+bundle.bb8c7e1b135df037bba9a6238b5ffef9f5ce13ca4432a764375207cefd97e016" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -4594,9 +4594,12 @@ ${node.nodeValue}`;
         }
         notifyPageCaretStolen();
       };
+      let pageCaretTrustedFocus = null;
+      const pageCaretTrustedRecently = () => Boolean(pageCaretTrustedAt && Date.now() - pageCaretTrustedAt < 1e3);
       const onPageCaretFocusIn = (event) => {
-        if (!pageCaretLeaseActive()) return;
         const target = event?.target;
+        if (pageCaretTrustedRecently() && target && target !== window && target !== document) pageCaretTrustedFocus = target;
+        if (!pageCaretLeaseActive()) return;
         const blurTarget = target && target !== window && target !== document ? target : document.activeElement;
         try {
           blurTarget?.blur?.();
@@ -4604,9 +4607,31 @@ ${node.nodeValue}`;
         }
         notifyPageCaretStolen();
       };
+      const restorePageCaretTrustedFocus = () => {
+        if (!pageCaretTrustedRecently()) return;
+        const target = pageCaretTrustedFocus;
+        if (!target?.isConnected || document.activeElement === target) return;
+        const active = document.activeElement;
+        if (active && active !== document.body && active !== document.documentElement) return;
+        allowPageCaretFocus(() => {
+          try {
+            target.focus({ preventScroll: true });
+          } catch {
+          }
+        });
+      };
+      const notifyPageCaretTrustedPointer = () => {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ source: PAGE_CARET_MESSAGE_SOURCE, action: "pointer" }, "*");
+          }
+        } catch {
+        }
+      };
       const markPageCaretTrustedPointer = (event) => {
         if (event?.isTrusted !== true || event?.type !== "pointerdown") return;
         pageCaretTrustedAt = Date.now();
+        notifyPageCaretTrustedPointer();
       };
       try {
         guardedElementFocus.toString = () => nativeElementFocus.toString();
@@ -4690,6 +4715,7 @@ ${node.nodeValue}`;
       window.addEventListener("keydown", releaseBootstrapForTrustedIntent, true);
       window.addEventListener("focusin", onPageCaretFocusIn, true);
       window.addEventListener("pointerdown", markPageCaretTrustedPointer, true);
+      window.addEventListener("focus", restorePageCaretTrustedFocus);
       if (pageCaretExpiresAt > Date.now()) evictPageCaretFocus();
       window[registryKey] = {
         version: PREFERRED_MODEL_FOCUS_SHIELD_VERSION,

@@ -33,6 +33,32 @@ assert.match(preload, /const releasePageCaret = \(guardToken = ""\)/);
 assert.match(preload, /const allowPageCaretFocus = \(callback\)/);
 assert.match(preload, /addEventListener\("focusin", onPageCaretFocusIn, true\)/);
 assert.match(preload, /markPageCaretTrustedPointer/);
+// The parent cannot see a pointerdown routed into this site-isolated frame; every trusted click is
+// reported so the composer leaves instead of reclaiming, regardless of lease state.
+assert.match(
+  preload,
+  /postMessage\(\{ source: PAGE_CARET_MESSAGE_SOURCE, action: "pointer" \}/,
+  "child shield must report trusted pointerdown to the parent"
+);
+const trustedPointerSource = preload.slice(
+  preload.indexOf("const notifyPageCaretTrustedPointer"),
+  preload.indexOf("try { guardedElementFocus.toString")
+);
+assert.match(trustedPointerSource, /window\.parent !== window/);
+assert.match(trustedPointerSource, /pageCaretTrustedAt = Date\.now\(\);\s*notifyPageCaretTrustedPointer\(\);/);
+assert.doesNotMatch(trustedPointerSource, /pageCaretLeaseActive\(\)/, "the pointer report must not depend on the lease");
+// When the parent reclaimed before the report landed and then hands the frame back, the caret goes
+// back onto the element the user's click focused; never onto anything else, never outside 1s.
+assert.match(preload, /const restorePageCaretTrustedFocus = \(\) =>/);
+assert.match(preload, /window\.addEventListener\("focus", restorePageCaretTrustedFocus\)/);
+const restoreSource = preload.slice(
+  preload.indexOf("const restorePageCaretTrustedFocus"),
+  preload.indexOf("const notifyPageCaretTrustedPointer")
+);
+assert.match(restoreSource, /if \(!pageCaretTrustedRecently\(\)\) return;/);
+assert.match(restoreSource, /active !== document\.body && active !== document\.documentElement\) return;/);
+assert.match(restoreSource, /allowPageCaretFocus\(/);
+assert.match(preload, /pageCaretTrustedRecently\(\) && target && target !== window && target !== document\) pageCaretTrustedFocus = target;/);
 assert.match(preload, /api: Object\.freeze\(\{ prepare, preparePageCaret, adoptPageCaret, releasePageCaret \}\)/);
 assert.match(
   preload,

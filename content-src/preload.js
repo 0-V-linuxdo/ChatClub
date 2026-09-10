@@ -492,18 +492,46 @@ function installPreload() {
       }
       notifyPageCaretStolen();
     };
+    let pageCaretTrustedFocus = null;
+    const pageCaretTrustedRecently = () => Boolean(pageCaretTrustedAt && Date.now() - pageCaretTrustedAt < 1000);
     const onPageCaretFocusIn = (event) => {
-      if (!pageCaretLeaseActive()) return;
       const target = event?.target;
+      if (pageCaretTrustedRecently() && target && target !== window && target !== document) pageCaretTrustedFocus = target;
+      if (!pageCaretLeaseActive()) return;
       const blurTarget = target && target !== window && target !== document
         ? target
         : document.activeElement;
       try { blurTarget?.blur?.(); } catch {}
       notifyPageCaretStolen();
     };
+    // The parent may reclaim the browsing context before the pointer report lands and hand the frame
+    // back afterwards; that yank left this document's focus on the body, so put the caret back where
+    // the user's click had placed it. Only within the trusted-click window, only onto the element that
+    // click focused, and only while the site itself left focus on the body.
+    const restorePageCaretTrustedFocus = () => {
+      if (!pageCaretTrustedRecently()) return;
+      const target = pageCaretTrustedFocus;
+      if (!target?.isConnected || document.activeElement === target) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== document.documentElement) return;
+      allowPageCaretFocus(() => {
+        try { target.focus({ preventScroll: true }); } catch {}
+      });
+    };
+    // The parent never sees a pointerdown routed into this site-isolated frame, and its focusout /
+    // window blur cannot tell a user click from a programmatic steal; report the trusted click so
+    // the composer leaves instead of reclaiming. Sent regardless of lease state.
+    const notifyPageCaretTrustedPointer = () => {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ source: PAGE_CARET_MESSAGE_SOURCE, action: "pointer" }, "*");
+        }
+      } catch {}
+    };
     const markPageCaretTrustedPointer = (event) => {
       if (event?.isTrusted !== true || event?.type !== "pointerdown") return;
       pageCaretTrustedAt = Date.now();
+      notifyPageCaretTrustedPointer();
     };
     try { guardedElementFocus.toString = () => nativeElementFocus.toString(); } catch {}
     try { guardedWindowFocus.toString = () => nativeWindowFocus.toString(); } catch {}
@@ -578,6 +606,7 @@ function installPreload() {
     window.addEventListener("keydown", releaseBootstrapForTrustedIntent, true);
     window.addEventListener("focusin", onPageCaretFocusIn, true);
     window.addEventListener("pointerdown", markPageCaretTrustedPointer, true);
+    window.addEventListener("focus", restorePageCaretTrustedFocus);
     if (pageCaretExpiresAt > Date.now()) evictPageCaretFocus();
 
     window[registryKey] = {

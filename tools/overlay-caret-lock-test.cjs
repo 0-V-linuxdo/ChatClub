@@ -24,18 +24,27 @@ assert.match(dom, /export function overlaySearchCaretComposer/);
 assert.match(dom, /shouldLeave: typeof options\.shouldLeave === "function"/);
 assert.match(frame, /overlaySearchCaretComposer\(\)/);
 assert.match(dom, /export function setOverlayCaretLeaseHandler/);
-assert.match(dom, /export function syncComposerWorkspaceIslandInert/);
+// The composer claim must not inert chat-frames or the workspace island: inert only blocks the
+// user's clicks, scrolling, and hover, while a site-isolated child can still focus itself.
+assert.doesNotMatch(dom, /syncComposerWorkspaceIslandInert|overlayCaretExemptComposerIsland/);
+assert.doesNotMatch(frame, /syncComposerWorkspaceIslandInert/);
+assert.doesNotMatch(view, /syncComposerWorkspaceIslandInert/);
+assert.doesNotMatch(frame, /iframe\.inert = Boolean\([^\n]*overlaySearchCaretComposer/);
 assert.match(dom, /export function armComposerLoadPin/);
 assert.match(dom, /OVERLAY_CARET_LOAD_PIN_MS/);
 assert.match(dom, /composerLoadPinOpen/);
 assert.match(frame, /armComposerLoadPin\(\)/);
-assert.match(frame, /syncComposerWorkspaceIslandInert\(\)/);
-assert.match(view, /syncComposerWorkspaceIslandInert\(\)/);
-assert.match(view, /appendChatGroup[\s\S]*syncComposerWorkspaceIslandInert/);
 assert.match(dom, /scheduleOverlayCaretPinFollow/);
+assert.match(dom, /function overlayCaretDeferFramePin/);
+assert.match(dom, /const OVERLAY_CARET_FRAME_GRACE_MS = 100/);
+assert.match(dom, /function scheduleOverlayCaretFrameGrace/);
+assert.match(composer, /onLeave: \(\) => \{[\s\S]*collapseInput\(inputNode\)/);
+assert.match(dom, /function overlayCaretFrameForSource/);
+assert.match(dom, /function leaveOverlayCaretForFrame/);
+assert.match(dom, /data\.action === "pointer"/);
 assert.match(dom, /document\.addEventListener\("focusin", onOverlaySearchCaretFocusIn, true\)/);
 assert.match(dom, /document\.addEventListener\("focusout", onOverlaySearchCaretFocusOut, true\)/);
-assert.match(dom, /window\.addEventListener\("message", onOverlayPageCaretStolen\)/);
+assert.match(dom, /window\.addEventListener\("message", onOverlayPageCaretMessage\)/);
 assert.match(dom, /window\.addEventListener\("blur", onOverlayCaretWindowBlur\)/);
 assert.match(dom, /function overlayCaretFieldHasFrameFocus/);
 assert.match(dom, /field\.matches\(":focus"\)/);
@@ -58,7 +67,8 @@ assert.match(composer, /oncompositionstart/);
 assert.match(composer, /oncompositionend/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /a focused `\.prompt-input` is the overlay-grade composer caret owner/);
-assert.match(agents, /workspace island/);
+assert.match(agents, /does not inert chat-frames or the workspace island/);
+assert.match(agents, /action: "pointer"/);
 assert.match(agents, /`\[autofocus\]`/);
 assert.match(agents, /three-frame follow cap/);
 assert.match(agents, /post-load pin settle/);
@@ -115,6 +125,7 @@ function createWorld() {
     nodeName: "IFRAME",
     inert: false,
     dataset: {},
+    contentWindow: { name: "chat-frame-window" },
     blurCalls: 0,
     focusCalls: 0,
     blur() { this.blurCalls += 1; },
@@ -247,6 +258,16 @@ function createWorld() {
     const pending = rafQueue.splice(0);
     for (const callback of pending) callback();
   };
+  // The chat-frame pointer grace is a setTimeout; tests flush it explicitly.
+  const timers = new Map();
+  let timerSeq = 0;
+  world.timers = timers;
+  world.pendingTimers = () => [...timers.values()].map((entry) => entry.delay);
+  world.flushTimers = () => {
+    const pending = [...timers.entries()];
+    timers.clear();
+    for (const [, entry] of pending) entry.callback();
+  };
   const context = vm.createContext({
     document: world.document,
     window: windowTarget,
@@ -259,7 +280,15 @@ function createWorld() {
       rafQueue.push(callback);
       return rafQueue.length;
     },
-    cancelAnimationFrame() {}
+    cancelAnimationFrame() {},
+    setTimeout(callback, delay) {
+      timerSeq += 1;
+      timers.set(timerSeq, { callback, delay });
+      return timerSeq;
+    },
+    clearTimeout(id) {
+      timers.delete(id);
+    }
   });
   vm.runInContext(
     `const openModals = [];
@@ -270,7 +299,6 @@ globalThis.releaseOverlaySearchCaret = releaseOverlaySearchCaret;
 globalThis.overlaySearchCaretMode = overlaySearchCaretMode;
 globalThis.overlaySearchCaretComposer = overlaySearchCaretComposer;
 globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;
-globalThis.syncComposerWorkspaceIslandInert = syncComposerWorkspaceIslandInert;
 globalThis.armComposerLoadPin = armComposerLoadPin;`,
     context
   );
@@ -280,8 +308,12 @@ globalThis.armComposerLoadPin = armComposerLoadPin;`,
   world.mode = context.overlaySearchCaretMode;
   world.composerClaimed = context.overlaySearchCaretComposer;
   world.setLeaseHandler = context.setOverlayCaretLeaseHandler;
-  world.syncIsland = context.syncComposerWorkspaceIslandInert;
   world.armLoadPin = context.armComposerLoadPin;
+  world.childMessage = (action, source = world.iframe.contentWindow) => {
+    const message = world.listeners.find((entry) => entry.type === "message");
+    assert.ok(message, "claiming a caret owner must listen for child page-caret messages");
+    message.handler({ data: { source: "chatclub-page-caret", action }, source });
+  };
   return world;
 }
 
@@ -565,11 +597,9 @@ function claimPrompt(world, extras = {}) {
   claimField(world);
   assert.equal(adopts, 0, "overlay search must not adopt the page caret lease");
   assert.equal(world.mode(), "overlay");
-  const stolen = world.listeners.find((entry) => entry.type === "message");
-  assert.ok(stolen, "overlay claim still installs the page-caret stolen listener");
   world.document.activeElement = world.iframe;
   const before = world.field.focusCalls;
-  stolen.handler({ data: { source: "chatclub-page-caret", action: "stolen" } });
+  world.childMessage("stolen");
   assert.equal(world.field.focusCalls, before, "overlay mode must not re-pin from a page-caret stolen message");
 }
 
@@ -597,11 +627,23 @@ function claimPrompt(world, extras = {}) {
 {
   const world = createPageWorld();
   claimPrompt(world);
-  const stolen = world.listeners.find((entry) => entry.type === "message");
-  assert.ok(stolen, "page claim must listen for child page-caret stolen messages");
   world.document.activeElement = world.iframe;
-  stolen.handler({ data: { source: "chatclub-page-caret", action: "stolen" } });
+  world.childMessage("stolen");
   assert.equal(world.document.activeElement, world.promptField, "a child stolen message must re-pin the prompt");
+  world.document.activeElement = world.iframe;
+  world.childMessage("stolen", { name: "not-a-chat-frame" });
+  assert.equal(world.document.activeElement, world.iframe, "a stolen message from a window that is no chat-frame must be ignored");
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimPrompt(world, { onLeave: () => { left = true; } });
+  world.document.activeElement = world.iframe;
+  world.childMessage("pointer");
+  assert.equal(left, true, "a child trusted-pointer report must leave the page caret owner");
+  assert.equal(world.mode(), "");
+  assert.equal(world.iframe.inert, false);
 }
 
 {
@@ -694,7 +736,7 @@ function claimComposer(world, extras = {}) {
   assert.equal(world.pin(), false, "in-shell send must hold without pin");
   assert.equal(claim.left, false);
   assert.equal(world.composerClaimed(), true);
-  assert.equal(world.iframe.inert, true, "a composer hold must keep chat-frames inert");
+  assert.equal(world.iframe.inert, false, "a composer hold must not inert chat-frames");
 }
 
 {
@@ -728,7 +770,7 @@ function claimComposer(world, extras = {}) {
   claimComposer(world);
   assert.equal(adopts, 1, "composer overlay must adopt the page caret lease");
   assert.equal(releases, 0);
-  assert.equal(world.iframe.inert, true, "composerInert must keep chat-frames inert without a typed modal");
+  assert.equal(world.iframe.inert, false, "composer claim must leave chat-frames interactive without a typed modal");
   world.document.activeElement = world.topbarButton;
   assert.equal(world.pin(), false);
   assert.equal(releases, 1, "leaving the composer caret owner must release the child-document lease");
@@ -738,21 +780,176 @@ function claimComposer(world, extras = {}) {
 {
   const world = createPageWorld();
   claimComposer(world);
-  const stolen = world.listeners.find((entry) => entry.type === "message");
-  assert.ok(stolen, "composer overlay must listen for child page-caret stolen messages");
   world.document.activeElement = world.iframe;
-  stolen.handler({ data: { source: "chatclub-page-caret", action: "stolen" } });
+  world.childMessage("stolen");
   assert.equal(world.document.activeElement, world.promptField, "a child stolen message must re-pin the composer");
 }
 
+// The parent never sees a pointerdown routed into a site-isolated chat-frame; the child shield reports
+// it as `action: "pointer"` and that report is the user's leave.
+{
+  const world = createPageWorld();
+  let left = false;
+  let releases = 0;
+  world.setLeaseHandler({ adopt() {}, release() { releases += 1; } });
+  claimComposer(world, { onLeave: () => { left = true; } });
+  world.document.activeElement = world.iframe;
+  const windowFocusBefore = world.window.focusCalls;
+  const frameFocusBefore = world.iframe.focusCalls;
+  world.childMessage("pointer");
+  assert.equal(left, true, "a child trusted-pointer report must leave the composer caret owner");
+  assert.equal(world.composerClaimed(), false);
+  assert.equal(releases, 1, "leaving through a child pointer must release the child-document lease");
+  assert.equal(world.document.activeElement, world.iframe, "the frame keeps the browsing context after the user's click");
+  assert.equal(world.iframe.focusCalls, frameFocusBefore, "frame.focus() while the frame already holds would blur the child editor");
+  const blur = findWindowBlur(world);
+  blur.handler({});
+  world.flushRaf();
+  world.flushTimers();
+  assert.equal(world.window.focusCalls, windowFocusBefore, "after the user's click nothing may reclaim the caret");
+  const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
+  focusout.handler({ target: world.promptField, relatedTarget: world.iframe });
+  world.flushRaf();
+  world.flushTimers();
+  assert.equal(world.document.activeElement, world.iframe);
+}
+
+// A fresh claim means the user came back from the frame; the old click is no longer a leave.
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.document.activeElement = world.iframe;
+  world.childMessage("pointer");
+  assert.equal(world.composerClaimed(), false);
+  world.document.activeElement = world.promptField;
+  claimComposer(world);
+  world.document.activeElement = world.iframe;
+  assert.equal(world.pin(), true, "a steal right after re-claiming must be reclaimed, not read as the earlier click");
+  assert.equal(world.document.activeElement, world.promptField);
+  assert.equal(world.composerClaimed(), true);
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimComposer(world, { onLeave: () => { left = true; } });
+  world.document.activeElement = world.iframe;
+  world.childMessage("pointer", { name: "not-a-chat-frame" });
+  assert.equal(left, false, "a pointer report from a window that is no chat-frame must be ignored");
+  assert.equal(world.composerClaimed(), true);
+  world.childMessage("pointer", null);
+  assert.equal(world.composerClaimed(), true);
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimComposer(world, { onLeave: () => { left = true; } });
+  world.document.querySelector = (selector) => {
+    if (String(selector) === ".modal") return world.panel;
+    if (String(selector).includes("prompt-input")) return world.promptField;
+    return null;
+  };
+  world.childMessage("pointer");
+  assert.equal(left, false, "frames are inert under a typed modal, so a pointer report there cannot be a click");
+  assert.equal(world.composerClaimed(), true);
+}
+
+// Focus entering a chat-frame may be the user's click whose report is still in flight: the composer
+// re-pins on the next frame instead of synchronously.
 {
   const world = createPageWorld();
   claimComposer(world);
   const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
   assert.ok(focusout, "composer overlay must install a capturing focusout listener");
   world.document.activeElement = world.iframe;
+  const windowFocusBefore = world.window.focusCalls;
   focusout.handler({ target: world.promptField, relatedTarget: null });
-  assert.equal(world.document.activeElement, world.promptField, "cross-origin iframe focusout must re-pin the composer");
+  assert.equal(world.document.activeElement, world.iframe, "cross-origin iframe focusout must not reclaim synchronously");
+  assert.equal(world.window.focusCalls, windowFocusBefore);
+  assert.deepEqual(world.pendingTimers(), [100], "the composer waits a 100ms grace for the child pointer report");
+  world.flushRaf();
+  assert.equal(world.document.activeElement, world.iframe, "an animation frame is not enough for a cold cross-process report");
+  // The composer blur settle asks the owner during the grace: it still holds, so the input stays expanded.
+  assert.equal(world.pin(), true, "pin during the grace reports a hold for an ambiguous destination");
+  assert.equal(world.window.focusCalls, windowFocusBefore, "pin during the grace must not window.focus()");
+  world.flushTimers();
+  assert.equal(world.document.activeElement, world.promptField, "with no pointer report the grace timer reclaims the composer");
+  assert.ok(world.window.focusCalls > windowFocusBefore);
+  assert.equal(world.pendingTimers().length, 0);
+}
+
+// A concrete destination during the grace decides now: a topbar control is a leave.
+{
+  const world = createPageWorld();
+  let left = false;
+  claimComposer(world, { onLeave: () => { left = true; } });
+  const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
+  world.document.activeElement = world.iframe;
+  focusout.handler({ target: world.promptField, relatedTarget: null });
+  assert.equal(world.pendingTimers().length, 1);
+  const focusin = world.listeners.find((entry) => entry.type === "focusin" && entry.capture === true);
+  world.document.activeElement = world.topbarButton;
+  focusin.handler({ target: world.topbarButton });
+  assert.equal(left, true, "focus landing on a topbar control during the grace leaves immediately");
+  assert.equal(world.pendingTimers().length, 0, "the leave cancels the grace timer");
+}
+
+// A child stolen report proves the steal: reclaim now instead of waiting out the grace.
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
+  world.document.activeElement = world.iframe;
+  focusout.handler({ target: world.promptField, relatedTarget: null });
+  assert.equal(world.pendingTimers().length, 1);
+  world.childMessage("stolen");
+  assert.equal(world.document.activeElement, world.promptField, "a stolen report short-circuits the pointer grace");
+  assert.equal(world.pendingTimers().length, 0);
+}
+
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  const focusin = world.listeners.find((entry) => entry.type === "focusin" && entry.capture === true);
+  world.document.activeElement = world.iframe;
+  focusin.handler({ target: world.iframe });
+  assert.equal(world.document.activeElement, world.iframe, "focusin on a chat-frame must defer the composer re-pin");
+  world.flushTimers();
+  assert.equal(world.document.activeElement, world.promptField);
+  world.document.activeElement = world.body;
+  focusin.handler({ target: world.body });
+  assert.equal(world.document.activeElement, world.promptField, "focusin on a non-frame steal target still reclaims synchronously");
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimComposer(world, { onLeave: () => { left = true; } });
+  const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
+  world.document.activeElement = world.iframe;
+  focusout.handler({ target: world.promptField, relatedTarget: world.iframe });
+  world.childMessage("pointer");
+  world.flushTimers();
+  assert.equal(left, true, "a pointer report landing before the deferred pin turns the frame focus into a leave");
+  assert.equal(world.document.activeElement, world.iframe);
+  assert.equal(world.composerClaimed(), false);
+}
+
+{
+  const world = createPageWorld();
+  let left = false;
+  claimComposer(world, { onLeave: () => { left = true; } });
+  const focusout = world.listeners.find((entry) => entry.type === "focusout" && entry.capture === true);
+  world.document.activeElement = world.iframe;
+  focusout.handler({ target: world.promptField, relatedTarget: world.iframe });
+  world.flushTimers();
+  assert.equal(world.document.activeElement, world.promptField, "the deferred pin ran before the report arrived");
+  const frameFocusBefore = world.iframe.focusCalls;
+  world.childMessage("pointer");
+  assert.equal(left, true, "a late pointer report must still leave");
+  assert.ok(world.iframe.focusCalls > frameFocusBefore, "a late pointer report hands the browsing context back to the frame");
+  assert.equal(world.document.activeElement, world.iframe);
 }
 
 {
@@ -762,7 +959,7 @@ function claimComposer(world, extras = {}) {
   world.document.activeElement = world.iframe;
   assert.equal(world.pin(), false, "a disconnected composer field must keep intent without pin");
   assert.equal(world.composerClaimed(), true);
-  assert.equal(world.iframe.inert, true, "composerInert survives textarea remount");
+  assert.equal(world.iframe.inert, false, "composer intent across a textarea remount must not inert chat-frames");
   world.promptField.isConnected = true;
   assert.equal(world.pin(), true, "composer pin rebinds the live .prompt-input");
   assert.equal(world.document.activeElement, world.promptField);
@@ -809,8 +1006,8 @@ function claimComposer(world, extras = {}) {
   claimComposer(world);
   world.release(world.promptField);
   assert.equal(world.composerClaimed(), true, "release without leave keeps composer intent");
-  assert.equal(world.iframe.inert, true, "composerInert survives clear(false) while intent holds");
-  assert.equal(world.card.inert, true, "workspace island stays inert while composer intent holds after release");
+  assert.equal(world.iframe.inert, false, "composer intent after clear(false) must not inert chat-frames");
+  assert.equal(world.card.inert, false, "composer intent must not inert the workspace island");
   world.document.activeElement = world.iframe;
   assert.equal(world.pin(), true, "intent-only pin rebinds the live .prompt-input");
   assert.equal(world.document.activeElement, world.promptField);
@@ -819,13 +1016,14 @@ function claimComposer(world, extras = {}) {
 {
   const world = createPageWorld();
   claimComposer(world);
-  assert.equal(world.card.inert, true, "composer claim must inert the workspace island .chat-card");
-  assert.equal(world.grid.inert, true, "composer claim must inert the workspace island .main-grid");
-  assert.equal(world.iframe.inert, true);
-  const pointer = world.listeners.find((entry) => entry.type === "pointerdown" && entry.capture === true);
-  pointer.handler({ isTrusted: true, target: world.wrap });
-  assert.equal(world.card.inert, false, "a trusted wrap click must clear island inert");
-  assert.equal(world.grid.inert, false, "a trusted wrap click must clear .main-grid inert");
+  assert.equal(world.card.inert, false, "composer claim must not inert the workspace island .chat-card");
+  assert.equal(world.grid.inert, false, "composer claim must not inert the workspace island .main-grid");
+  assert.equal(world.iframe.inert, false, "composer claim must not inert chat-frames");
+  world.iframe.dataset.frameLoadPending = "1";
+  world.iframe.inert = true;
+  world.document.activeElement = world.topbarButton;
+  assert.equal(world.pin(), false);
+  assert.equal(world.iframe.inert, true, "leaving the composer must not clear a loading frame's own inert");
 }
 
 {
@@ -872,32 +1070,6 @@ function claimComposer(world, extras = {}) {
   for (let i = 0; i < 4; i += 1) world.flushRaf();
   assert.ok(world.promptField.focusCalls > before + 3, "post-load settle pin retries past three frames");
   assert.equal(world.composerClaimed(), true);
-}
-
-{
-  const world = createPageWorld();
-  claimComposer(world);
-  const late = {
-    className: "chat-card",
-    nodeName: "DIV",
-    classList: { contains(name) { return name === "chat-card"; } },
-    inert: false,
-    setAttribute(name) {
-      if (name === "inert") this.inert = true;
-    },
-    removeAttribute(name) {
-      if (name === "inert") this.inert = false;
-    }
-  };
-  const originalAll = world.document.querySelectorAll;
-  world.document.querySelectorAll = (selector) => {
-    const text = String(selector);
-    if (text.includes(".main-grid") || text.includes(".chat-card")) return [world.grid, world.card, late];
-    return originalAll(selector);
-  };
-  world.syncIsland();
-  assert.equal(late.inert, true, "late-mounted .chat-card becomes inert while composer intent holds");
-  assert.equal(world.card.inert, true);
 }
 
 {
@@ -957,6 +1129,8 @@ function findWindowBlur(world) {
   blur.handler({});
   assert.equal(world.window.focusCalls, before, "window blur must defer the re-pin until Chromium finished switching frames");
   world.flushRaf();
+  assert.equal(world.window.focusCalls, before, "the composer window blur waits out the pointer grace, not one frame");
+  world.flushTimers();
   assert.ok(world.window.focusCalls > before, "the deferred re-pin must call window.focus()");
   assert.equal(world.frameFocused, true);
   assert.equal(world.document.activeElement, world.promptField);
@@ -971,7 +1145,7 @@ function findWindowBlur(world) {
   const before = world.window.focusCalls;
   blur.handler({});
   world.flushRaf();
-  world.flushRaf();
+  world.flushTimers();
   assert.equal(world.window.focusCalls, before, "a browser-window blur (hasFocus false) must not fight the OS");
 }
 
@@ -1002,7 +1176,7 @@ function findWindowBlur(world) {
     world.frameFocused = false;
     const before = world.window.focusCalls;
     blur.handler({});
-    world.flushRaf();
+    world.flushTimers();
     if (world.window.focusCalls > before) pins += 1;
   }
   assert.equal(pins, 8, "window-blur re-pins are capped so a self-refocusing site cannot ping-pong every frame");

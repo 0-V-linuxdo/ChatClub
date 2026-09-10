@@ -260,6 +260,8 @@ assert.match(read("app/share/controller.js"), /overlay-panel-resize-handle overl
 assert.match(agents, /History and Tabs search detail content may reuse Pocket/);
 assert.match(agents, /iframe load and frame restore must not move focus back to `\.prompt-input`/);
 assert.match(agents, /must not clear that frame's `inert`/);
+assert.match(agents, /does not inert chat-frames or the workspace island/);
+assert.match(agents, /action: "pointer"/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
 assert.match(agents, /a focused `\.prompt-input` is the overlay-grade composer caret owner/);
 assert.match(agents, /composerInert/);
@@ -269,7 +271,7 @@ assert.match(agents, /`\[autofocus\]`/);
 assert.match(agents, /three-frame follow cap/);
 assert.match(agents, /post-load pin settle/);
 assert.match(dom, /export function armComposerLoadPin/);
-assert.match(dom, /export function syncComposerWorkspaceIslandInert/);
+assert.doesNotMatch(dom, /syncComposerWorkspaceIslandInert/);
 assert.match(agents, /#composer-center-host\.overlay-surface/);
 assert.match(dom, /export function overlaySearchCaretComposer/);
 assert.match(agents, /page-caret lease/);

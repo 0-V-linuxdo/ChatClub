@@ -1016,7 +1016,14 @@ export function createComposerController(dependencies = {}) {
       getSelection: () => state.promptSelection,
       composing: () => promptComposing,
       stolen: composerCaretStolen,
-      shouldLeave: composerCaretShouldLeave
+      shouldLeave: composerCaretShouldLeave,
+      // While the owner waits out the chat-frame pointer grace the blur settle keeps the input
+      // expanded; a leave decided by the child's pointer report collapses it here instead.
+      onLeave: () => {
+        const inputNode = document.querySelector(".prompt-input");
+        if (!inputNode || document.activeElement === inputNode || promptComposing) return;
+        if (inputNode.classList.contains("prompt-input-expanded")) collapseInput(inputNode);
+      }
     });
   }
 

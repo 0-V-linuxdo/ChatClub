@@ -68,11 +68,11 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "a266692262f877c64045a3a58be5fa03cc9533b94063adc2fc07a45bfbdb4ed0";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "851a087e7e996c9602e8fd57a74837513255bdc53698608efbf494d09353f169";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "5171c9cd90643aa6b804056aee088e9597712f080ad9afab55e86ab9d634e795";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.5171c9cd90643aa6b804056aee088e9597712f080ad9afab55e86ab9d634e795";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dfb172186e328bb3159d9d02a87c8226fdc695e3247fc21ea4c379fec5795304";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dfb172186e328bb3159d9d02a87c8226fdc695e3247fc21ea4c379fec5795304";
   var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "fb44c066b93ae83475ccf1749bd2437411c3975737382b517b2553420914bddd", "implementationSha256": "fe503c61b7089df3c69caf10d2409ab0fdbf67c1e2464c50faf595c04f9340d0", "implementationVersion": "2026.07.16.2+bundle.fe503c61b7089df3c69caf10d2409ab0fdbf67c1e2464c50faf595c04f9340d0" });
   var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "8a868747c0e99158cd9604a1910ffc0a1d84095649e47daaa2615440aa458c7c", "implementationSha256": "11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9", "implementationVersion": "2026.07.16.2+bundle.11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9" });
   var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "ff2ac89dfde2b3f166263b3cabe8c0431cdab734fbecd1a415e4b206a3979999", "implementationSha256": "631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04", "implementationVersion": "2026.07.16.2+bundle.631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04" });

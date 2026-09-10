@@ -1,7 +1,7 @@
 import { TAB_GROUP_HEADER_BUTTONS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import { normalizeTabGroupButtonOrder, normalizeTabGroupButtonPlacement } from "../../shared/storage-schema.js";
-import { bindLinearMenuKeyboard, claimTopmostPopoverEscape, el, isChatFrameNode, scheduleFrameOwnedBlurDismissal, syncComposerWorkspaceIslandInert } from "../../ui/dom.js";
+import { bindLinearMenuKeyboard, claimTopmostPopoverEscape, el, isChatFrameNode, scheduleFrameOwnedBlurDismissal } from "../../ui/dom.js";
 import { renderChatFavicon } from "../../ui/favicon.js";
 import { createReorderButtons } from "../../ui/components.js";
 import { buildAppPickerSections, renderAppPickerColumns } from "./app-picker.js";
@@ -252,7 +252,6 @@ export function createWorkspaceViewController(dependencies = {}) {
     workspaceRenderSignature = workspaceSignature();
     syncGridColumnClass();
     syncFullscreenLayout();
-    syncComposerWorkspaceIslandInert();
     return result.changed;
   }
 
@@ -320,7 +319,6 @@ export function createWorkspaceViewController(dependencies = {}) {
     workspaceRenderSignature = signature;
     syncWorkspaceDom();
     syncFullscreenLayout();
-    syncComposerWorkspaceIslandInert();
     return workspaceNode;
   }
 
@@ -444,7 +442,6 @@ export function createWorkspaceViewController(dependencies = {}) {
     grid.append(renderChatGroup(group, state.groups.findIndex((item) => item.id === group.id)));
     syncGridColumnClass();
     syncFullscreenLayout();
-    syncComposerWorkspaceIslandInert();
   }
 
   function appendEmptyChatGroup(group) {
@@ -452,7 +449,6 @@ export function createWorkspaceViewController(dependencies = {}) {
     if (!grid || !group) return null;
     const card = renderChatGroup(group, state.groups.findIndex((item) => item.id === group.id), { chatApps: [] });
     grid.append(card);
-    syncComposerWorkspaceIslandInert();
     return card;
   }
   function renderChatTab(group, chat) {
