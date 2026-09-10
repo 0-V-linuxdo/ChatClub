@@ -53,6 +53,9 @@ export function createComposerSearchPanel(options = {}) {
   const highlight = typeof workspaceSearch.highlight === "function"
     ? workspaceSearch.highlight
     : highlightQuery;
+  const renderFavicons = typeof workspaceSearch.renderFavicons === "function"
+    ? workspaceSearch.renderFavicons
+    : () => null;
 
   let active = false;
   let query = "";
@@ -116,7 +119,7 @@ export function createComposerSearchPanel(options = {}) {
     node.dataset.promptMode = active ? "search" : "compose";
     syncToggle();
     const results = node.querySelector(".prompt-search-results");
-    if (results) results.hidden = !active;
+    if (results && !active) results.hidden = true;
   }
 
   function syncField(inputNode = liveField()) {
@@ -167,15 +170,18 @@ export function createComposerSearchPanel(options = {}) {
     if (!node) return;
     const items = visibleRecords();
     const searching = Boolean(String(query || "").trim());
+    const showEmpty = searching && !loading && !items.length;
     if (listNode) {
       listNode.replaceChildren(...items.map((record, index) => {
         const title = recordTitle(record, index);
+        const liveLabel = record.live ? t("composer.search.live") : t("composer.search.closed");
         const option = el("button", {
           class: `prompt-search-option${index === selectedIndex ? " is-active" : ""}`,
           type: "button",
           id: `prompt-search-option-${record.workspaceId}`,
           role: "option",
           "aria-selected": index === selectedIndex ? "true" : "false",
+          "aria-label": `${title}, ${liveLabel}`,
           onclick: (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -183,25 +189,21 @@ export function createComposerSearchPanel(options = {}) {
             activateSelected();
           }
         },
-          el("span", { class: "prompt-search-option-title" }, ...highlight(title, query)),
-          el("span", { class: "prompt-search-option-meta" },
-            record.live ? t("composer.search.live") : t("composer.search.closed"),
-            Array.isArray(record.appIds) && record.appIds.length
-              ? el("span", { class: "prompt-search-option-apps" }, record.appIds.filter(Boolean).join(" · "))
-              : null
-          )
+          renderFavicons(record),
+          el("span", { class: "prompt-search-option-title" }, ...highlight(title, query))
         );
         return option;
       }));
       listNode.hidden = !items.length;
     }
     if (emptyNode) {
-      emptyNode.hidden = Boolean(items.length) || loading;
-      emptyNode.textContent = t(searching ? "composer.search.empty" : "workspace.tabs.empty");
+      emptyNode.hidden = !showEmpty;
+      emptyNode.textContent = t("composer.search.empty");
     }
     if (hintNode) {
       hintNode.hidden = !items.length;
     }
+    node.hidden = !active || (!items.length && !showEmpty);
     syncField();
     syncClearButton();
   }
@@ -411,7 +413,7 @@ export function createComposerSearchPanel(options = {}) {
         role: "listbox",
         "aria-label": t("workspace.tabs.searchSidebar")
       });
-      emptyNode = el("div", { class: "prompt-search-empty ui-empty-state" }, t("workspace.tabs.empty"));
+      emptyNode = el("div", { class: "prompt-search-empty ui-empty-state", hidden: true }, t("composer.search.empty"));
       hintNode = el("div", { class: "prompt-search-footer" },
         el("span", { class: "prompt-search-hint" }, t("composer.search.hint")),
         el("button", {

@@ -56,6 +56,7 @@ import {
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
 import { createCompactIconButton, createMenuButton } from "../ui/components.js";
 import { el, ensureChatFramePointerReports, ensureToastHost, isDismissalEscape, openConfirmationAction, setToastStay, toast } from "../ui/dom.js";
+import { renderChatFaviconStack, uniqueChatFaviconSources } from "../ui/favicon.js";
 import { FRAME_TOAST_POSITION_EVENT } from "../ui/frame-toast.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
 import { createSvgIcon } from "../ui/icons.js";
@@ -177,7 +178,8 @@ const composerController = createComposerController({
     listRecords: listComposerSearchRecords,
     openRecord: openComposerSearchRecord,
     openViewer: openComposerSearchViewer,
-    highlight: highlightQuery
+    highlight: highlightQuery,
+    renderFavicons: renderComposerSearchFavicons
   }
 });
 const preferredModelController = createPreferredModelController({
@@ -427,12 +429,29 @@ async function listComposerSearchRecords(query) {
     query,
     fullTextEnabled: enabled === true,
     labelOf: workspaceSearchRecordTitle
-  }).map((record) => ({
-    ...record,
-    appIds: (Array.isArray(record.appIds) ? record.appIds : [])
-      .map((id) => String(inferAppName(appById(id)) || id || "").trim())
-      .filter(Boolean)
-  }));
+  });
+}
+function renderComposerSearchFavicons(record) {
+  const ids = Array.isArray(record?.appIds) ? record.appIds : [];
+  return renderChatFaviconStack(uniqueChatFaviconSources(ids, (appId) => {
+    const app = appById(appId) || { id: appId };
+    return { app, appId, href: app?.url || "", title: inferAppName(app) || appId };
+  }), {
+    appFaviconUrl: faviconService.app,
+    effectiveFaviconUrl: faviconService.effective,
+    fallbackFaviconUrl: faviconService.fallback,
+    browserFaviconUrl: faviconService.browserUrl || faviconService.browser,
+    siteFaviconUrls: faviconService.siteUrls,
+    networkFaviconUrls: faviconService.networkUrls,
+    candidateFaviconUrls: typeof faviconService.candidates === "function"
+      ? (href, logoUrl, options) => faviconService.candidates(href, logoUrl, options)
+      : undefined,
+    rememberDecodedFavicon: typeof faviconService.rememberDecoded === "function"
+      ? (href, image) => faviconService.rememberDecoded(href, image)
+      : undefined,
+    omitTitle: true,
+    stackClass: "prompt-search-option-favicons"
+  });
 }
 async function openComposerSearchRecord(record) {
   if (!record?.workspaceId) return;

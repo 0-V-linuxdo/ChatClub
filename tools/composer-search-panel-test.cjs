@@ -45,7 +45,8 @@ assert.match(css, /\.textarea\.prompt-input \{[\s\S]*?min-height:\s*0 !important
 assert.match(css, /line-height:\s*var\(--prompt-collapsed-line\)/);
 assert.match(css, /:focus \+ \.prompt-collapsed-preview/);
 assert.match(css, /\.prompt-mode-switch/);
-assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\]\s*\{[\s\S]*?background:\s*var\(--panel-2\)/);
+assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\]\s*\{[\s\S]*?background:\s*var\(--bg\)/);
+assert.match(css, /\.prompt-mode-switch\s*\{[\s\S]*?background:\s*var\(--panel-2\)/);
 assert.match(css, /\.prompt-mode-switch\s*\{[\s\S]*?position:\s*static/);
 assert.doesNotMatch(css, /\.prompt-mode-chip[^{]*\{[^}]*transform:/);
 assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.prompt-mode-switch/);
@@ -54,10 +55,20 @@ assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hid
 assert.match(css, /\.prompt-search-results \{[\s\S]*?position:\s*static/);
 assert.doesNotMatch(css, /\.prompt-search-results \{[\s\S]*?border-bottom-left-radius:\s*var\(--ui-radius-pill\)/);
 assert.match(css, /\.prompt-search-option \{[\s\S]*?display:\s*flex/);
+assert.match(css, /\.prompt-search-option \{[\s\S]*?justify-content:\s*flex-start/);
 assert.match(css, /\.prompt-search-option \{[\s\S]*?min-height:\s*var\(--prompt-search-row\)/);
+assert.match(css, /\.prompt-search-option-favicons[\s\S]{0,500}border-radius:\s*50%/);
 assert.match(css, /\.prompt-input:not\(\.prompt-input-expanded\):focus::placeholder/);
 assert.match(css, /\.prompt-send-button:disabled \{[\s\S]*?background:\s*transparent/);
-assert.match(css, /\.prompt-shell\.prompt-shell-search[\s\S]{0,280}box-shadow:\s*var\(--overlay-shadow\)/);
+assert.match(css, /\.prompt-shell\.prompt-shell-search[\s\S]{0,400}box-shadow:\s*none/);
+assert.match(css, /\.prompt-shell-search \.prompt-input-row\s*\{[\s\S]*?box-shadow:\s*var\(--overlay-shadow\)/);
+assert.match(css, /\.prompt-search-results \{[\s\S]*?box-shadow:\s*var\(--overlay-shadow\)/);
+assert.match(css, /\.composer-center-host\.overlay-surface\s*\{[\s\S]*?background:\s*transparent/);
+assert.match(css, /\.prompt-search-list\s*\{[\s\S]*?scrollbar-width:\s*thin/);
+assert.match(css, /\.prompt-search-list::-webkit-scrollbar\s*\{[\s\S]*?width:\s*6px[\s\S]*?border:\s*0/);
+assert.match(css, /\.prompt-search-list::-webkit-scrollbar-track[\s\S]*?background:\s*transparent[\s\S]*?border:\s*0/);
+assert.match(css, /\.prompt-search-list::-webkit-scrollbar-thumb\s*\{[\s\S]*?border:\s*0/);
+assert.doesNotMatch(css, /\.prompt-search-list[\s\S]{0,280}scrollbar-gutter/);
 assert.match(css, /\.prompt-input \{[\s\S]*?position:\s*relative;/);
 assert.doesNotMatch(css, /\.prompt-input \{[^}]*position:\s*absolute;/);
 assert.match(panelSource, /prompt-mode-switch/);
@@ -65,7 +76,14 @@ assert.match(panelSource, /prompt-mode-chip-compose/);
 assert.match(panelSource, /prompt-mode-chip-search/);
 assert.match(panelSource, /tabindex: "-1"/);
 assert.match(panelSource, /function handleTab\(/);
+assert.match(panelSource, /renderFavicons\(record\)/);
+assert.match(panelSource, /composer\.search\.empty/);
+assert.doesNotMatch(panelSource, /prompt-search-option-meta/);
+assert.doesNotMatch(panelSource, /workspace\.tabs\.empty/);
 assert.doesNotMatch(panelSource, /prompt-search-toggle/);
+assert.match(runtime, /renderComposerSearchFavicons/);
+assert.match(runtime, /renderFavicons: renderComposerSearchFavicons/);
+assert.match(runtime, /stackClass: "prompt-search-option-favicons"/);
 assert.doesNotMatch(panelSource, /createSvgIcon/);
 assert.doesNotMatch(panelSource, /data-tooltip-id/);
 assert.doesNotMatch(panelSource, /tooltip-trigger/);
@@ -79,6 +97,9 @@ assert.match(agents, /Tab while `\.prompt-input` owns the caret toggles compose 
 assert.doesNotMatch(css, /\.prompt-search-results \{[^}]*transform:/);
 assert.match(agents, /Do not wrap `\.prompt-shell` in `viewerModal`/);
 assert.match(agents, /Topbar Search enters composer search mode/);
+assert.match(agents, /card chrome lives on the input row/);
+assert.match(agents, /renderFavicons/);
+assert.match(agents, /must not paint `workspace\.tabs\.empty`/);
 assert.match(i18n, /"composer\.mode\.tabToSearch": "Press Tab to search chats"/);
 assert.match(i18n, /"composer\.mode\.tabToCompose": "Press Tab to compose"/);
 assert.match(i18n, /"composer\.mode\.tabToSearch": "按下 Tab 搜索对话"/);
@@ -244,7 +265,12 @@ globalThis.document = {
           return records.filter((record) => record.title.toLowerCase().includes(needle));
         },
         openRecord: async (record) => { opened.push(record.workspaceId); },
-        openViewer: (opts) => { viewers.push(opts); }
+        openViewer: (opts) => { viewers.push(opts); },
+        renderFavicons: () => {
+          const node = new FakeNode("span");
+          node.className = "prompt-search-option-favicons";
+          return node;
+        }
       }
     });
     const shell = new FakeNode("div");
@@ -327,9 +353,16 @@ globalThis.document = {
     assert.equal(panel.isActive(), true);
     assert.equal(shell.classList.contains("prompt-shell-search"), true);
     assert.equal(searchChip.getAttribute("aria-pressed"), "true");
+    const emptyNode = shell.querySelector(".prompt-search-empty");
+    assert.equal(emptyNode.hidden, true, "empty query must not show an empty state before recency loads");
+    assert.doesNotMatch(String(emptyNode.textContent || ""), /No ChatClub tabs/);
     await new Promise((resolve) => { setImmediate(resolve); });
     const options = shell.querySelectorAll(".prompt-search-option");
     assert.equal(options.length, 2, "empty query lists recency rows");
+    assert.equal(emptyNode.hidden, true, "empty query must not show an empty state after recency loads");
+    assert.equal(options[0].children[0]?.classList.contains("prompt-search-option-favicons"), true, "site favicons sit to the left of the title");
+    assert.ok(options[0].querySelector(".prompt-search-option-title"), "search rows keep a title after the favicon stack");
+    assert.equal(options[0].querySelector(".prompt-search-option-meta"), null, "search rows must not use app-name text meta");
     field.value = "Closed";
     panel.handleInput({ target: field });
     await new Promise((resolve) => { setImmediate(resolve); });
@@ -350,6 +383,11 @@ globalThis.document = {
     panel.enter();
     field.value = "no-such-desk";
     panel.handleInput({ target: field });
+    await new Promise((resolve) => { setImmediate(resolve); });
+    assert.equal(shell.querySelectorAll(".prompt-search-option").length, 0, "a miss query must not keep recency rows");
+    assert.equal(emptyNode.hidden, false, "a miss query shows the matching-chats empty state");
+    assert.match(String(emptyNode.textContent || ""), /No matching chats/);
+    assert.doesNotMatch(String(emptyNode.textContent || ""), /No ChatClub tabs/);
     const escape = {
       key: "Escape",
       preventDefault() {},
