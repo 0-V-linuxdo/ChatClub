@@ -29,7 +29,7 @@
   },
   "app/composer/model.js#PROMPT_COLLAPSED_HEIGHT": {
     "kind": "test-only",
-    "reason": "Composer height regressions pin the collapsed 40px JS constant to `--prompt-collapsed-height` so inline sizing cannot drift from the CSS token."
+    "reason": "Composer height regressions pin the collapsed 40px overlay constant; the topbar slot reads `--prompt-collapsed-height` (56px) so inline sizing cannot drift from the CSS token."
   },
   "background/content-registration.js#assertSuccessfulFrameInjection": {
     "kind": "test-only",

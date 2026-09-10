@@ -37,6 +37,7 @@ assert.match(css, /\.prompt-search-results \{[\s\S]*?overlay-surface|z-index:\s*
 assert.match(css, /\.prompt-send-button \{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?height:\s*var\(--prompt-collapsed-height\);/);
 assert.match(css, /--prompt-collapsed-height:\s*40px;/);
+assert.match(css, /\.topbar \.composer:not\(\.composer-center-slot\)\s*\{[\s\S]*?--prompt-collapsed-height:\s*56px/);
 assert.match(css, /--prompt-search-radius:\s*var\(--ui-compact-height\)/);
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?display:\s*grid/);
 assert.match(composer, /prompt-pin-button/);

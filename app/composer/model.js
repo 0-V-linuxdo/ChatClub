@@ -16,6 +16,17 @@ export function promptCollapsedPreview(value = "", placeholder = "") {
   };
 }
 
+export function promptCollapsedHeightFor(node) {
+  const shell = node?.classList?.contains?.("prompt-shell") ? node : node?.closest?.(".prompt-shell");
+  if (shell && typeof getComputedStyle === "function") {
+    try {
+      const value = Number.parseFloat(getComputedStyle(shell).getPropertyValue("--prompt-collapsed-height"));
+      if (Number.isFinite(value) && value > 0) return value;
+    } catch {}
+  }
+  return PROMPT_COLLAPSED_HEIGHT;
+}
+
 function promptExpandedMaxHeight(viewportHeight = 0, hasImages = false) {
   if (hasImages) {
     return Math.min(
@@ -27,14 +38,17 @@ function promptExpandedMaxHeight(viewportHeight = 0, hasImages = false) {
 }
 
 export function promptInputHeight(scrollHeight, viewportHeight, expanded, options = {}) {
+  const collapsedHeight = Number(options.collapsedHeight) > 0
+    ? Number(options.collapsedHeight)
+    : PROMPT_COLLAPSED_HEIGHT;
   if (!expanded) {
     return {
-      height: PROMPT_COLLAPSED_HEIGHT,
+      height: collapsedHeight,
       overflowY: "hidden"
     };
   }
   const hasImages = Boolean(options?.hasImages);
-  const minHeight = hasImages ? PROMPT_IMAGE_EXPANDED_MIN_HEIGHT : PROMPT_COLLAPSED_HEIGHT;
+  const minHeight = hasImages ? PROMPT_IMAGE_EXPANDED_MIN_HEIGHT : collapsedHeight;
   const maxHeight = promptExpandedMaxHeight(viewportHeight, hasImages);
   const naturalHeight = Math.max(0, Number(scrollHeight || 0));
   const height = Math.max(minHeight, Math.min(naturalHeight, maxHeight));

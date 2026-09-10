@@ -28,7 +28,7 @@ import {
 } from "./history.js";
 import { createFrameSendQueue } from "./frame-send-queue.js";
 import { createPromptImageModel } from "./images.js";
-import { promptCollapsedPreview, promptInputHeight } from "./model.js";
+import { promptCollapsedPreview, promptCollapsedHeightFor, promptInputHeight } from "./model.js";
 import { createComposerSearchPanel } from "./search-panel.js";
 
 const PROMPT_IMAGE_RETRY_COUNT = 3;
@@ -919,7 +919,10 @@ export function createComposerController(dependencies = {}) {
       inputNode.style.height = "0px";
       inputNode.style.overflowY = "hidden";
     }
-    const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, grow, { hasImages });
+    const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, grow, {
+      hasImages,
+      collapsedHeight: promptCollapsedHeightFor(inputNode)
+    });
     inputNode.style.height = `${sizing.height}px`;
     inputNode.style.overflowY = sizing.overflowY;
     if (shell) {

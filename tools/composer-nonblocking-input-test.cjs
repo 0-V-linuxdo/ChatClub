@@ -301,7 +301,27 @@ function preferredModelStub() {
 
 (async () => {
   const { createComposerController } = await import(moduleUrl("app/composer/controller.js"));
-  const { PROMPT_COLLAPSED_HEIGHT } = await import(moduleUrl("app/composer/model.js"));
+  const {
+    PROMPT_COLLAPSED_HEIGHT,
+    promptCollapsedHeightFor,
+    promptInputHeight
+  } = await import(moduleUrl("app/composer/model.js"));
+  assert.equal(PROMPT_COLLAPSED_HEIGHT, 40);
+  assert.equal(promptInputHeight(20, 800, false).height, 40);
+  assert.equal(promptInputHeight(20, 800, false, { collapsedHeight: 56 }).height, 56);
+  assert.equal(promptInputHeight(42, 800, true, { collapsedHeight: 56 }).height, 56);
+  assert.equal(promptInputHeight(80, 800, true, { collapsedHeight: 56 }).height, 80);
+  assert.equal(promptCollapsedHeightFor(null), 40);
+  const previousGetComputedStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({ getPropertyValue: () => "56px" });
+  try {
+    const shell = new FakeNode("div");
+    shell.classList.add("prompt-shell");
+    assert.equal(promptCollapsedHeightFor(shell), 56);
+  } finally {
+    if (previousGetComputedStyle === undefined) delete globalThis.getComputedStyle;
+    else globalThis.getComputedStyle = previousGetComputedStyle;
+  }
   const collapsedHeight = `${PROMPT_COLLAPSED_HEIGHT}px`;
   const expandedShortHeight = `${Math.max(PROMPT_COLLAPSED_HEIGHT, 42)}px`;
   const { createPreferredModelController } = await import(moduleUrl("app/preferred-model/controller.js"));

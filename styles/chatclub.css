@@ -1456,6 +1456,14 @@ button { cursor: pointer; }
   container-type: inline-size;
 }
 
+.topbar .composer:not(.composer-center-slot) {
+  --prompt-collapsed-height: 56px;
+}
+
+.topbar .composer:not(.composer-center-slot) .prompt-shell {
+  --prompt-collapsed-height: 56px;
+}
+
 .composer:has(.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed)) {
   height: auto;
 }
@@ -1505,6 +1513,7 @@ button { cursor: pointer; }
 }
 
 .composer-center-host {
+  --prompt-collapsed-height: 40px;
   --composer-center-top: calc(var(--topbar-height) + var(--workspace-tab-row-height, 40px) + var(--space-3));
   position: fixed;
   left: 50%;
