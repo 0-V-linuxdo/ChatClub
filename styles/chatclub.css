@@ -3626,10 +3626,6 @@ body.tab-gesture-active * {
   outline-offset: 2px;
 }
 
-.prompt-shell:not(.prompt-shell-expanded):not(.prompt-shell-search) .prompt-actions-button:not(.prompt-actions-button-active):not([aria-expanded="true"]) {
-  display: none;
-}
-
 .prompt-shell-expanded:not(.prompt-shell-search) .prompt-mode-switch {
   display: inline-flex;
 }
