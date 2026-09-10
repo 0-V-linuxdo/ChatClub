@@ -39,7 +39,9 @@ assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?height:\s*var\(--prompt-collap
 assert.match(css, /--prompt-collapsed-height:\s*56px;/);
 assert.match(css, /--prompt-search-radius:\s*var\(--ui-compact-height\)/);
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?display:\s*grid/);
-assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\):not\(\.prompt-shell-expanded\)\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
+assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\):not\(\.prompt-shell-expanded\) \.prompt-input-row\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
+assert.match(css, /\.prompt-send-button\.tooltip-trigger \{[\s\S]*?position:\s*static/);
+assert.match(css, /\.textarea\.prompt-input \{[\s\S]*?min-height:\s*0 !important/);
 assert.match(css, /line-height:\s*var\(--prompt-collapsed-line\)/);
 assert.match(css, /:focus \+ \.prompt-collapsed-preview/);
 assert.match(css, /\.prompt-mode-switch/);

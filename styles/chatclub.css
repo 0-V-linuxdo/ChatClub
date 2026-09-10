@@ -1526,10 +1526,19 @@ button { cursor: pointer; }
 }
 
 .prompt-shell:not(.prompt-shell-search):not(.prompt-shell-expanded) {
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.prompt-shell:not(.prompt-shell-search):not(.prompt-shell-expanded) .prompt-input-row {
   overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--ui-radius-pill);
+  max-height: var(--prompt-collapsed-height);
+  grid-auto-rows: 0;
 }
 
 .prompt-input-row {
@@ -1549,7 +1558,8 @@ button { cursor: pointer; }
 }
 
 .prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) {
-  height: auto;
+  height: auto !important;
+  overflow: visible;
   gap: var(--space-1);
 }
 
@@ -2278,27 +2288,27 @@ button { cursor: pointer; }
 }
 
 .prompt-clear-button.tooltip-trigger {
-  position: absolute;
-  top: 5px;
-  right: 40px;
+  position: static;
+  top: auto;
+  right: auto;
   left: auto;
   bottom: auto;
   transform: none;
 }
 
 .prompt-actions-button.tooltip-trigger {
-  position: absolute;
-  top: 5px;
+  position: static;
+  top: auto;
   right: auto;
-  left: 5px;
+  left: auto;
   bottom: auto;
   transform: none;
 }
 
 .prompt-send-button.tooltip-trigger {
-  position: absolute;
-  top: 4px;
-  right: 4px;
+  position: static;
+  top: auto;
+  right: auto;
   left: auto;
   bottom: auto;
   transform: none;
@@ -3323,15 +3333,17 @@ body.tab-gesture-active * {
 .textarea.prompt-input {
   grid-column: 2;
   grid-row: 1;
-  min-height: 0;
+  align-self: center;
+  min-height: 0 !important;
   height: 100%;
   max-height: none;
-  padding: 0;
+  padding: calc((var(--prompt-collapsed-height) - var(--prompt-collapsed-line)) / 2) 0;
   resize: none;
-  border: 0;
+  border: 0 !important;
   background: transparent;
   border-radius: 0;
   box-shadow: none;
+  text-align: start;
 }
 
 .prompt-shell-has-images .textarea.prompt-input-expanded {
@@ -3380,6 +3392,7 @@ body.tab-gesture-active * {
 
 .prompt-input:not(.prompt-input-expanded) {
   height: 100% !important;
+  min-height: 0 !important;
   max-height: none;
   overflow: hidden !important;
   scrollbar-width: none;

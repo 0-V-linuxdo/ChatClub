@@ -911,7 +911,10 @@ export function createComposerController(dependencies = {}) {
     const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, expanded, { hasImages });
     inputNode.style.height = `${sizing.height}px`;
     inputNode.style.overflowY = sizing.overflowY;
-    if (shell) shell.style.height = `${sizing.height}px`;
+    if (shell) {
+      if (expanded) shell.style.height = `${sizing.height}px`;
+      else shell.style.height = "";
+    }
     if (restoreTransition !== null) {
       void inputNode.offsetHeight;
       inputNode.style.transition = restoreTransition;
