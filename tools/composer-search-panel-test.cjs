@@ -120,7 +120,9 @@ assert.doesNotMatch(panelSource, /createSvgIcon/, "the search panel must render 
 assert.doesNotMatch(panelSource, /ui\/icons\.js/);
 assert.match(panelSource, /options\.renderIcon/);
 assert.match(composer, /renderIcon: \(name\) => createSvgIcon\(name\)/);
-assert.match(panelSource, /"data-tooltip-id": "composer\.mode\.compose"/);
+assert.match(panelSource, /modeChipContent\("split", composeLabel\)/);
+assert.match(panelSource, /modeChipContent\("search", searchLabel\)/);
+assert.doesNotMatch(panelSource, /modeChipContent\("edit"/);
 assert.match(panelSource, /"data-tooltip-id": "composer\.mode\.search"/);
 assert.match(panelSource, /prompt-mode-chip prompt-mode-chip-compose tooltip-trigger/);
 assert.match(panelSource, /prompt-mode-chip prompt-mode-chip-search tooltip-trigger/);
@@ -360,7 +362,7 @@ globalThis.document = {
     assert.equal(searchChip.getAttribute("aria-label"), "Search", "icon-only search chip must keep its accessible name");
     assert.equal(composeChip.getAttribute("data-tooltip"), "Compose");
     assert.equal(searchChip.getAttribute("data-tooltip"), "Search");
-    assert.equal(composeChip.querySelector(".svg-icon")?.getAttribute("data-icon"), "edit", "compose chip renders the edit glyph through the icon port");
+    assert.equal(composeChip.querySelector(".svg-icon")?.getAttribute("data-icon"), "split", "compose chip renders the split glyph through the icon port");
     assert.equal(searchChip.querySelector(".svg-icon")?.getAttribute("data-icon"), "search", "search chip renders the search glyph through the icon port");
     assert.equal(composeChip.querySelector(".svg-icon")?.getAttribute("aria-hidden"), "true", "chip glyphs are decorative");
     assert.equal(composeChip.getAttribute("aria-pressed"), "true");

@@ -430,7 +430,7 @@ export function createComposerSearchPanel(options = {}) {
           event.stopPropagation();
         },
         onkeydown: (event) => event.stopPropagation()
-      }, modeChipContent("edit", composeLabel));
+      }, modeChipContent("split", composeLabel));
       searchChip = el("button", {
         class: "prompt-mode-chip prompt-mode-chip-search tooltip-trigger",
         type: "button",
