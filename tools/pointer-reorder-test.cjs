@@ -83,6 +83,10 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(css, /--ui-reorder-cluster:/);
   assert.match(css, /grid-template-columns:\s*var\(--ui-reorder-cluster\)/);
   assert.match(css, /html:not\(\[data-settings-click-reorder="always"\]\)/);
+  assert.match(
+    css,
+    /html:not\(\[data-settings-click-reorder="always"\]\) \.app-picker-heading-row \.ui-reorder,\s*html:not\(\[data-settings-click-reorder="always"\]\) \.app-picker-item-row \.ui-reorder,\s*html:not\(\[data-settings-click-reorder="always"\]\) \.layout-preset-item \.ui-reorder \{[^}]*display:\s*none/s
+  );
   assert.doesNotMatch(css, /settings-reorder-click-path/);
 
   const agents = read("AGENTS.md");
@@ -90,6 +94,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(agents, /Do not add those actions to `TABS_SIDEBAR_HOVER_BUTTONS`/);
   assert.match(agents, /settingsClickReorderButtonsEnabled/);
   assert.match(agents, /Hidden click-reorder is the default/);
+  assert.match(agents, /App picker popover/);
 
   console.log("pointer reorder: ok");
 })().catch((error) => {

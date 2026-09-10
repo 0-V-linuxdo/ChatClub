@@ -9258,6 +9258,24 @@ html:not([data-settings-click-reorder="always"]) .settings-reorder .ui-reorder {
   flex: 0 0 auto;
 }
 
+html:not([data-settings-click-reorder="always"]) .app-picker-heading-row .ui-reorder,
+html:not([data-settings-click-reorder="always"]) .app-picker-item-row .ui-reorder,
+html:not([data-settings-click-reorder="always"]) .layout-preset-item .ui-reorder {
+  display: none;
+}
+
+html:not([data-settings-click-reorder="always"]) .app-picker-item-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html:not([data-settings-click-reorder="always"]) .app-picker-heading-row .app-picker-add-button {
+  margin-left: auto;
+}
+
+html:not([data-settings-click-reorder="always"]) .layout-preset-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .settings-main-cell {
   overflow: hidden;
   font-size: var(--font-size-md);

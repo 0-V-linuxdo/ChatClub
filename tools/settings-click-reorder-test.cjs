@@ -69,6 +69,29 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const css = read("styles/chatclub.css");
   assert.match(css, /html:not\(\[data-settings-click-reorder="always"\]\) \{\s*--ui-reorder-cluster: var\(--settings-control-height\);/s);
   assert.match(css, /html:not\(\[data-settings-click-reorder="always"\]\) \.settings-reorder \.ui-reorder \{[^}]*width:\s*0/s);
+  assert.match(
+    css,
+    /html:not\(\[data-settings-click-reorder="always"\]\) \.app-picker-heading-row \.ui-reorder,\s*html:not\(\[data-settings-click-reorder="always"\]\) \.app-picker-item-row \.ui-reorder,\s*html:not\(\[data-settings-click-reorder="always"\]\) \.layout-preset-item \.ui-reorder \{[^}]*display:\s*none/s,
+    "click-reorder off must hide App picker and layout-preset Move up / Move down"
+  );
+  assert.match(
+    css,
+    /html:not\(\[data-settings-click-reorder="always"\]\) \.app-picker-item-row \{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s,
+    "hidden App picker rows must not keep a chevron track"
+  );
+  assert.match(
+    css,
+    /html:not\(\[data-settings-click-reorder="always"\]\) \.app-picker-heading-row \.app-picker-add-button \{[^}]*margin-left:\s*auto/s,
+    "hidden App picker headings must keep Add on the trailing edge"
+  );
+  assert.match(
+    css,
+    /html:not\(\[data-settings-click-reorder="always"\]\) \.layout-preset-item \{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/s,
+    "hidden layout presets must not keep a chevron track"
+  );
+  const agents = read("AGENTS.md");
+  assert.match(agents, /App picker popover/);
+  assert.match(agents, /layout presets/);
   assert.doesNotMatch(css, /settings-list:has\(\.settings-reorder:focus-within\)/);
   assert.doesNotMatch(css, /settings-reorder-click-path/);
   assert.doesNotMatch(css, /settings-reorder:focus-within \.ui-reorder/);

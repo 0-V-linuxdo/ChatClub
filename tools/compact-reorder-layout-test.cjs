@@ -55,6 +55,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(agents, /`--settings-site-mark`/);
   assert.match(agents, /three leading tracks/);
   assert.match(agents, /Hidden click-reorder is the default/);
+  assert.match(agents, /App picker popover/);
 
   class FakeNode {
     constructor(tag = "div") {
