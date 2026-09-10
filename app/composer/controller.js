@@ -94,6 +94,7 @@ function composerCaretShouldLeave(active, field) {
 }
 
 const COMPOSER_CENTER_HOST_ID = "composer-center-host";
+const COMPOSER_CENTER_LAUNCHER_ID = "composer-center-launcher";
 const CHAT_FRAME_POINTER_EVENT = "chatclub:chat-frame-pointer";
 
 export function createComposerController(dependencies = {}) {
@@ -1293,6 +1294,7 @@ export function createComposerController(dependencies = {}) {
     if (composerPlacementValue() !== "center") return;
     const host = ensureComposerCenterHost();
     host.hidden = false;
+    syncCenterLauncher();
   }
 
   function hideCenterHost() {
@@ -1302,6 +1304,7 @@ export function createComposerController(dependencies = {}) {
     if (inputNode) collapseInput(inputNode);
     const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
     if (host) host.hidden = true;
+    syncCenterLauncher();
   }
 
   function toggleCenterPinned(event) {
@@ -1319,6 +1322,7 @@ export function createComposerController(dependencies = {}) {
       if (!node || typeof node.closest !== "function") return false;
       return Boolean(
         node.closest("#composer-center-host")
+        || node.closest("#composer-center-launcher")
         || node.closest(".composer-center-mark")
         || node.closest(".prompt-actions-popover")
         || node.closest(".modal")
@@ -1348,6 +1352,35 @@ export function createComposerController(dependencies = {}) {
     return host;
   }
 
+  function syncCenterLauncher() {
+    const center = composerPlacementValue() === "center";
+    let launcher = document.getElementById(COMPOSER_CENTER_LAUNCHER_ID);
+    if (!center) {
+      launcher?.remove();
+      return;
+    }
+    if (!launcher) {
+      launcher = el("button", {
+        id: COMPOSER_CENTER_LAUNCHER_ID,
+        class: "composer-center-launcher tooltip-trigger",
+        type: "button",
+        hidden: true,
+        "aria-label": t("composer.open"),
+        "data-tooltip": t("composer.open"),
+        "data-tooltip-id": "composer.open",
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          focusInput(true);
+        },
+        onpointerdown: (event) => event.stopPropagation()
+      }, createSvgIcon("edit"), el("span", { class: "composer-center-launcher-label" }, t("composer.open")));
+      document.body.append(launcher);
+    }
+    const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
+    launcher.hidden = Boolean(host && !host.hidden);
+  }
+
   function applyPlacement() {
     const composerNode = document.querySelector(".composer.topbar-item-composer");
     if (!composerNode) return;
@@ -1362,6 +1395,7 @@ export function createComposerController(dependencies = {}) {
       composerNode.classList.add("composer-center-slot");
       if (centerPinned) centerHost.hidden = false;
       syncPinButton();
+      syncCenterLauncher();
       return;
     }
     const duplicate = composerNode.querySelector(".prompt-shell");
@@ -1374,6 +1408,7 @@ export function createComposerController(dependencies = {}) {
       host.hidden = true;
       if (!host.querySelector(".prompt-shell")) host.remove();
     }
+    syncCenterLauncher();
   }
 
   function modelGateStatusIcon(applying) {

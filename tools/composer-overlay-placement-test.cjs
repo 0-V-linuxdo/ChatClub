@@ -38,15 +38,21 @@ assert.match(composer, /COMPOSER_CENTER_HOST_ID/);
 assert.match(composer, /overlay-surface composer-center-host/);
 assert.match(composer, /composer-center-slot/);
 assert.match(composer, /composer-center-mark/);
+assert.match(composer, /composer-center-launcher/);
+assert.match(composer, /COMPOSER_CENTER_LAUNCHER_ID/);
 assert.match(composer, /prompt-pin-button/);
 assert.match(composer, /let centerPinned = false/);
 assert.match(composer, /function showCenterHost\(/);
 assert.match(composer, /function hideCenterHost\(/);
+assert.match(composer, /function syncCenterLauncher\(/);
 assert.match(composer, /CHAT_FRAME_POINTER_EVENT/);
 assert.match(composer, /host\.hidden = true/);
 assert.match(functionSource(composer, "focusInput"), /showCenterHost\(/);
 assert.match(functionSource(composer, "enterSearchMode"), /showCenterHost\(/);
+assert.match(functionSource(composer, "showCenterHost"), /syncCenterLauncher\(/);
+assert.match(functionSource(composer, "hideCenterHost"), /syncCenterLauncher\(/);
 assert.match(functionSource(composer, "applyPlacement"), /if \(centerPinned\) centerHost\.hidden = false/);
+assert.match(functionSource(composer, "applyPlacement"), /syncCenterLauncher\(/);
 assert.match(composer, /state\.topbarEditMode/);
 assert.match(dom, /export function overlaySearchCaretComposer/);
 assert.match(dom, /composer: options\.composer === true/);
@@ -82,10 +88,14 @@ assert.match(i18n, /"composer\.pin": "Pin composer"/);
 assert.match(i18n, /"composer\.pin": "置顶"/);
 assert.match(i18n, /"composer\.unpin": "Unpin composer"/);
 assert.match(i18n, /"composer\.unpin": "取消置顶"/);
+assert.match(i18n, /"composer\.open": "Open composer"/);
+assert.match(i18n, /"composer\.open": "打开输入框"/);
 assert.match(agents, /host starts hidden unless pinned/);
 assert.match(agents, /`\.prompt-pin-button`/);
+assert.match(agents, /composer-center-launcher/);
 assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?grid-column:\s*6/);
 assert.match(css, /\.composer-center-host \.prompt-pin-button\s*\{[\s\S]*?display:\s*inline-grid/);
+assert.match(css, /\.composer-center-launcher\s*\{[\s\S]*?z-index:\s*var\(--overlay-z-panel\)/);
 
 assert.match(functionSource(composer, "composerCaretStolen"), /chat-frame-wrap/);
 // Frame chrome inside .chat-frame-wrap only receives focus programmatically (selection-overlay
@@ -218,6 +228,7 @@ assert.doesNotMatch(functionSource(composer, "applyPlacement"), /cloneNode|inner
     const COMPOSER_CENTER_HOST_ID = "composer-center-host";
     let centerPinned = false;
     function syncPinButton() {}
+    function syncCenterLauncher() {}
     ${functionSource(composer, "composerPlacementValue")}
     ${functionSource(composer, "ensureComposerCenterHost")}
     ${functionSource(composer, "applyPlacement")}
