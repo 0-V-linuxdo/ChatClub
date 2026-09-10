@@ -403,13 +403,28 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /\.prompt-model-gate-status\.tooltip-trigger\s*\{[\s\S]*?position:\s*static;[\s\S]*?pointer-events:\s*auto;/,
-    "the visual model status must sit in-flow outside the textarea and remain interactive"
+    /\.prompt-model-gate-status\.tooltip-trigger\s*\{[\s\S]*?position:\s*absolute;\s*top:\s*calc\(100% \+ var\(--space-1\)\);\s*right:\s*0;[\s\S]*?pointer-events:\s*auto;/,
+    "the visual model status must float below the pill's bottom-right corner, outside the textarea, and remain interactive"
+  );
+  assert.doesNotMatch(
+    chatclubCss,
+    /--topbar-height:\s*calc\(51px/,
+    "a visible model status must never grow --topbar-height; it floats over the workspace instead of pushing it down"
+  );
+  assert.doesNotMatch(
+    chatclubCss,
+    /\.app-shell:has\([^)]*prompt-shell-model-gate/,
+    "the model gate must not reach up to .app-shell to resize the topbar row"
+  );
+  assert.doesNotMatch(
+    chatclubCss,
+    /\.(?:composer|prompt-shell)(?::has\([^)]*\))?:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\s*\{[^}]*height:\s*auto/,
+    "the model gate must not switch the shell or composer to height: auto; the chip is out of flow"
   );
   assert.match(
     chatclubCss,
-    /\.app-shell:has\(\.topbar \.prompt-shell:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\)\s*\{[\s\S]*?--topbar-height:\s*calc\(51px \+ var\(--ui-accessory-height\) \+ var\(--space-1\)\);/,
-    "a visible model status in the topbar slot must grow the topbar instead of hanging over the workspace iframe"
+    /\.topbar-edit-slot-composer \.prompt-model-gate-status\s*\{[\s\S]*?display:\s*none;/,
+    "the edit-mode composer preview must hide the floating chip so the livebar scroll container gains no overflow"
   );
   assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images\s*\{[\s\S]*?height:\s*auto;/, "image mode must allow the prompt shell to grow with multiline text");
   assert.match(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*auto;/, "image mode must allow a capped textarea to scroll instead of clipping text");
@@ -420,7 +435,8 @@ function responsiveBrandRules(kind) {
   assert.doesNotMatch(chatclubCss, /\.prompt-shell-expanded\.prompt-shell-has-images \.prompt-(?:actions|clear|send)-button\.tooltip-trigger\s*\{[^}]*position:\s*absolute/, "image mode must not float the composer buttons over the textarea");
   assert.match(chatclubCss, /\.prompt-collapsed-preview\s*\{[\s\S]*?pointer-events:\s*none;/, "the collapsed preview must be visual-only so the first click reaches the textarea");
   assert.doesNotMatch(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[^}]*!important/, "image mode height must remain overridable by measured inline sizing");
-  assert.doesNotMatch(chatclubCss, /\.prompt-model-gate-status[^\{]*\{[^}]*top:\s*calc\(100%/, "the model status must never float below Composer over an iframe");
+  assert.doesNotMatch(chatclubCss, /\.prompt-model-gate-status[^\{]*\{[^}]*top:\s*(?:5px|12px);/, "the model status must not move back inside the prompt field over the textarea glyphs");
+  assert.doesNotMatch(chatclubCss, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-model-gate-status\s*\{[^}]*grid-row/, "the out-of-flow chip must not be placed as a search grid row");
   assert.match(chatclubCss, /\.prompt-model-gate-live\s*\{[\s\S]*?clip-path:\s*inset\(50%\);/, "the dedicated model live region must be visually hidden without the hidden attribute");
   for (const method of [
     "preferredModelFrameReadiness",

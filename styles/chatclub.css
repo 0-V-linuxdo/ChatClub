@@ -257,10 +257,6 @@ button { cursor: pointer; }
   container: chatclub-topbar / inline-size;
 }
 
-.app-shell:has(.topbar .prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed)) {
-  --topbar-height: calc(51px + var(--ui-accessory-height) + var(--space-1));
-}
-
 .app-shell.fullscreen-mode {
   grid-template-rows: minmax(0, 1fr);
 }
@@ -1467,10 +1463,6 @@ button { cursor: pointer; }
   --prompt-collapsed-height: 38px;
 }
 
-.composer:has(.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed)) {
-  height: auto;
-}
-
 .composer.composer-center-slot {
   flex: 0 0 auto;
   width: auto;
@@ -1629,12 +1621,6 @@ button { cursor: pointer; }
   min-width: 0;
   padding: 0 var(--space-2) 0 var(--space-3);
   box-sizing: border-box;
-}
-
-.prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed) {
-  height: auto !important;
-  overflow: visible;
-  gap: var(--space-1);
 }
 
 .prompt-shell.prompt-shell-expanded.prompt-shell-has-images {
@@ -1955,6 +1941,13 @@ button { cursor: pointer; }
   position: relative;
 }
 
+/* The edit-mode livebar is an overflow-x: auto scroll container and its
+   slot bodies are pointer-events: none, so a floating chip there would only
+   add scrollable overflow. The live region still announces state. */
+.topbar-edit-slot-composer .prompt-model-gate-status {
+  display: none;
+}
+
 .topbar-edit-slot-composer .prompt-collapsed-preview {
   padding: 0;
 }
@@ -2163,19 +2156,28 @@ button { cursor: pointer; }
   border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
 }
 
+/* The gate chip floats below the pill's bottom-right corner. It is a DOM
+   sibling of .prompt-input-row so applyPlacement still reparents one shell,
+   but it is absolutely positioned against .prompt-shell so it never adds
+   height to the shell, the composer, or --topbar-height. The topbar paints
+   at --workspace-z-topbar above the workspace, so the chip overlays the tab
+   row instead of pushing it down. */
 .prompt-model-gate-status.tooltip-trigger {
-  position: static;
-  z-index: 0;
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  left: auto;
+  bottom: auto;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
-  align-self: flex-end;
   gap: var(--space-2);
   box-sizing: border-box;
   width: var(--prompt-model-gate-width);
   max-width: var(--prompt-model-gate-width);
   min-height: var(--ui-accessory-height);
   height: var(--ui-accessory-height);
-  margin-right: var(--space-1);
+  margin: 0;
   padding: var(--space-1) var(--space-2);
   color: var(--muted);
   background: color-mix(in srgb, var(--panel) 88%, var(--soft) 12%);
@@ -3757,17 +3759,6 @@ body.tab-gesture-active * {
   grid-column: 1;
   z-index: 1;
   padding-top: 0;
-}
-
-.prompt-shell-search:has(.prompt-search-results:not([hidden])) .prompt-model-gate-status {
-  grid-row: 3;
-  grid-column: 1;
-  z-index: 1;
-}
-
-.prompt-shell-search:has(.prompt-search-results:not([hidden])) .prompt-model-gate-live {
-  grid-row: 4;
-  grid-column: 1;
 }
 
 .prompt-search-results[hidden] {
