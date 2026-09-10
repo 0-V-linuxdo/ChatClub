@@ -23,7 +23,7 @@ const tokens = {
   "--info": "var(--primary)",
   "--drop-indicator": "var(--primary)",
   "--focus-ring": "color-mix(in srgb, var(--primary) 54%, transparent)",
-  "--topbar-height": "61px",
+  "--topbar-height": "69px",
   "--space-1": "4px",
   "--space-2": "8px",
   "--space-3": "12px",

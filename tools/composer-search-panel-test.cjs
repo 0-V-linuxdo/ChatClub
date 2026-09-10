@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
 
+const { functionSource } = require("./function-source.cjs");
 const panelSource = read("app/composer/search-panel.js");
 const composer = read("app/composer/controller.js");
 const runtime = read("app/runtime.js");
@@ -32,7 +33,20 @@ assert.match(runtime, /composerController\.enterSearchMode\(\)/);
 assert.match(runtime, /listComposerSearchRecords/);
 assert.match(css, /\.prompt-search-results \{[\s\S]*?overlay-surface|z-index:\s*var\(--overlay-z-popover\)/);
 assert.match(css, /\.prompt-send-button \{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
-assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?height:\s*48px;/);
+assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?height:\s*var\(--prompt-collapsed-height\);/);
+assert.match(css, /--prompt-collapsed-height:\s*56px;/);
+assert.match(css, /\.prompt-collapsed-preview\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
+assert.match(css, /line-height:\s*var\(--prompt-collapsed-line\)/);
+assert.match(css, /:focus \+ \.prompt-collapsed-preview/);
+assert.match(css, /\.prompt-search-toggle/);
+assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\)/);
+assert.match(panelSource, /prompt-search-toggle/);
+assert.match(panelSource, /createSvgIcon\("search"\)/);
+assert.doesNotMatch(functionSource(composer, "enterSearchMode"), /expandInput\(/);
+assert.doesNotMatch(functionSource(composer, "collapseInput"), /searchPanel\.exit/);
+assert.match(functionSource(composer, "enterSearchMode"), /collapseInput\(/);
+assert.match(agents, /Search mode stays single-line/);
+assert.match(agents, /visible `\.prompt-search-toggle`/);
 assert.doesNotMatch(css, /\.prompt-search-results \{[^}]*transform:/);
 assert.match(agents, /Do not wrap `\.prompt-shell` in `viewerModal`/);
 assert.match(agents, /Topbar Search enters composer search mode/);
@@ -168,6 +182,7 @@ globalThis.Node = FakeNode;
 globalThis.document = {
   body: new FakeNode("body"),
   createElement: (tagName) => new FakeNode(tagName),
+  createElementNS: (_ns, tagName) => new FakeNode(tagName),
   createTextNode: (value) => {
     const node = new FakeNode("#text");
     node.textContent = String(value);
@@ -212,9 +227,11 @@ globalThis.document = {
     globalThis.document.body.append(shell);
     panel.attach(shell);
     assert.equal(panel.isActive(), false);
+    assert.equal(Boolean(shell.querySelector(".prompt-search-toggle")), true, "search toggle is visible at rest");
     panel.enter();
     assert.equal(panel.isActive(), true);
     assert.equal(shell.classList.contains("prompt-shell-search"), true);
+    assert.equal(shell.querySelector(".prompt-search-toggle")?.classList.contains("is-active"), true);
     await new Promise((resolve) => { setImmediate(resolve); });
     const options = shell.querySelectorAll(".prompt-search-option");
     assert.equal(options.length, 2, "empty query lists recency rows");

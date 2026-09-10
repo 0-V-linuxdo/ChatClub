@@ -121,14 +121,32 @@ function innermostBlockAt(blocks, index) {
   for (let index = stylesheetSource.indexOf(variableConsumer); index >= 0; index = stylesheetSource.indexOf(variableConsumer, index + 1)) {
     consumerIndexes.push(index);
   }
-  assert.equal(consumerIndexes.length, 1, "the input font-size variable must have one CSS consumer");
-  const consumerBlock = innermostBlockAt(blocks, consumerIndexes[0]);
-  assert.ok(consumerBlock, "the input font-size variable must be consumed inside a CSS rule");
-  assert.equal(consumerBlock.header, ".prompt-input-expanded");
+  assert.equal(consumerIndexes.length, 2, "the input font-size variable must have two CSS consumers");
+  const consumerHeaders = consumerIndexes.map((index) => innermostBlockAt(blocks, index)?.header);
+  assert.deepEqual(
+    [...consumerHeaders].sort(),
+    [".prompt-input-expanded", ".prompt-shell"],
+    "collapsed line-height and expanded font-size must share the input font-size variable"
+  );
+  const expandedBlock = innermostBlockAt(
+    blocks,
+    consumerIndexes.find((index) => innermostBlockAt(blocks, index)?.header === ".prompt-input-expanded")
+  );
+  assert.ok(expandedBlock, "the expanded prompt must consume the custom font-size variable");
   assert.match(
-    consumerBlock.body,
+    expandedBlock.body,
     /(?:^|;)\s*font-size\s*:\s*var\(--topbar-prompt-input-font-size\)\s*;/,
     "the expanded prompt textarea must consume the custom font-size variable"
+  );
+  const shellBlock = innermostBlockAt(
+    blocks,
+    consumerIndexes.find((index) => innermostBlockAt(blocks, index)?.header === ".prompt-shell")
+  );
+  assert.ok(shellBlock, "the prompt shell must consume the custom font-size variable");
+  assert.match(
+    shellBlock.body,
+    /(?:^|;)\s*--prompt-collapsed-line\s*:\s*var\(--topbar-prompt-input-font-size\)\s*;/,
+    "collapsed single-line height must follow the input font-size variable"
   );
 
   const collapsedPreviewBlocks = blocks.filter((block) => (

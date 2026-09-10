@@ -115,7 +115,7 @@
   --frame-loading-overlay-opacity: 0.82;
   --preferred-model-selection-overlay-opacity: 0.7;
   --topbar-prompt-input-font-size: 15px;
-  --topbar-height: 61px;
+  --topbar-height: 69px;
   --workspace-tabs-sidebar-width: 320px;
   --workspace-z-sidebar: 15;
   --workspace-z-topbar: 20;
@@ -257,7 +257,7 @@ button { cursor: pointer; }
 }
 
 .app-shell:has(.topbar .prompt-shell:is(.prompt-shell-model-gate-applying, .prompt-shell-model-gate-failed)) {
-  --topbar-height: calc(61px + var(--ui-accessory-height) + var(--space-1));
+  --topbar-height: calc(69px + var(--ui-accessory-height) + var(--space-1));
 }
 
 .app-shell.fullscreen-mode {
@@ -1447,7 +1447,7 @@ button { cursor: pointer; }
   display: block;
   flex: 1 1 min(58vw, 760px);
   width: 100%;
-  height: 48px;
+  height: 56px;
   overflow: visible;
   position: relative;
   min-width: 420px;
@@ -1500,6 +1500,10 @@ button { cursor: pointer; }
 
 .prompt-shell {
   --prompt-model-gate-width: clamp(132px, 32cqi, 240px);
+  --prompt-collapsed-height: 56px;
+  --prompt-collapsed-line: var(--topbar-prompt-input-font-size);
+  --prompt-accessory-top: calc((var(--prompt-collapsed-height) - var(--ui-accessory-height)) / 2);
+  --prompt-send-top: calc((var(--prompt-collapsed-height) - var(--ui-compact-height)) / 2);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1507,7 +1511,7 @@ button { cursor: pointer; }
   position: relative;
   z-index: 30;
   width: 100%;
-  height: 48px;
+  height: var(--prompt-collapsed-height);
   min-width: 0;
   overflow: visible;
 }
@@ -1516,8 +1520,8 @@ button { cursor: pointer; }
   position: relative;
   z-index: 0;
   width: 100%;
-  height: 48px;
-  min-height: 48px;
+  height: var(--prompt-collapsed-height);
+  min-height: var(--prompt-collapsed-height);
   min-width: 0;
 }
 
@@ -1541,16 +1545,16 @@ button { cursor: pointer; }
   inset: 0 auto auto 0;
   z-index: 45;
   width: 100%;
-  height: 48px;
+  height: var(--prompt-collapsed-height);
   border: 1px solid var(--line);
-  border-radius: var(--ui-radius);
-  padding: var(--space-2) 88px var(--space-2) 48px;
+  border-radius: var(--ui-radius-pill);
+  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 48px;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   background: var(--panel);
   color: var(--text);
-  line-height: 20px;
+  line-height: var(--prompt-collapsed-line);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1603,7 +1607,7 @@ button { cursor: pointer; }
 
 .prompt-actions-button {
   position: absolute;
-  top: 10px;
+  top: var(--prompt-accessory-top);
   right: auto;
   left: 10px;
   bottom: auto;
@@ -1624,7 +1628,7 @@ button { cursor: pointer; }
 
 .prompt-clear-button {
   position: absolute;
-  top: 10px;
+  top: var(--prompt-accessory-top);
   right: 48px;
   left: auto;
   bottom: auto;
@@ -1645,7 +1649,7 @@ button { cursor: pointer; }
 
 .prompt-send-button {
   position: absolute;
-  top: 8px;
+  top: var(--prompt-send-top);
   right: 8px;
   left: auto;
   bottom: auto;
@@ -1766,12 +1770,12 @@ button { cursor: pointer; }
 }
 
 .topbar-edit-slot-composer .prompt-collapsed-preview {
-  padding: var(--space-2) 88px var(--space-2) 48px;
+  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 48px;
 }
 
 .topbar-edit-slot-composer .prompt-actions-button {
   position: absolute;
-  top: 10px;
+  top: var(--prompt-accessory-top);
   right: auto;
   left: 10px;
   bottom: auto;
@@ -1780,7 +1784,7 @@ button { cursor: pointer; }
 
 .topbar-edit-slot-composer .prompt-clear-button {
   position: absolute;
-  top: 10px;
+  top: var(--prompt-accessory-top);
   right: 48px;
   left: auto;
   bottom: auto;
@@ -1789,7 +1793,7 @@ button { cursor: pointer; }
 
 .topbar-edit-slot-composer .prompt-send-button {
   position: absolute;
-  top: 8px;
+  top: var(--prompt-send-top);
   right: 8px;
   left: auto;
   bottom: auto;
@@ -1810,7 +1814,7 @@ button { cursor: pointer; }
 
 .prompt-image-preview-list {
   position: absolute;
-  top: 10px;
+  top: var(--prompt-accessory-top);
   left: 10px;
   right: 82px;
   z-index: 72;
@@ -1945,14 +1949,14 @@ button { cursor: pointer; }
 .prompt-input {
   box-sizing: border-box;
   display: block;
-  height: 48px;
-  min-height: 48px;
+  height: var(--prompt-collapsed-height);
+  min-height: var(--prompt-collapsed-height);
   max-height: 360px;
   position: absolute;
   inset: 0 auto auto 0;
   z-index: 31;
   resize: none !important;
-  line-height: 20px;
+  line-height: var(--prompt-collapsed-line);
   overflow: hidden;
   scrollbar-width: thin;
   overscroll-behavior: contain;
@@ -3295,10 +3299,10 @@ body.tab-gesture-active * {
 }
 
 .textarea.prompt-input {
-  min-height: 48px;
-  height: 48px;
+  min-height: var(--prompt-collapsed-height);
+  height: var(--prompt-collapsed-height);
   max-height: 180px;
-  padding: var(--space-2) 88px var(--space-2) 48px;
+  padding: calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 88px calc((var(--prompt-collapsed-height) - 2px - var(--prompt-collapsed-line)) / 2) 48px;
   resize: none;
 }
 
@@ -3344,8 +3348,8 @@ body.tab-gesture-active * {
 }
 
 .prompt-input:not(.prompt-input-expanded) {
-  height: 48px !important;
-  max-height: 48px;
+  height: var(--prompt-collapsed-height) !important;
+  max-height: var(--prompt-collapsed-height);
   overflow: hidden !important;
   scrollbar-width: none;
   box-shadow: none;
@@ -3355,7 +3359,8 @@ body.tab-gesture-active * {
   background:
     linear-gradient(var(--panel), var(--panel)) padding-box,
     linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--panel) 92%, transparent) 100%) border-box;
-  line-height: 20px;
+  line-height: var(--prompt-collapsed-line);
+  border-radius: var(--ui-radius-pill);
 }
 
 .prompt-input:not(.prompt-input-expanded)::placeholder {
@@ -3367,6 +3372,11 @@ body.tab-gesture-active * {
   background: transparent;
   color: var(--text);
   caret-color: var(--text);
+}
+
+.prompt-input:not(.prompt-input-expanded):focus + .prompt-collapsed-preview,
+.prompt-shell:has(.prompt-input:not(.prompt-input-expanded):focus) .prompt-collapsed-preview {
+  display: none;
 }
 
 .prompt-input:not(.prompt-input-expanded)::-webkit-scrollbar {
@@ -3384,21 +3394,22 @@ body.tab-gesture-active * {
   display: none;
 }
 
-.prompt-mode-chip {
+.prompt-search-toggle {
   position: absolute;
-  top: 10px;
-  right: 48px;
+  top: var(--prompt-accessory-top);
+  left: 10px;
+  right: auto;
   z-index: 70;
+  width: var(--ui-accessory-height);
   height: var(--ui-accessory-height);
   min-height: var(--ui-accessory-height);
   min-width: var(--target-min);
-  padding: 0 var(--space-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--line));
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
   border-radius: var(--ui-radius-pill);
   box-shadow: none;
   font-size: var(--font-size-xs);
@@ -3406,31 +3417,50 @@ body.tab-gesture-active * {
   line-height: 1;
 }
 
-.prompt-mode-chip[hidden] {
-  display: none;
-}
-
-.prompt-mode-chip:hover {
+.prompt-search-toggle:hover {
   color: var(--text);
-  background: var(--control-hover);
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel));
 }
 
-.prompt-mode-chip:focus-visible {
+.prompt-search-toggle.is-active,
+.prompt-search-toggle[aria-pressed="true"] {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+}
+
+.prompt-search-toggle:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
+.prompt-shell:not(.prompt-shell-expanded):not(.prompt-shell-search) .prompt-actions-button {
+  display: none;
+}
+
+.prompt-shell-expanded:not(.prompt-shell-search) .prompt-search-toggle {
+  display: none;
+}
+
 .prompt-shell-search .prompt-collapsed-preview,
-.prompt-shell-search .prompt-image-preview-list {
+.prompt-shell-search .prompt-image-preview-list,
+.prompt-shell-search .prompt-actions-button,
+.prompt-shell-search .prompt-send-button {
   display: none;
 }
 
 .prompt-shell-search .prompt-clear-button {
-  right: 108px;
+  right: 10px;
 }
 
 .prompt-shell-search .textarea.prompt-input {
-  padding-right: 148px;
+  padding-right: 48px;
+  border-radius: var(--ui-radius-pill);
+}
+
+.prompt-shell-search:has(.prompt-search-results:not([hidden])) .textarea.prompt-input,
+.prompt-shell-search:has(.prompt-search-results:not([hidden])) .prompt-input:not(.prompt-input-expanded) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .prompt-shell-search .prompt-input:not(.prompt-input-expanded) {
@@ -3440,7 +3470,7 @@ body.tab-gesture-active * {
 
 .prompt-search-results {
   position: absolute;
-  top: calc(100% + var(--space-1));
+  top: 100%;
   left: 0;
   right: 0;
   z-index: var(--overlay-z-popover);
@@ -3449,7 +3479,13 @@ body.tab-gesture-active * {
   gap: var(--space-1);
   max-height: min(360px, calc(100vh - var(--topbar-height) - 24px));
   overflow: auto;
+  margin: 0;
   padding: var(--space-1);
+  border-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: var(--ui-radius-pill);
+  border-bottom-right-radius: var(--ui-radius-pill);
 }
 
 .prompt-search-results[hidden] {

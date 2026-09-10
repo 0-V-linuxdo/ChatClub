@@ -1,5 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { el } from "../../ui/dom.js";
+import { createSvgIcon } from "../../ui/icons.js";
 
 const SEARCH_RESULTS_LIMIT = 12;
 
@@ -59,7 +60,7 @@ export function createComposerSearchPanel(options = {}) {
   let listNode = null;
   let hintNode = null;
   let emptyNode = null;
-  let chipNode = null;
+  let toggleNode = null;
 
   function liveShell() {
     return shell?.isConnected ? shell : document.querySelector(".prompt-shell");
@@ -73,15 +74,18 @@ export function createComposerSearchPanel(options = {}) {
     return t("composer.search.placeholder");
   }
 
+  function syncToggle() {
+    if (!toggleNode) return;
+    toggleNode.setAttribute("aria-pressed", active ? "true" : "false");
+    toggleNode.classList.toggle("is-active", active);
+  }
+
   function syncShell() {
     const node = liveShell();
     if (!node) return;
     node.classList.toggle("prompt-shell-search", active);
     node.dataset.promptMode = active ? "search" : "compose";
-    if (chipNode) {
-      chipNode.hidden = !active;
-      chipNode.setAttribute("aria-pressed", active ? "true" : "false");
-    }
+    syncToggle();
     const results = node.querySelector(".prompt-search-results");
     if (results) results.hidden = !active;
   }
@@ -299,33 +303,35 @@ export function createComposerSearchPanel(options = {}) {
     });
   }
 
+  function toggleSearch(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if (active) exit({ restoreField: true });
+    else options.onEnter?.();
+  }
+
   function attach(nextShell) {
     shell = nextShell;
     if (!shell) return;
     const row = shell.querySelector(".prompt-input-row");
-    if (row && !row.querySelector(".prompt-mode-chip")) {
-      chipNode = el("button", {
-        class: "prompt-mode-chip tooltip-trigger",
+    const existingToggle = row?.querySelector?.(".prompt-search-toggle");
+    if (row && !existingToggle) {
+      toggleNode = el("button", {
+        class: "prompt-search-toggle compact-icon tooltip-trigger",
         type: "button",
-        hidden: !active,
         "aria-pressed": active ? "true" : "false",
         "aria-label": t("composer.mode.search"),
         "data-tooltip": t("composer.mode.search"),
         "data-tooltip-id": "composer.mode.search",
-        onclick: (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (active) exit({ restoreField: true });
-          else options.onEnter?.();
-        },
+        onclick: toggleSearch,
         onpointerdown: (event) => event.stopPropagation(),
         onkeydown: (event) => event.stopPropagation()
-      }, t("composer.mode.search"));
-      const send = row.querySelector(".prompt-send-button");
-      if (typeof send?.before === "function") send.before(chipNode);
-      else row.append(chipNode);
+      }, createSvgIcon("search"));
+      const field = row.querySelector(".prompt-input");
+      if (typeof field?.before === "function") field.before(toggleNode);
+      else row.append(toggleNode);
     } else {
-      chipNode = row?.querySelector?.(".prompt-mode-chip") || chipNode;
+      toggleNode = existingToggle || toggleNode;
     }
     if (!shell.querySelector(".prompt-search-results")) {
       listNode = el("div", {

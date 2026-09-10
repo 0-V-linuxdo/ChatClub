@@ -378,7 +378,7 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /\.prompt-input-row\s*\{[\s\S]*?position:\s*relative;[\s\S]*?height:\s*48px;/,
+    /\.prompt-input-row\s*\{[\s\S]*?position:\s*relative;[\s\S]*?height:\s*var\(--prompt-collapsed-height\);/,
     "textarea chrome must live in a dedicated input row so the model status cannot overlay glyphs"
   );
   assert.match(
@@ -388,7 +388,7 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /\.app-shell:has\(\.topbar \.prompt-shell:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\)\s*\{[\s\S]*?--topbar-height:\s*calc\(61px \+ var\(--ui-accessory-height\) \+ var\(--space-1\)\);/,
+    /\.app-shell:has\(\.topbar \.prompt-shell:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\)\s*\{[\s\S]*?--topbar-height:\s*calc\(69px \+ var\(--ui-accessory-height\) \+ var\(--space-1\)\);/,
     "a visible model status in the topbar slot must grow the topbar instead of hanging over the workspace iframe"
   );
   assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images\s*\{[\s\S]*?height:\s*auto;/, "image mode must allow the prompt shell to grow with multiline text");

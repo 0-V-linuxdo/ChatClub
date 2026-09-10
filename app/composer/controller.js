@@ -1013,7 +1013,6 @@ export function createComposerController(dependencies = {}) {
   }
 
   function collapseInput(inputNode) {
-    if (searchPanel.isActive()) searchPanel.exit({ restoreField: true });
     rememberSelection(inputNode);
     syncCollapsedPreview(inputNode);
     inputNode.closest?.(".prompt-shell")?.classList.remove("prompt-shell-expanded");
@@ -1082,6 +1081,10 @@ export function createComposerController(dependencies = {}) {
   function handlePointerDown(event) {
     const inputNode = inputFromEvent(event);
     if (!inputNode || inputNode.classList.contains("prompt-input-expanded")) return;
+    if (searchPanel.isActive()) {
+      inputNode.focus({ preventScroll: true });
+      return;
+    }
     if (inputNode.value) { event.preventDefault(); event.stopPropagation(); inputNode.dataset.openedFromCollapsed = "1"; }
     inputNode.focus({ preventScroll: true });
     expandInput(inputNode);
@@ -1228,7 +1231,7 @@ export function createComposerController(dependencies = {}) {
   function focusInput(expand=true){syncInputNode({focus:true,expand})}
 
   function enterSearchMode() {
-    const field = document.querySelector(".prompt-input") || syncInputNode({ focus: true, expand: true });
+    const field = document.querySelector(".prompt-input") || syncInputNode({ focus: true, expand: false });
     const shell = field?.closest?.(".prompt-shell") || document.querySelector(".prompt-shell");
     if (shell) searchPanel.attach(shell);
     searchPanel.enter();
@@ -1236,7 +1239,7 @@ export function createComposerController(dependencies = {}) {
     searchPanel.syncField(field);
     claimPromptCaret(field);
     field.focus?.({ preventScroll: true });
-    expandInput(field);
+    collapseInput(field);
   }
 
   function composerPlacementValue() {
@@ -1304,7 +1307,7 @@ export function createComposerController(dependencies = {}) {
       placeholder: currentPlaceholder,
       dataset: { modelGateState: gateState },
       onpointerdown: handlePointerDown,
-      onfocus:e=>{claimPromptCaret(e.target);!document.documentElement.dataset.p&&!document.querySelector(".modal")&&expandInput(e.target)},
+      onfocus:e=>{claimPromptCaret(e.target);if(searchPanel.isActive()||document.documentElement.dataset.p||document.querySelector(".modal"))return;expandInput(e.target)},
       onblur: handleInputBlur,
       oncompositionstart:()=>{promptComposing=true},
       oncompositionend:e=>{promptComposing=false;rememberSelection(e.target);pinOverlaySearchCaret()},
