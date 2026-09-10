@@ -42,11 +42,17 @@ assert.match(css, /\.prompt-collapsed-preview\s*\{[\s\S]*?border-radius:\s*var\(
 assert.match(css, /line-height:\s*var\(--prompt-collapsed-line\)/);
 assert.match(css, /:focus \+ \.prompt-collapsed-preview/);
 assert.match(css, /\.prompt-mode-switch/);
-assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\]\s*\{[\s\S]*?background:\s*var\(--control-selected\)/);
+assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\]\s*\{[\s\S]*?background:\s*var\(--hover\)/);
 assert.doesNotMatch(css, /\.prompt-mode-chip[^{]*\{[^}]*transform:/);
 assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.prompt-mode-switch/);
 assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.textarea\.prompt-input/);
 assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\)/);
+assert.match(css, /\.prompt-search-results \{[\s\S]*?border-bottom-left-radius:\s*var\(--ui-radius\)/);
+assert.doesNotMatch(css, /\.prompt-search-results \{[\s\S]*?border-bottom-left-radius:\s*var\(--ui-radius-pill\)/);
+assert.match(css, /\.prompt-search-option \{[\s\S]*?display:\s*flex/);
+assert.match(css, /\.prompt-input:not\(\.prompt-input-expanded\):focus::placeholder/);
+assert.match(css, /\.prompt-send-button:disabled \{[\s\S]*?background:\s*transparent/);
+assert.match(css, /\.prompt-shell\.prompt-shell-search[\s\S]{0,240}height:\s*var\(--prompt-collapsed-height\)/);
 assert.match(panelSource, /prompt-mode-switch/);
 assert.match(panelSource, /prompt-mode-chip-compose/);
 assert.match(panelSource, /prompt-mode-chip-search/);
