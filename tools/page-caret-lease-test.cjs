@@ -59,6 +59,23 @@ assert.match(restoreSource, /if \(!pageCaretTrustedRecently\(\)\) return;/);
 assert.match(restoreSource, /active !== document\.body && active !== document\.documentElement\) return;/);
 assert.match(restoreSource, /allowPageCaretFocus\(/);
 assert.match(preload, /pageCaretTrustedRecently\(\) && target && target !== window && target !== document\) pageCaretTrustedFocus = target;/);
+// A site may keep its editor in a nested iframe; that document's shield reports to this window, so
+// this window relays it upward: only `pointer`, only from a frame this document owns, only while
+// embedded. `stolen` is never relayed (a nested steal is the site's business, not the parent's).
+assert.match(preload, /const relayPageCaretTrustedPointer = \(event\) =>/);
+assert.match(preload, /window\.addEventListener\("message", relayPageCaretTrustedPointer\)/);
+assert.match(preload, /window\.removeEventListener\("message", relayPageCaretTrustedPointer\)/);
+assert.match(preload, /window\.removeEventListener\("focus", restorePageCaretTrustedFocus\)/);
+const relaySource = preload.slice(
+  preload.indexOf("const relayPageCaretTrustedPointer"),
+  preload.indexOf("try { guardedElementFocus.toString")
+);
+assert.match(relaySource, /data\.source !== PAGE_CARET_MESSAGE_SOURCE \|\| data\.action !== "pointer"\) return;/);
+assert.match(relaySource, /if \(!window\.parent \|\| window\.parent === window\) return;/);
+assert.match(relaySource, /if \(!source \|\| source === window\) return;/);
+assert.match(relaySource, /frame\.contentWindow === source/);
+assert.match(relaySource, /if \(!owned\) return;\s*notifyPageCaretTrustedPointer\(\);/);
+assert.doesNotMatch(relaySource, /pageCaretTrustedAt = /, "a relayed nested click is not a trusted pointer on this document");
 assert.match(preload, /api: Object\.freeze\(\{ prepare, preparePageCaret, adoptPageCaret, releasePageCaret \}\)/);
 assert.match(
   preload,

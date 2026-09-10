@@ -223,6 +223,11 @@ function createWorld() {
         listeners.push({ type, handler, capture });
       },
       removeEventListener() {},
+      // Re-dispatched chat-frame pointer reports land here for the prompt-focus controller.
+      dispatchEvent(event) {
+        world.dispatched.push(event);
+        return true;
+      },
       querySelector(selector) {
         if (String(selector).includes(".modal")) return panel;
         if (String(selector).includes("prompt-input")) return prompt;
@@ -234,7 +239,8 @@ function createWorld() {
         if (text.includes(".main-grid") || text.includes(".chat-card")) return [grid, card];
         return [];
       }
-    }
+    },
+    dispatched: []
   };
   world.documentHasFocus = true;
   world.frameFocused = true;
@@ -268,6 +274,13 @@ function createWorld() {
     timers.clear();
     for (const [, entry] of pending) entry.callback();
   };
+  class FakeCustomEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.bubbles = Boolean(init.bubbles);
+      this.detail = init.detail;
+    }
+  }
   const context = vm.createContext({
     document: world.document,
     window: windowTarget,
@@ -276,6 +289,7 @@ function createWorld() {
     String,
     Date,
     console,
+    CustomEvent: FakeCustomEvent,
     requestAnimationFrame(callback) {
       rafQueue.push(callback);
       return rafQueue.length;
@@ -299,9 +313,11 @@ globalThis.releaseOverlaySearchCaret = releaseOverlaySearchCaret;
 globalThis.overlaySearchCaretMode = overlaySearchCaretMode;
 globalThis.overlaySearchCaretComposer = overlaySearchCaretComposer;
 globalThis.setOverlayCaretLeaseHandler = setOverlayCaretLeaseHandler;
-globalThis.armComposerLoadPin = armComposerLoadPin;`,
+globalThis.armComposerLoadPin = armComposerLoadPin;
+globalThis.ensureChatFramePointerReports = ensureChatFramePointerReports;`,
     context
   );
+  world.ensureReports = context.ensureChatFramePointerReports;
   world.claim = context.claimOverlaySearchCaret;
   world.pin = context.pinOverlaySearchCaret;
   world.release = context.releaseOverlaySearchCaret;
@@ -812,6 +828,54 @@ function claimComposer(world, extras = {}) {
   world.flushRaf();
   world.flushTimers();
   assert.equal(world.document.activeElement, world.iframe);
+}
+
+// 2026-09-10 Arc report: the click left the composer, then the parent pulled the caret back. Two
+// parent-side restores never saw that click: the initial prompt-focus lock (`data-p` restore loop)
+// and a `promptFocusRestoreGeneration` armed on the frame's navigation. Leaving through the child
+// report must neutralize both so nothing yanks the caret after the user chose the frame.
+assert.match(dom, /^const CHAT_FRAME_POINTER_EVENT = "chatclub:chat-frame-pointer";/m);
+assert.match(dom, /function announceChatFramePointer/);
+assert.match(dom, /export function ensureChatFramePointerReports/);
+assert.match(agents, /chatclub:chat-frame-pointer/);
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.iframe.dataset.promptFocusRestoreGeneration = "3";
+  world.document.activeElement = world.iframe;
+  world.childMessage("pointer");
+  assert.equal(world.composerClaimed(), false);
+  assert.equal(world.iframe.dataset.promptFocusRestoreGeneration, undefined, "leaving for a frame must drop the armed prompt restore on every chat-frame");
+  assert.equal(world.dispatched.length, 1, "leaving for a frame must re-dispatch the click as a document event");
+  assert.equal(world.dispatched[0].type, "chatclub:chat-frame-pointer");
+  assert.equal(world.dispatched[0].bubbles, true, "the report must bubble so a window listener hears it");
+  assert.equal(world.dispatched[0].detail?.frame, world.iframe);
+}
+
+// The report also fires when no owner was ever claimed: the initial prompt-focus lock exists before
+// the first claim, so the page installs the listeners at startup.
+{
+  const world = createPageWorld();
+  assert.equal(world.listeners.some((entry) => entry.type === "message"), false);
+  world.ensureReports();
+  assert.equal(world.listeners.some((entry) => entry.type === "message"), true, "ensureChatFramePointerReports must install the message listener without a claim");
+  assert.equal(world.composerClaimed(), false);
+  world.iframe.dataset.promptFocusRestoreGeneration = "1";
+  world.document.activeElement = world.iframe;
+  world.childMessage("pointer");
+  assert.equal(world.dispatched.length, 1, "a pointer report with no caret owner must still be announced");
+  assert.equal(world.iframe.dataset.promptFocusRestoreGeneration, undefined);
+  assert.equal(world.document.activeElement, world.iframe, "no owner: nothing may move focus");
+}
+
+// Reports that are not a click (`stolen`), or not from a chat-frame, must not be announced.
+{
+  const world = createPageWorld();
+  claimComposer(world);
+  world.document.activeElement = world.iframe;
+  world.childMessage("stolen");
+  world.childMessage("pointer", { name: "not-a-chat-frame" });
+  assert.equal(world.dispatched.length, 0, "only an accepted trusted pointer may be announced");
 }
 
 // A fresh claim means the user came back from the frame; the old click is no longer a leave.

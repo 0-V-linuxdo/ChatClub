@@ -77,8 +77,14 @@ function makeContext({ options = false } = {}) {
   const window = {
     addEventListener(type, listener) { listeners.set(type, listener); }
   };
+  // The controller only reads `Date.now()`; a controllable clock lets the tests step across the
+  // chat-frame pointer report grace and the 1 s recent-pointer window deterministically.
+  const clock = {
+    now: 10_000,
+    advance(ms) { clock.now += ms; }
+  };
   const context = vm.createContext({
-    Date,
+    Date: { now: () => clock.now },
     document,
     globalThis: undefined,
     Node: MockNode,
@@ -88,8 +94,17 @@ function makeContext({ options = false } = {}) {
   });
   context.globalThis = context;
   vm.runInContext(executableSource, context);
-  return { context, document, listeners, prompt, promptChild, body, timers, window };
+  return { clock, context, document, listeners, prompt, promptChild, body, timers, window };
 }
+
+const INITIAL_PROMPT_FOCUS_RESTORE_MS = 50;
+const CHAT_FRAME_POINTER_EVENT = "chatclub:chat-frame-pointer";
+const CHAT_FRAME_POINTER_REPORT_GRACE_MS = 120;
+assert.match(focusControllerSource, /const INITIAL_PROMPT_FOCUS_RESTORE_MS = 50;/);
+assert.match(focusControllerSource, /const CHAT_FRAME_POINTER_EVENT = "chatclub:chat-frame-pointer";/);
+assert.match(focusControllerSource, /const CHAT_FRAME_POINTER_REPORT_GRACE_MS = 120;/);
+assert.match(focusControllerSource, /window\.addEventListener\(CHAT_FRAME_POINTER_EVENT, onFramePointerReport\)/);
+assert.match(runtime, /ensureChatFramePointerReports\(\);\nconst promptFocusPromise/, "the chat-frame pointer report listeners must be installed before the prompt focus controller");
 
 const workspace = makeContext();
 let focusCalls = 0;
@@ -114,18 +129,35 @@ assert.equal(focusCalls, 2, "an automatic iframe focus must be pulled back to th
 workspace.document.activeElement = iframe;
 workspace.listeners.get("focusin")({ target: iframe });
 workspace.timers.shift()?.();
-assert.equal(focusCalls, 3, "untrusted iframe focusin must return the caret to the prompt");
+assert.equal(focusCalls, 2, "focus entering a chat-frame must first wait for the child pointer report");
+workspace.clock.advance(CHAT_FRAME_POINTER_REPORT_GRACE_MS - 1);
+workspace.listeners.get("focusin")({ target: iframe });
+workspace.timers.shift()?.();
+assert.equal(focusCalls, 2, "the report grace must cover the whole window, not only the first restore tick");
+workspace.clock.advance(1);
+workspace.listeners.get("focusin")({ target: iframe });
+workspace.timers.shift()?.();
+assert.equal(focusCalls, 3, "an unreported iframe focus must return the caret to the prompt once the grace ends");
+assert.equal(workspace.document.activeElement, workspace.prompt);
+workspace.document.activeElement = iframe;
+workspace.listeners.get("focusin")({ target: iframe });
+workspace.timers.shift()?.();
+assert.equal(focusCalls, 3, "a fresh frame focus after a reclaim must start a new grace instead of reusing the expired one");
+workspace.clock.advance(CHAT_FRAME_POINTER_REPORT_GRACE_MS);
+workspace.listeners.get("focusin")({ target: iframe });
+workspace.timers.shift()?.();
+assert.equal(focusCalls, 4, "the renewed grace must still end in a reclaim without a report");
 const modalInput = Object.assign(new MockNode(), {
   classList: { contains(name) { return name === "modal"; } }
 });
 workspace.document.activeElement = modalInput;
 workspace.listeners.get("focusin")({ target: modalInput });
 workspace.timers.shift()?.();
-assert.equal(focusCalls, 3, "typed modal focus must not be pulled back to the prompt");
+assert.equal(focusCalls, 4, "typed modal focus must not be pulled back to the prompt");
 workspace.document.activeElement = iframe;
 workspace.listeners.get("load")({ target: iframe });
 workspace.timers.at(-1)?.();
-assert.equal(focusCalls, 4, "iframe load must still restore prompt focus");
+assert.equal(focusCalls, 5, "iframe load must still restore prompt focus");
 {
   const modalLoad = makeContext();
   let modalFocusCalls = 0;
@@ -159,7 +191,7 @@ assert.doesNotThrow(
   "a non-Node Window focus target must not be passed to Node.contains"
 );
 workspace.timers.shift()?.();
-assert.equal(focusCalls, 5, "regaining the top-level window must restart prompt focus without waiting for an iframe event");
+assert.equal(focusCalls, 6, "regaining the top-level window must restart prompt focus without waiting for an iframe event");
 
 workspace.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: workspace.promptChild });
 assert.equal(workspace.document.documentElement.dataset.p, undefined, "a prompt click must end the initial iframe focus lock");
@@ -184,6 +216,80 @@ const iframeController = iframeInteraction.context.createPromptFocusController({
 iframeInteraction.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: iframe });
 iframeController.focusInitialPromptInput();
 assert.equal(iframeFocusCalls, 0, "manual iframe interaction must be able to take focus");
+
+{
+  // 2026-09-10 Arc report: the user's first interaction on a fresh page was a click inside a
+  // site-isolated chat-frame. The parent never sees that pointerdown; focus moves to the frame and
+  // the child shield reports the click 1–40 ms later. The 50 ms restore loop used to refocus the
+  // prompt in between, so the caret "came back" to the composer.
+  const fresh = makeContext();
+  let freshFocusCalls = 0;
+  const freshController = fresh.context.createPromptFocusController({
+    focusInput() {
+      freshFocusCalls += 1;
+      fresh.document.activeElement = fresh.prompt;
+    }
+  });
+  freshController.focusInitialPromptInput();
+  assert.equal(freshFocusCalls, 1);
+  assert.equal(fresh.document.documentElement.dataset.p, "1");
+  const freshFrame = Object.assign(new MockNode(), {
+    classList: { contains(name) { return name === "chat-frame"; } }
+  });
+  fresh.document.activeElement = freshFrame;
+  fresh.listeners.get("focusin")({ target: freshFrame });
+  fresh.timers.shift()?.();
+  fresh.clock.advance(INITIAL_PROMPT_FOCUS_RESTORE_MS);
+  fresh.timers.shift()?.();
+  assert.equal(freshFocusCalls, 1, "the restore loop must not refocus the prompt while the child pointer report can still land");
+  assert.equal(fresh.document.activeElement, freshFrame);
+  fresh.clock.advance(40);
+  assert.ok(typeof fresh.listeners.get(CHAT_FRAME_POINTER_EVENT) === "function", "the controller must listen for the re-dispatched chat-frame pointer report");
+  fresh.listeners.get(CHAT_FRAME_POINTER_EVENT)({ type: CHAT_FRAME_POINTER_EVENT, detail: { frame: freshFrame } });
+  assert.equal(fresh.document.documentElement.dataset.p, undefined, "a reported chat-frame click must end the initial focus lock like a wrap pointerdown");
+  fresh.clock.advance(CHAT_FRAME_POINTER_REPORT_GRACE_MS * 4);
+  while (fresh.timers.length) fresh.timers.shift()?.();
+  fresh.listeners.get("focusin")({ target: freshFrame });
+  while (fresh.timers.length) fresh.timers.shift()?.();
+  fresh.listeners.get("load")({ target: freshFrame });
+  while (fresh.timers.length) fresh.timers.shift()?.();
+  freshController.focusInitialPromptInput();
+  assert.equal(freshFocusCalls, 1, "after the reported click nothing may pull the caret back to the prompt");
+  assert.equal(fresh.document.activeElement, freshFrame);
+}
+
+{
+  // A report that arrives while the frame `load` restore is pending must also win: the load handler
+  // checks the recent-pointer window when it fires, not when it was scheduled.
+  const late = makeContext();
+  let lateFocusCalls = 0;
+  const lateController = late.context.createPromptFocusController({
+    focusInput() {
+      lateFocusCalls += 1;
+      late.document.activeElement = late.prompt;
+    }
+  });
+  lateController.focusInitialPromptInput();
+  const lateFrame = Object.assign(new MockNode(), {
+    classList: { contains(name) { return name === "chat-frame"; } }
+  });
+  late.document.activeElement = lateFrame;
+  late.listeners.get("load")({ target: lateFrame });
+  late.listeners.get(CHAT_FRAME_POINTER_EVENT)({ type: CHAT_FRAME_POINTER_EVENT, detail: { frame: lateFrame } });
+  while (late.timers.length) late.timers.shift()?.();
+  assert.equal(lateFocusCalls, 1, "a frame load right after the reported click must not restore prompt focus");
+  assert.equal(late.document.activeElement, lateFrame);
+}
+
+{
+  // The report is only meaningful while the lock is pending; afterwards it is a no-op.
+  const released = makeContext();
+  released.context.createPromptFocusController({ focusInput() {} });
+  released.listeners.get("pointerdown")({ isTrusted: true, type: "pointerdown", target: new MockNode() });
+  assert.equal(released.document.documentElement.dataset.p, undefined);
+  assert.doesNotThrow(() => released.listeners.get(CHAT_FRAME_POINTER_EVENT)({ type: CHAT_FRAME_POINTER_EVENT, detail: {} }));
+  assert.equal(released.document.documentElement.dataset.p, undefined);
+}
 
 const optionsContext = makeContext({ options: true });
 optionsContext.context.createPromptFocusController({ isOptionsPage: true, focusInput() {} });

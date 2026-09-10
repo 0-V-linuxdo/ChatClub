@@ -35,8 +35,9 @@ const byteBudgets = Object.freeze({
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   // Exact cost after the document_start shield reports trusted pointerdown to the
-  // parent and re-focuses the clicked element on a late handback.
-  "content/preload.js": 225_636,
+  // parent, re-focuses the clicked element on a late handback, relays a nested-iframe
+  // pointer report upward, and removes its focus/message listeners on dispose.
+  "content/preload.js": 226_554,
   "content/summary-userscripts-main.js": 230_894,
   "content/summary-userscripts.js": 161_108
 });
@@ -45,8 +46,8 @@ const byteBudgets = Object.freeze({
 const aggregateByteBudget = 801_706;
 // Exact all-bundle closure after MAIN-world page-caret document_start
 // bootstrap plus the isolated command-contract growth, then the shield's
-// trusted-pointer report and late-handback refocus.
-const allBundlesByteBudget = 1_591_385;
+// trusted-pointer report, late-handback refocus, and nested-frame pointer relay.
+const allBundlesByteBudget = 1_592_303;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

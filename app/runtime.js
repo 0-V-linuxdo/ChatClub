@@ -55,7 +55,7 @@ import {
 } from "./functional-anomalies/controller.js";
 import { SETTINGS_SECTIONS } from "./settings/sections.js";
 import { createCompactIconButton, createMenuButton } from "../ui/components.js";
-import { el, ensureToastHost, isDismissalEscape, openConfirmationAction, setToastStay, toast } from "../ui/dom.js";
+import { el, ensureChatFramePointerReports, ensureToastHost, isDismissalEscape, openConfirmationAction, setToastStay, toast } from "../ui/dom.js";
 import { FRAME_TOAST_POSITION_EVENT } from "../ui/frame-toast.js";
 import { installGlobalTooltips } from "../ui/tooltip.js";
 import { createSvgIcon } from "../ui/icons.js";
@@ -233,6 +233,8 @@ const syncTopbarPromptPlaceholder = topbarController.syncPlaceholder;
 const syncPromptInputNode = composerController.syncInputNode;
 const setPromptImages = composerController.setImages;
 const focusPromptInput = composerController.focusInput;
+// The initial prompt-focus lock must hear a chat-frame click (child shield report) before any caret claim.
+ensureChatFramePointerReports();
 const promptFocusPromise = import("./prompt-focus/controller.js").then(({ installPromptFocusController }) => installPromptFocusController());
 const closePromptActionsMenu = composerController.closeActionsMenu;
 const closeSettingsJumpMenu = topbarController.closeSettingsMenu;

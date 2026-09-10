@@ -229,6 +229,10 @@ const OVERLAY_CARET_LOAD_PIN_MS = 2500;
 const OVERLAY_CARET_FRAME_BLUR_WINDOW_MS = 1000;
 const OVERLAY_CARET_FRAME_BLUR_MAX = 8;
 const PAGE_CARET_MESSAGE_SOURCE = "chatclub-page-caret";
+// Re-dispatched on `document` for every trusted chat-frame pointer this module accepts (wrap
+// pointerdown or the child shield's report), so other parent code that keeps the prompt caret
+// (`app/prompt-focus/controller.js`) can treat it exactly like a pointerdown it never received.
+const CHAT_FRAME_POINTER_EVENT = "chatclub:chat-frame-pointer";
 
 function overlaySearchCaretPanel(field) {
   return field?.closest?.(".modal") || openModals[openModals.length - 1]?.panel || null;
@@ -514,6 +518,12 @@ export function setOverlayCaretLeaseHandler(handler) {
   overlayCaretLeaseHandler = handler && typeof handler === "object" ? handler : null;
 }
 
+// The child pointer report must be heard before any caret owner exists (the initial prompt-focus
+// lock runs before the first claim), so the page installs the listeners at startup.
+export function ensureChatFramePointerReports() {
+  ensureOverlaySearchCaretListeners();
+}
+
 export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW_MAX) {
   // window.focus() re-dispatches `focus` on the field before Chromium finishes moving the focused
   // frame back; a field focus handler that re-claims must not recurse into another window.focus().
@@ -629,10 +639,26 @@ function overlayCaretFrameForSource(source) {
 // the shield) is the user choosing the site: stamp it so the frame focus reads as a leave, drop the
 // claim, and hand the browsing context to the frame when a re-pin already yanked it back. Calling
 // frame.focus() while the frame already holds it would blur the child's editor (Chromium 149).
+function announceChatFramePointer(frame) {
+  if (typeof CustomEvent !== "function" || typeof document.dispatchEvent !== "function") return;
+  try {
+    document.dispatchEvent(new CustomEvent(CHAT_FRAME_POINTER_EVENT, { bubbles: true, detail: { frame } }));
+  } catch {}
+}
+
 function leaveOverlayCaretForFrame(frame) {
   overlayCaretFramePointerAt = Date.now();
   cancelOverlayCaretPinFollow();
   cancelOverlayCaretFrameGrace();
+  // A navigation armed while the prompt held would refocus it when that load completes (a heavy site
+  // fires `load` long after it is usable); the user has chosen the frame, so no chat-frame keeps that
+  // restore, and the initial prompt-focus lock learns about the click it never saw.
+  try {
+    for (const chatFrame of document.querySelectorAll?.("iframe.chat-frame") || []) {
+      delete chatFrame.dataset?.promptFocusRestoreGeneration;
+    }
+  } catch {}
+  announceChatFramePointer(frame);
   if (overlaySearchCaretMode() !== "page" && !overlaySearchCaretComposer()) return;
   clearOverlaySearchCaret(true);
   if (document.activeElement === frame) return;

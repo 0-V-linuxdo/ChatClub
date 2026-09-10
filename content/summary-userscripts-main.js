@@ -74,11 +74,11 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "851a087e7e996c9602e8fd57a74837513255bdc53698608efbf494d09353f169";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "44a1d29a6776a2c0df232857b1720b532fa00b1b25899a5bb96235b80564403a";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dfb172186e328bb3159d9d02a87c8226fdc695e3247fc21ea4c379fec5795304";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dfb172186e328bb3159d9d02a87c8226fdc695e3247fc21ea4c379fec5795304";
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "7c98d95fd945a96455798d59936b006217ee509b469c2d1c8309fb645de868dd";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.7c98d95fd945a96455798d59936b006217ee509b469c2d1c8309fb645de868dd";
   var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "8a868747c0e99158cd9604a1910ffc0a1d84095649e47daaa2615440aa458c7c", "implementationSha256": "11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9", "implementationVersion": "2026.07.16.2+bundle.11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9" });
 
   // shared/content-runtime-identity.js
@@ -2944,7 +2944,7 @@
       return [];
     };
     scripts["qianwen.js"] = scripts["qianwen"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.dfb172186e328bb3159d9d02a87c8226fdc695e3247fc21ea4c379fec5795304" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.7c98d95fd945a96455798d59936b006217ee509b469c2d1c8309fb645de868dd" });
     return scripts;
   }
 

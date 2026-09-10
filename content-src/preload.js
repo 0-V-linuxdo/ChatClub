@@ -533,6 +533,27 @@ function installPreload() {
       pageCaretTrustedAt = Date.now();
       notifyPageCaretTrustedPointer();
     };
+    // A site may keep its editor inside a nested iframe; that document's shield reports the click to
+    // this window, not to ChatClub. Relay only `pointer`, only from a frame this document owns, only
+    // when this document is itself embedded.
+    const relayPageCaretTrustedPointer = (event) => {
+      const data = event?.data;
+      if (!data || data.source !== PAGE_CARET_MESSAGE_SOURCE || data.action !== "pointer") return;
+      if (!window.parent || window.parent === window) return;
+      const source = event.source;
+      if (!source || source === window) return;
+      let owned = false;
+      try {
+        for (const frame of document.querySelectorAll("iframe, frame")) {
+          if (frame.contentWindow === source) {
+            owned = true;
+            break;
+          }
+        }
+      } catch {}
+      if (!owned) return;
+      notifyPageCaretTrustedPointer();
+    };
     try { guardedElementFocus.toString = () => nativeElementFocus.toString(); } catch {}
     try { guardedWindowFocus.toString = () => nativeWindowFocus.toString(); } catch {}
     let elementInstalled = false;
@@ -607,6 +628,7 @@ function installPreload() {
     window.addEventListener("focusin", onPageCaretFocusIn, true);
     window.addEventListener("pointerdown", markPageCaretTrustedPointer, true);
     window.addEventListener("focus", restorePageCaretTrustedFocus);
+    window.addEventListener("message", relayPageCaretTrustedPointer);
     if (pageCaretExpiresAt > Date.now()) evictPageCaretFocus();
 
     window[registryKey] = {
@@ -633,6 +655,8 @@ function installPreload() {
         window.removeEventListener("keydown", releaseBootstrapForTrustedIntent, true);
         window.removeEventListener("focusin", onPageCaretFocusIn, true);
         window.removeEventListener("pointerdown", markPageCaretTrustedPointer, true);
+        window.removeEventListener("focus", restorePageCaretTrustedFocus);
+        window.removeEventListener("message", relayPageCaretTrustedPointer);
         try { leaseObserver?.disconnect?.(); } catch {}
         try { rootObserver?.disconnect?.(); } catch {}
         if (expiryTimer) clearTimeout(expiryTimer);
