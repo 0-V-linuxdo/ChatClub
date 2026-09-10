@@ -39,6 +39,8 @@ assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?height:\s*var\(--prompt-collap
 assert.match(css, /--prompt-collapsed-height:\s*56px;/);
 assert.match(css, /--prompt-search-radius:\s*var\(--ui-compact-height\)/);
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?display:\s*grid/);
+assert.match(composer, /prompt-pin-button/);
+assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?display:\s*none/);
 assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[\s\S]*?background:\s*var\(--panel\)/);
 assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-pill\)/);
 assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\):not\(\.prompt-shell-expanded\) \.prompt-input-row\s*\{[\s\S]*?max-height:\s*var\(--prompt-collapsed-height\)/);

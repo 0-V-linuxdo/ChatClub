@@ -94,6 +94,7 @@ function composerCaretShouldLeave(active, field) {
 }
 
 const COMPOSER_CENTER_HOST_ID = "composer-center-host";
+const CHAT_FRAME_POINTER_EVENT = "chatclub:chat-frame-pointer";
 
 export function createComposerController(dependencies = {}) {
   const {
@@ -154,6 +155,7 @@ export function createComposerController(dependencies = {}) {
   let observedDraftText = String(state.promptText || "");
   let observedDraftImages = canonicalDraftImages().map((image) => ({ ...image }));
   let promptHistoryWriteTail = Promise.resolve();
+  let centerPinned = false;
   const frameSendQueue = createFrameSendQueue({
     execute: executeQueuedFrameSend,
     isUncertainError: frameSendDeliveryIsUncertain,
@@ -1173,6 +1175,17 @@ export function createComposerController(dependencies = {}) {
   }
 
   function handleInputKeydown(event) {
+    if (
+      event.key === "Escape"
+      && !centerPinned
+      && composerPlacementValue() === "center"
+      && !document.getElementById(COMPOSER_CENTER_HOST_ID)?.hidden
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      hideCenterHost();
+      return;
+    }
     if (searchPanel.handleTab(event)) return;
     const inputNode = event.currentTarget;
     if (searchPanel.isActive()) {
@@ -1241,9 +1254,13 @@ export function createComposerController(dependencies = {}) {
     return n
   }
 
-  function focusInput(expand=true){syncInputNode({focus:true,expand})}
+  function focusInput(expand=true){
+    if (composerPlacementValue() === "center") showCenterHost();
+    syncInputNode({focus:true,expand})
+  }
 
   function enterSearchMode() {
+    if (composerPlacementValue() === "center") showCenterHost();
     const field = document.querySelector(".prompt-input") || syncInputNode({ focus: true, expand: false });
     const shell = field?.closest?.(".prompt-shell") || document.querySelector(".prompt-shell");
     if (shell) searchPanel.attach(shell);
@@ -1259,6 +1276,64 @@ export function createComposerController(dependencies = {}) {
     return state.options?.composerPlacement === "center" && !state.topbarEditMode ? "center" : "topbar";
   }
 
+  function pinLabel() {
+    return centerPinned ? t("composer.unpin") : t("composer.pin");
+  }
+
+  function syncPinButton(button = document.querySelector(".prompt-pin-button")) {
+    if (!button) return;
+    const label = pinLabel();
+    button.setAttribute("aria-pressed", centerPinned ? "true" : "false");
+    button.setAttribute("aria-label", label);
+    button.setAttribute("data-tooltip", label);
+    button.classList.toggle("is-pinned", centerPinned);
+  }
+
+  function showCenterHost() {
+    if (composerPlacementValue() !== "center") return;
+    const host = ensureComposerCenterHost();
+    host.hidden = false;
+  }
+
+  function hideCenterHost() {
+    if (centerPinned) return;
+    if (searchPanel.isActive()) searchPanel.exit({ restoreField: true });
+    const inputNode = document.querySelector(".prompt-input");
+    if (inputNode) collapseInput(inputNode);
+    const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
+    if (host) host.hidden = true;
+  }
+
+  function toggleCenterPinned(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    centerPinned = !centerPinned;
+    if (centerPinned) showCenterHost();
+    syncPinButton();
+  }
+
+  function eventIsInsideCenterChrome(event) {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    const nodes = path.length ? path : [event.target];
+    return nodes.some((node) => {
+      if (!node || typeof node.closest !== "function") return false;
+      return Boolean(
+        node.closest("#composer-center-host")
+        || node.closest(".composer-center-mark")
+        || node.closest(".prompt-actions-popover")
+        || node.closest(".modal")
+        || node.closest(".popover-menu")
+      );
+    });
+  }
+
+  function handleCenterDismissPointer(event) {
+    if (centerPinned || composerPlacementValue() !== "center") return;
+    const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
+    if (!host || host.hidden) return;
+    if (event.type === CHAT_FRAME_POINTER_EVENT || !eventIsInsideCenterChrome(event)) hideCenterHost();
+  }
+
   function ensureComposerCenterHost() {
     let host = document.getElementById(COMPOSER_CENTER_HOST_ID);
     if (host) return host;
@@ -1269,6 +1344,7 @@ export function createComposerController(dependencies = {}) {
       "aria-label": t("topbar.input.centerHost")
     });
     document.body.append(host);
+    host.hidden = true;
     return host;
   }
 
@@ -1284,7 +1360,8 @@ export function createComposerController(dependencies = {}) {
       if (liveShell.parentNode !== centerHost) centerHost.appendChild(liveShell);
       if (duplicate && duplicate !== liveShell) duplicate.remove();
       composerNode.classList.add("composer-center-slot");
-      centerHost.hidden = false;
+      if (centerPinned) centerHost.hidden = false;
+      syncPinButton();
       return;
     }
     const duplicate = composerNode.querySelector(".prompt-shell");
@@ -1438,7 +1515,22 @@ export function createComposerController(dependencies = {}) {
             "aria-atomic": "true"
           }, Number(state.promptQueuedTargetCount) > 0
             ? t("topbar.promptQueuedTargets", { count: Number(state.promptQueuedTargetCount) })
-            : "")
+            : ""),
+          el("button", {
+            class: "prompt-pin-button compact-icon tooltip-trigger",
+            type: "button",
+            tabindex: "-1",
+            "aria-pressed": centerPinned ? "true" : "false",
+            "aria-label": pinLabel(),
+            "data-tooltip": pinLabel(),
+            "data-tooltip-id": "composer.pin",
+            onclick: toggleCenterPinned,
+            onpointerdown: (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            },
+            onkeydown: (event) => event.stopPropagation()
+          }, createSvgIcon("pin"))
         ),
         el("div", {
           class: "prompt-model-gate-status tooltip-trigger",
@@ -1468,8 +1560,12 @@ export function createComposerController(dependencies = {}) {
       )
     );
     searchPanel.attach(composerNode.querySelector(".prompt-shell"));
+    syncPinButton(composerNode.querySelector(".prompt-pin-button"));
     return composerNode;
   }
+
+  document.addEventListener("pointerdown", handleCenterDismissPointer, true);
+  document.addEventListener(CHAT_FRAME_POINTER_EVENT, handleCenterDismissPointer);
 
   return Object.freeze({
     admitSnapshot,

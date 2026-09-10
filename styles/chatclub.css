@@ -1542,7 +1542,7 @@ button { cursor: pointer; }
 
 .prompt-input-row {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
   grid-template-rows: var(--prompt-collapsed-height);
   align-items: center;
   column-gap: var(--space-2);
@@ -1715,6 +1715,49 @@ button { cursor: pointer; }
 .prompt-send-button .svg-icon {
   width: 16px;
   height: 16px;
+}
+
+.prompt-pin-button {
+  position: static;
+  grid-column: 6;
+  grid-row: 1;
+  top: auto;
+  right: auto;
+  left: auto;
+  bottom: auto;
+  z-index: 70;
+  width: var(--ui-accessory-height);
+  height: var(--ui-accessory-height);
+  min-width: var(--ui-accessory-height);
+  min-height: var(--ui-accessory-height);
+  display: none;
+  place-items: center;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 8%, var(--panel));
+  border: 0;
+  border-radius: var(--ui-radius);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.composer-center-host .prompt-pin-button {
+  display: inline-grid;
+}
+
+.composer-center-host .prompt-pin-button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel));
+}
+
+.composer-center-host .prompt-pin-button.is-pinned,
+.composer-center-host .prompt-pin-button[aria-pressed="true"] {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 16%, var(--panel));
+}
+
+.composer-center-host .prompt-pin-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .prompt-send-queue-badge {
@@ -2305,6 +2348,15 @@ button { cursor: pointer; }
 }
 
 .prompt-send-button.tooltip-trigger {
+  position: static;
+  top: auto;
+  right: auto;
+  left: auto;
+  bottom: auto;
+  transform: none;
+}
+
+.prompt-pin-button.tooltip-trigger {
   position: static;
   top: auto;
   right: auto;

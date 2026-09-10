@@ -38,6 +38,15 @@ assert.match(composer, /COMPOSER_CENTER_HOST_ID/);
 assert.match(composer, /overlay-surface composer-center-host/);
 assert.match(composer, /composer-center-slot/);
 assert.match(composer, /composer-center-mark/);
+assert.match(composer, /prompt-pin-button/);
+assert.match(composer, /let centerPinned = false/);
+assert.match(composer, /function showCenterHost\(/);
+assert.match(composer, /function hideCenterHost\(/);
+assert.match(composer, /CHAT_FRAME_POINTER_EVENT/);
+assert.match(composer, /host\.hidden = true/);
+assert.match(functionSource(composer, "focusInput"), /showCenterHost\(/);
+assert.match(functionSource(composer, "enterSearchMode"), /showCenterHost\(/);
+assert.match(functionSource(composer, "applyPlacement"), /if \(centerPinned\) centerHost\.hidden = false/);
 assert.match(composer, /state\.topbarEditMode/);
 assert.match(dom, /export function overlaySearchCaretComposer/);
 assert.match(dom, /composer: options\.composer === true/);
@@ -69,6 +78,14 @@ assert.match(i18n, /"topbar\.input\.placement": "Placement"/);
 assert.match(i18n, /"topbar\.input\.placement": "位置"/);
 assert.match(i18n, /"topbar\.input\.placementCenter": "Center"/);
 assert.match(i18n, /"topbar\.input\.placementCenter": "居中"/);
+assert.match(i18n, /"composer\.pin": "Pin composer"/);
+assert.match(i18n, /"composer\.pin": "置顶"/);
+assert.match(i18n, /"composer\.unpin": "Unpin composer"/);
+assert.match(i18n, /"composer\.unpin": "取消置顶"/);
+assert.match(agents, /host starts hidden unless pinned/);
+assert.match(agents, /`\.prompt-pin-button`/);
+assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?grid-column:\s*6/);
+assert.match(css, /\.composer-center-host \.prompt-pin-button\s*\{[\s\S]*?display:\s*inline-grid/);
 
 assert.match(functionSource(composer, "composerCaretStolen"), /chat-frame-wrap/);
 // Frame chrome inside .chat-frame-wrap only receives focus programmatically (selection-overlay
@@ -199,6 +216,8 @@ assert.doesNotMatch(functionSource(composer, "applyPlacement"), /cloneNode|inner
   });
   vm.runInContext(`
     const COMPOSER_CENTER_HOST_ID = "composer-center-host";
+    let centerPinned = false;
+    function syncPinButton() {}
     ${functionSource(composer, "composerPlacementValue")}
     ${functionSource(composer, "ensureComposerCenterHost")}
     ${functionSource(composer, "applyPlacement")}
@@ -207,7 +226,7 @@ assert.doesNotMatch(functionSource(composer, "applyPlacement"), /cloneNode|inner
   `, context);
   assert.equal(shell.parentNode.id, "composer-center-host", "center placement must reparent the live prompt shell");
   assert.equal(composerNode.classList.contains("composer-center-slot"), true);
-  assert.equal(context.host.hidden, false);
+  assert.equal(context.host.hidden, true, "center host starts hidden when unpinned");
   assert.equal(input.parentNode, shell, "reparenting must not remount the textarea");
   context.state.options.composerPlacement = "topbar";
   vm.runInContext("applyPlacement()", context);
