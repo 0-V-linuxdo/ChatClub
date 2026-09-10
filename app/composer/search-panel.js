@@ -31,6 +31,38 @@ function recordTitle(record, index) {
   return names.join(" · ") || t("workspace.tabs.untitled", { index: index + 1 });
 }
 
+function recordTimestamp(record) {
+  const values = [record?.viewedAt, record?.updatedAt, record?.createdAt, record?.detachedAt];
+  for (const value of values) {
+    if (value == null || value === "") continue;
+    const parsed = value instanceof Date
+      ? value.getTime()
+      : typeof value === "number" ? value : Date.parse(String(value));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function recordTimeLabel(record) {
+  const ms = recordTimestamp(record);
+  if (ms == null) return "";
+  try {
+    return new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
+function renderTime(record, label) {
+  const text = String(label || "");
+  if (!text) return null;
+  const ms = recordTimestamp(record);
+  return el("time", {
+    class: "prompt-search-option-time",
+    datetime: ms == null ? "" : new Date(ms).toISOString()
+  }, text);
+}
+
 function composeEmptyHint(placeholder) {
   const value = String(placeholder || "");
   if (!value || value === t("topbar.promptPlaceholder")) return t("composer.mode.tabToSearch");
@@ -175,13 +207,14 @@ export function createComposerSearchPanel(options = {}) {
       listNode.replaceChildren(...items.map((record, index) => {
         const title = recordTitle(record, index);
         const liveLabel = record.live ? t("composer.search.live") : t("composer.search.closed");
+        const timeLabel = recordTimeLabel(record);
         const option = el("button", {
           class: `prompt-search-option${index === selectedIndex ? " is-active" : ""}`,
           type: "button",
           id: `prompt-search-option-${record.workspaceId}`,
           role: "option",
           "aria-selected": index === selectedIndex ? "true" : "false",
-          "aria-label": `${title}, ${liveLabel}`,
+          "aria-label": timeLabel ? `${title}, ${liveLabel}, ${timeLabel}` : `${title}, ${liveLabel}`,
           onclick: (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -190,7 +223,8 @@ export function createComposerSearchPanel(options = {}) {
           }
         },
           renderFavicons(record),
-          el("span", { class: "prompt-search-option-title" }, ...highlight(title, query))
+          el("span", { class: "prompt-search-option-title" }, ...highlight(title, query)),
+          renderTime(record, timeLabel)
         );
         return option;
       }));

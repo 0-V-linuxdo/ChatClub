@@ -55,9 +55,13 @@ assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\]\s*\{[\s\S]*?backgro
 assert.match(css, /\.prompt-mode-switch\s*\{[\s\S]*?background:\s*var\(--panel-2\)/);
 assert.match(css, /\.prompt-mode-switch\s*\{[\s\S]*?position:\s*static/);
 assert.doesNotMatch(css, /\.prompt-mode-chip[^{]*\{[^}]*transform:/);
-assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.prompt-mode-switch/);
+assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.prompt-mode-switch\s*\{[\s\S]*?display:\s*inline-flex/);
+assert.doesNotMatch(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.prompt-mode-switch\s*\{[^}]*display:\s*none/);
 assert.match(css, /\.prompt-shell-expanded:not\(\.prompt-shell-search\) \.textarea\.prompt-input/);
-assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\)/);
+assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-input-row\s*\{[\s\S]*?border-bottom:\s*0/);
+assert.doesNotMatch(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-input-row\s*\{[^}]*border-bottom-color/);
+assert.match(css, /\.prompt-search-results \{[\s\S]*?padding:\s*var\(--space-1\) var\(--space-3\) var\(--space-3\)/);
+assert.match(css, /\.prompt-search-option-time\s*\{[\s\S]*?margin-left:\s*auto/);
 assert.match(css, /\.prompt-search-results \{[\s\S]*?position:\s*static/);
 assert.doesNotMatch(css, /\.prompt-search-results \{[\s\S]*?border-bottom-left-radius:\s*var\(--ui-radius-pill\)/);
 assert.match(css, /\.prompt-search-option \{[\s\S]*?display:\s*flex/);
@@ -84,8 +88,9 @@ assert.match(panelSource, /prompt-mode-chip-compose/);
 assert.match(panelSource, /prompt-mode-chip-search/);
 assert.match(panelSource, /tabindex: "-1"/);
 assert.match(panelSource, /function handleTab\(/);
-assert.match(panelSource, /renderFavicons\(record\)/);
-assert.match(panelSource, /composer\.search\.empty/);
+assert.match(panelSource, /renderTime\(record, timeLabel\)/);
+assert.match(panelSource, /prompt-search-option-time/);
+assert.match(panelSource, /month: "short", day: "numeric"/);
 assert.doesNotMatch(panelSource, /prompt-search-option-meta/);
 assert.doesNotMatch(panelSource, /workspace\.tabs\.empty/);
 assert.doesNotMatch(panelSource, /prompt-search-toggle/);
@@ -106,13 +111,16 @@ assert.doesNotMatch(functionSource(panelSource, "exit"), /query = ""/);
 assert.match(functionSource(composer, "handleInputKeydown"), /searchPanel\.handleTab/);
 assert.match(agents, /Search mode stays single-line/);
 assert.match(agents, /visible `\.prompt-mode-switch`/);
+assert.match(agents, /expanded compose must not `display: none` that switch/);
 assert.match(agents, /Tab while `\.prompt-input` owns the caret toggles compose and search/);
 assert.doesNotMatch(css, /\.prompt-search-results \{[^}]*transform:/);
 assert.match(agents, /Do not wrap `\.prompt-shell` in `viewerModal`/);
 assert.match(agents, /Topbar Search enters composer search mode/);
 assert.match(agents, /card chrome lives on the input row/);
 assert.match(agents, /expanded compose keeps that same row chrome/);
+assert.match(agents, /join the input row with `border-bottom: 0`/);
 assert.match(agents, /renderFavicons/);
+assert.match(agents, /prompt-search-option-time/);
 assert.match(agents, /must not paint `workspace\.tabs\.empty`/);
 assert.match(agents, /`\.ui-empty-state\[hidden\]`/);
 assert.match(agents, /compose draft and search query are independent buffers/);
@@ -266,8 +274,8 @@ globalThis.document = {
   try {
     const { createComposerSearchPanel } = await import(moduleUrl("app/composer/search-panel.js"));
     const records = [
-      { workspaceId: "live-1", title: "Live desk", live: true, current: false, appIds: ["Grok"] },
-      { workspaceId: "closed-1", title: "Closed desk", live: false, current: false, appIds: ["Claude"] }
+      { workspaceId: "live-1", title: "Live desk", live: true, current: false, appIds: ["Grok"], viewedAt: Date.UTC(2026, 8, 10) },
+      { workspaceId: "closed-1", title: "Closed desk", live: false, current: false, appIds: ["Claude"], updatedAt: Date.UTC(2026, 8, 9) }
     ];
     const opened = [];
     const viewers = [];
@@ -378,6 +386,9 @@ globalThis.document = {
     assert.equal(options[0].children[0]?.classList.contains("prompt-search-option-favicons"), true, "site favicons sit to the left of the title");
     assert.ok(options[0].querySelector(".prompt-search-option-title"), "search rows keep a title after the favicon stack");
     assert.equal(options[0].querySelector(".prompt-search-option-meta"), null, "search rows must not use app-name text meta");
+    const timeNode = options[0].querySelector(".prompt-search-option-time");
+    assert.equal(Boolean(timeNode), true, "search rows show a date on the right");
+    assert.ok(String(nodeText(timeNode) || "").trim(), "date label must not be empty");
     field.value = "Closed";
     panel.handleInput({ target: field });
     await new Promise((resolve) => { setImmediate(resolve); });

@@ -1542,7 +1542,7 @@ button { cursor: pointer; }
 
 .prompt-input-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   grid-template-rows: var(--prompt-collapsed-height);
   align-items: center;
   column-gap: var(--space-2);
@@ -1575,7 +1575,7 @@ button { cursor: pointer; }
 .prompt-collapsed-preview {
   position: relative;
   inset: auto;
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1;
   z-index: 45;
   width: auto;
@@ -1642,7 +1642,7 @@ button { cursor: pointer; }
 
 .prompt-actions-button {
   position: static;
-  grid-column: 1;
+  grid-column: 2;
   grid-row: 1;
   top: auto;
   right: auto;
@@ -1665,7 +1665,7 @@ button { cursor: pointer; }
 
 .prompt-clear-button {
   position: static;
-  grid-column: 3;
+  grid-column: 4;
   grid-row: 1;
   top: auto;
   right: auto;
@@ -1688,7 +1688,7 @@ button { cursor: pointer; }
 
 .prompt-send-button {
   position: static;
-  grid-column: 4;
+  grid-column: 5;
   grid-row: 1;
   top: auto;
   right: auto;
@@ -3330,7 +3330,7 @@ body.tab-gesture-active * {
 }
 
 .textarea.prompt-input {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1;
   align-self: center;
   min-height: 0 !important;
@@ -3502,7 +3502,7 @@ body.tab-gesture-active * {
 }
 
 .prompt-shell-expanded:not(.prompt-shell-search) .prompt-mode-switch {
-  display: none;
+  display: inline-flex;
 }
 
 .prompt-shell-expanded:not(.prompt-shell-search) {
@@ -3524,7 +3524,7 @@ body.tab-gesture-active * {
 
 .prompt-shell-expanded:not(.prompt-shell-search) .textarea.prompt-input,
 .prompt-shell-expanded:not(.prompt-shell-search) .prompt-collapsed-preview {
-  padding-left: 0;
+  min-width: 0;
 }
 
 .prompt-shell.prompt-shell-search,
@@ -3551,7 +3551,7 @@ body.tab-gesture-active * {
 .prompt-shell-search:has(.prompt-search-results:not([hidden])) .prompt-input-row {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
-  border-bottom-color: color-mix(in srgb, var(--line) 70%, transparent);
+  border-bottom: 0;
   box-shadow: none;
 }
 
@@ -3599,7 +3599,7 @@ body.tab-gesture-active * {
   max-height: min(calc(var(--prompt-search-row) * 6 + var(--space-3) * 2), calc(100vh - var(--topbar-height) - 80px));
   overflow: hidden;
   margin: 0;
-  padding: var(--space-3);
+  padding: var(--space-1) var(--space-3) var(--space-3);
   background: var(--panel);
   border: var(--overlay-border);
   border-top: 0;
@@ -3693,6 +3693,15 @@ body.tab-gesture-active * {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-search-option-time {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
   white-space: nowrap;
 }
 
