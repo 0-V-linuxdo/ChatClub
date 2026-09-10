@@ -648,18 +648,23 @@ export function createTabSearchController(ctx) {
     }).catch(() => currentRedraw?.());
   }
 
-  function openSearchPanel() {
+  function openSearchPanel(options = {}) {
+    const seed = options && typeof options === "object" ? options : {};
+    const seedQuery = String(seed.query || "");
+    const seedWorkspaceId = String(seed.workspaceId || "");
     const existing = document.querySelector(".modal.workspace-tabs-search-modal");
     searchFocused = true;
     if (existing) {
+      if (seedQuery) searchQuery = seedQuery;
+      if (seedWorkspaceId) activeWorkspaceId = seedWorkspaceId;
       restoreSearchField();
       refresh(currentRedraw).catch(() => currentRedraw?.());
       return existing.closest(".modal-backdrop") || existing.parentElement;
     }
-    searchQuery = "";
+    searchQuery = seedQuery;
     searchComposing = false;
     searchSelection = { start: 0, end: 0 };
-    activeWorkspaceId = "";
+    activeWorkspaceId = seedWorkspaceId;
     const host = el("div", { class: "ui-dialog workspace-tabs-search-dialog" });
     let dialog;
     const close = () => {

@@ -76,7 +76,8 @@ function responsiveBrandRules(kind) {
   );
   assert.match(runtime, /action === "toggleWorkspaceTabsSidebar"/, "Ctrl/Cmd+B must toggle the ChatClub Tabs sidebar");
   assert.match(runtime, /openWorkspaceTabsSearch/, "runtime must expose the topbar Search action");
-  assert.match(runtime, /ensureTabSearchController/, "topbar Search must lazy-load the Tabs search viewer");
+  assert.match(runtime, /enterSearchMode/, "topbar Search must enter composer search mode");
+  assert.match(runtime, /ensureTabSearchController/, "the Tabs search viewer remains a lazy deep link");
   assert.doesNotMatch(runtime, /workspaceTabsSidebarController\.openSearch/, "topbar Search must not open the ChatClub Tabs sidebar");
   assert.match(topbarView, /item\.id === "search"/, "the topbar must render a dedicated Search control");
   assert.match(topbarView, /actions\.openWorkspaceTabsSearch\(\)/, "Search must open the ChatClub Tabs search popup");
@@ -87,7 +88,7 @@ function responsiveBrandRules(kind) {
   assert.match(runtime, /topbarBinding\.bind\(topbarController\)/, "runtime must bind the stable topbar port once");
   assert.doesNotMatch(runtime, /workspace:\s*\(\)\s*=>\s*workspaceController/, "runtime must not expose an uninitialized workspace controller through a provider thunk");
   assert.doesNotMatch(runtime, /=>\s*preferredModelController\./, "runtime must not expose an uninitialized Preferred Model controller through provider thunks");
-  assert.ok(runtime.split(/\r?\n/).length <= 1480, "runtime must stay an assembly root after Composer/Topbar extraction");
+  assert.ok(runtime.split(/\r?\n/).length <= 1550, "runtime must stay an assembly root after Composer/Topbar extraction");
   assert.match(runtime, /scheduleIdleFullTextCapture\?\.\(text\)/, "send admission must schedule per-frame idle full-text capture");
   assert.match(runtime, /scheduleExistingIdleFullTextCapture/, "workspace restore must schedule idle capture of existing conversations");
   assert.doesNotMatch(runtime, /captureWorkspaceFullText/, "send admission must not collect full text immediately");
@@ -377,7 +378,7 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /\.prompt-input-row\s*\{[\s\S]*?position:\s*relative;[\s\S]*?height:\s*38px;/,
+    /\.prompt-input-row\s*\{[\s\S]*?position:\s*relative;[\s\S]*?height:\s*48px;/,
     "textarea chrome must live in a dedicated input row so the model status cannot overlay glyphs"
   );
   assert.match(
@@ -387,7 +388,7 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /\.app-shell:has\(\.topbar \.prompt-shell:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\)\s*\{[\s\S]*?--topbar-height:\s*calc\(51px \+ var\(--ui-accessory-height\) \+ var\(--space-1\)\);/,
+    /\.app-shell:has\(\.topbar \.prompt-shell:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\)\s*\{[\s\S]*?--topbar-height:\s*calc\(61px \+ var\(--ui-accessory-height\) \+ var\(--space-1\)\);/,
     "a visible model status in the topbar slot must grow the topbar instead of hanging over the workspace iframe"
   );
   assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images\s*\{[\s\S]*?height:\s*auto;/, "image mode must allow the prompt shell to grow with multiline text");

@@ -21,33 +21,33 @@ const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
   // Exact base cost after preparePageCaretLease joined the isolated
   // content contract with adoptPageCaretLease / releasePageCaretLease.
-  "content/content.js": 110_947,
+  "content/content.js": 110_961,
   "content/send.js": 85_000,
   // Bundles that embed the shared frame-command contract each carry the
   // page-caret lease spec entries (about one hundred bytes more).
-  "content/summary-bridge.js": 100_111,
+  "content/summary-bridge.js": 100_125,
   // Shared Notion catalog plus exact custom picker-name apply stay inside the
   // preferred-model content boundary instead of a second selector dialect.
-  "content/preferred-model.js": 243_847,
+  "content/preferred-model.js": 243_861,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
-  "content/delete.js": 266_697,
+  "content/delete.js": 266_711,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   // Exact cost after the document_start shield reports trusted pointerdown to the
   // parent, re-focuses the clicked element on a late handback, relays a nested-iframe
   // pointer report upward, and removes its focus/message listeners on dispose.
-  "content/preload.js": 226_554,
-  "content/summary-userscripts-main.js": 230_894,
-  "content/summary-userscripts.js": 161_108
+  "content/preload.js": 226_568,
+  "content/summary-userscripts-main.js": 230_908,
+  "content/summary-userscripts.js": 161_122
 });
 // Exact base-plus-capabilities closure after preparePageCaretLease joined
 // the isolated content contract.
-const aggregateByteBudget = 801_706;
+const aggregateByteBudget = 801_776;
 // Exact all-bundle closure after MAIN-world page-caret document_start
 // bootstrap plus the isolated command-contract growth, then the shield's
 // trusted-pointer report, late-handback refocus, and nested-frame pointer relay.
-const allBundlesByteBudget = 1_592_303;
+const allBundlesByteBudget = 1_592_443;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

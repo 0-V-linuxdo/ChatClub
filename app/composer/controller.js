@@ -29,6 +29,7 @@ import {
 import { createFrameSendQueue } from "./frame-send-queue.js";
 import { createPromptImageModel } from "./images.js";
 import { promptCollapsedPreview, promptInputHeight } from "./model.js";
+import { createComposerSearchPanel } from "./search-panel.js";
 
 const PROMPT_IMAGE_RETRY_COUNT = 3;
 const FRAME_SUBMIT_ERROR_MAX_CHARS = 160;
@@ -108,6 +109,7 @@ export function createComposerController(dependencies = {}) {
     optimizePrompt,
     recordFunctionalAnomaly,
     onPromptAdmitted,
+    workspaceSearch,
     frameSendPrepareTimeoutMs = FRAME_SEND_PREPARE_TIMEOUT_MS,
     savePromptSendHistory = defaultSavePromptSendHistory,
     toast = defaultToast,
@@ -125,6 +127,7 @@ export function createComposerController(dependencies = {}) {
     optimizePrompt: "function",
     recordFunctionalAnomaly: "function",
     onPromptAdmitted: "function?",
+    workspaceSearch: "object?",
     frameSendPrepareTimeoutMs: "number?",
     savePromptSendHistory: "function?",
     toast: "function?",
@@ -155,6 +158,18 @@ export function createComposerController(dependencies = {}) {
     execute: executeQueuedFrameSend,
     isUncertainError: frameSendDeliveryIsUncertain,
     onStateChange: syncFrameSendQueueState
+  });
+  const searchPanel = createComposerSearchPanel({
+    workspaceSearch,
+    onRestoreField(field) {
+      if (!field) return;
+      if (field.value !== state.promptText) field.value = state.promptText;
+      field.placeholder = currentPlaceholder;
+      field.setAttribute("aria-label", currentPlaceholder || t("topbar.promptPlaceholder"));
+      searchPanel.syncField(field);
+      syncCollapsedPreview(field);
+    },
+    onEnter() { enterSearchMode(); }
   });
 
   function normalizeImages(images) {
@@ -868,6 +883,7 @@ export function createComposerController(dependencies = {}) {
   }
 
   function submit(source = null) {
+    if (searchPanel.isActive()) searchPanel.exit({ restoreField: true });
     const inputNode = source?.classList?.contains?.("prompt-input")
       ? source
       : source?.currentTarget?.closest?.(".prompt-shell")?.querySelector?.(".prompt-input")
@@ -931,6 +947,7 @@ export function createComposerController(dependencies = {}) {
   }
 
   function syncClearButton(inputNode = document.querySelector(".prompt-input")) {
+    if (searchPanel.isActive()) return;
     const shell = inputNode?.closest?.(".prompt-shell") || document.querySelector(".prompt-shell");
     const clearButton = shell?.querySelector?.(".prompt-clear-button");
     if (clearButton) clearButton.hidden = !hasContent(inputNode?.value ?? state.promptText, state.promptImages);
@@ -996,6 +1013,7 @@ export function createComposerController(dependencies = {}) {
   }
 
   function collapseInput(inputNode) {
+    if (searchPanel.isActive()) searchPanel.exit({ restoreField: true });
     rememberSelection(inputNode);
     syncCollapsedPreview(inputNode);
     inputNode.closest?.(".prompt-shell")?.classList.remove("prompt-shell-expanded");
@@ -1121,6 +1139,10 @@ export function createComposerController(dependencies = {}) {
   function clearInput(event) {
     event?.preventDefault?.();
     event?.stopPropagation?.();
+    if (searchPanel.isActive()) {
+      searchPanel.clearQuery();
+      return;
+    }
     clearDraft({ focus: true });
   }
 
@@ -1138,6 +1160,10 @@ export function createComposerController(dependencies = {}) {
 
   function handleInputKeydown(event) {
     const inputNode = event.currentTarget;
+    if (searchPanel.isActive()) {
+      if (searchPanel.handleKeydown(event)) return;
+      return;
+    }
     if (event.isComposing || event.keyCode === 229) return;
     if (shouldOpenPromptLibraryFromSlash(event, inputNode.value, inputNode.selectionStart, inputNode.selectionEnd)) {
       event.preventDefault();
@@ -1169,6 +1195,7 @@ export function createComposerController(dependencies = {}) {
   }
 
   function handleInput(event) {
+    if (searchPanel.handleInput(event)) return;
     state.promptText = event.target.value;
     resetHistoryNavigation();
     reconcileDraftContent();
@@ -1181,7 +1208,8 @@ export function createComposerController(dependencies = {}) {
     reconcileDraftContent()
     const n=document.querySelector(".prompt-input")
     if(!n)return
-    if(n.value!==state.promptText)n.value=state.promptText
+    if (searchPanel.isActive()) searchPanel.syncField(n);
+    else if(n.value!==state.promptText)n.value=state.promptText
     syncCollapsedPreview(n)
     const reclaim = overlaySearchCaretComposer() && !document.querySelector(".modal");
     if(focus || reclaim){
@@ -1198,6 +1226,18 @@ export function createComposerController(dependencies = {}) {
   }
 
   function focusInput(expand=true){syncInputNode({focus:true,expand})}
+
+  function enterSearchMode() {
+    const field = document.querySelector(".prompt-input") || syncInputNode({ focus: true, expand: true });
+    const shell = field?.closest?.(".prompt-shell") || document.querySelector(".prompt-shell");
+    if (shell) searchPanel.attach(shell);
+    searchPanel.enter();
+    if (!field) return;
+    searchPanel.syncField(field);
+    claimPromptCaret(field);
+    field.focus?.({ preventScroll: true });
+    expandInput(field);
+  }
 
   function composerPlacementValue() {
     return state.options?.composerPlacement === "center" && !state.topbarEditMode ? "center" : "topbar";
@@ -1276,7 +1316,7 @@ export function createComposerController(dependencies = {}) {
       onkeydown: handleInputKeydown
     });
     const collapsed = promptCollapsedPreview(state.promptText, currentPlaceholder);
-    return el("div", { class: "composer topbar-item topbar-item-composer" },
+    const composerNode = el("div", { class: "composer topbar-item topbar-item-composer" },
       el("button", {
         class: "composer-center-mark compact-icon tooltip-trigger",
         type: "button",
@@ -1411,6 +1451,8 @@ export function createComposerController(dependencies = {}) {
         })
       )
     );
+    searchPanel.attach(composerNode.querySelector(".prompt-shell"));
+    return composerNode;
   }
 
   return Object.freeze({
@@ -1427,6 +1469,7 @@ export function createComposerController(dependencies = {}) {
     closeActionsMenu,
     subscribeContentChange: subscribeDraftChanges,
     subscribeDraftChanges,
+    enterSearchMode,
     submit
   });
 }

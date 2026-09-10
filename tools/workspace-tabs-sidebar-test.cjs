@@ -606,7 +606,7 @@ globalThis.document = {
       currentWorkspace: () => ({ layoutName: "Prompt", appIds: ["Grok", "Notion AI"] })
     });
     const shell = Object.assign(new FakeNode("div"), { isConnected: true, className: "app-shell" });
-    const grid = Object.assign(new FakeNode("div"), { className: "main-grid", offsetTop: 51 });
+    const grid = Object.assign(new FakeNode("div"), { className: "main-grid", offsetTop: 61 });
     shell.append(grid);
     fixture.api.setOpen(true);
     fixture.api.syncSidebar(shell);
@@ -618,7 +618,7 @@ globalThis.document = {
     titled.api.syncSidebar(shell);
     assert.equal(ownerDocument.title, "Compare models");
     const sidebar = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
-    assert.equal(sidebar?.style?.top, "51px");
+    assert.equal(sidebar?.style?.top, "61px");
   }
 
   {
@@ -828,7 +828,7 @@ globalThis.document = {
     await fixture.api.refresh();
     fixture.api.setOpen(true);
     const shell = Object.assign(new FakeNode("div"), { isConnected: true, className: "app-shell" });
-    const grid = Object.assign(new FakeNode("div"), { className: "main-grid", offsetTop: 51 });
+    const grid = Object.assign(new FakeNode("div"), { className: "main-grid", offsetTop: 61 });
     shell.append(grid);
     const sidebar = fixture.api.syncSidebar(shell);
     const handle = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-resize"));
@@ -995,7 +995,7 @@ globalThis.document = {
     };
     const fixture = controller({ document: ownerDocument });
     const shell = Object.assign(new FakeNode("div"), { isConnected: true, className: "app-shell" });
-    const grid = Object.assign(new FakeNode("div"), { className: "main-grid", offsetTop: 51 });
+    const grid = Object.assign(new FakeNode("div"), { className: "main-grid", offsetTop: 61 });
     shell.append(grid);
     shell.querySelector = (selector) => shell.querySelectorAll(selector)[0] || null;
     await fixture.api.refresh();

@@ -475,7 +475,7 @@ export function createWorkspaceTabsSidebarController({
     const grid = shell?.querySelector?.(".main-grid");
     if (!sidebar?.style || !grid) return;
     const top = Number(grid.offsetTop);
-    sidebar.style.top = `${Number.isFinite(top) && top > 0 ? top : 51}px`;
+    sidebar.style.top = `${Number.isFinite(top) && top > 0 ? top : 61}px`;
     applySidebarWidth(shell, sidebar);
   }
 

@@ -45,7 +45,7 @@ import { createTopbarWorkspaceQuickSave } from "./topbar/workspace-quick-save.js
 import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
 import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
-import { loadWorkspaceTabFullTextStore, persistWorkspaceTabFullTextFromPreview } from "./workspace/tab-search.js";
+import { collectWorkspaceSearchRecords, highlightQuery, loadRecordFullTextEnabled, loadWorkspaceTabFullTextStore, persistWorkspaceTabFullTextFromPreview } from "./workspace/tab-search.js";
 import { createWorkspaceTopicTitleController } from "./workspace/topic-title-controller.js";
 import { createWorkspaceAutoTitleController, openingPromptFromPocketEntries } from "./workspace/auto-title-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
@@ -172,6 +172,12 @@ const composerController = createComposerController({
     if (state.options?.recordFullText === true) {
       ensureSummaryController().then((summary) => summary?.scheduleIdleFullTextCapture?.(text)).catch(() => {});
     }
+  },
+  workspaceSearch: {
+    listRecords: listComposerSearchRecords,
+    openRecord: openComposerSearchRecord,
+    openViewer: openComposerSearchViewer,
+    highlight: highlightQuery
   }
 });
 const preferredModelController = createPreferredModelController({
@@ -401,8 +407,55 @@ const {
 });
 function toggleWorkspaceTabsSidebar() { workspaceTabsSidebarController.toggle(); }
 function isWorkspaceTabsSidebarOpen() { return workspaceTabsSidebarController.isOpen(); }
+function workspaceSearchRecordTitle(item, index) {
+  const title = String(item?.topicTitle || item?.title || "").trim();
+  if (title) return title;
+  const names = (Array.isArray(item?.appIds) ? item.appIds : [])
+    .map((id) => String(inferAppName(appById(id)) || id || "").trim())
+    .filter(Boolean);
+  return names.join(" · ") || t("workspace.tabs.untitled", { index: index + 1 });
+}
+async function listComposerSearchRecords(query) {
+  const [tabs, enabled, store] = await Promise.all([
+    requestBackground("listLiveWorkspaceTabs").catch(() => ({ tabs: [] })),
+    loadRecordFullTextEnabled().catch(() => false),
+    loadWorkspaceTabFullTextStore().catch(() => ({}))
+  ]);
+  return collectWorkspaceSearchRecords({
+    items: Array.isArray(tabs?.tabs) ? tabs.tabs : [],
+    store: store || {},
+    query,
+    fullTextEnabled: enabled === true,
+    labelOf: workspaceSearchRecordTitle
+  }).map((record) => ({
+    ...record,
+    appIds: (Array.isArray(record.appIds) ? record.appIds : [])
+      .map((id) => String(inferAppName(appById(id)) || id || "").trim())
+      .filter(Boolean)
+  }));
+}
+async function openComposerSearchRecord(record) {
+  if (!record?.workspaceId) return;
+  try {
+    if (record.live && record.tabId != null) {
+      try {
+        await requestBackground("focusWorkspaceTab", { tabId: record.tabId });
+        return;
+      } catch {
+        // Fall through to open a workspace tab for a stale live id.
+      }
+    }
+    await requestBackground("openWorkspaceTab", { workspaceId: record.workspaceId });
+  } catch (error) {
+    toast(t("toast.workspaceTabOpenFailed"), "error");
+    throw error;
+  }
+}
+function openComposerSearchViewer(opts) {
+  ensureTabSearchController().then((search) => search?.openSearchPanel?.(opts)).catch((error) => lazyControllerError("Search", error));
+}
 function openWorkspaceTabsSearch() {
-  ensureTabSearchController().then((search) => search?.openSearchPanel?.()).catch((error) => lazyControllerError("Search", error));
+  composerController.enterSearchMode();
 }
 const workspacePromptHandoffController = createWorkspacePromptHandoffController({
   api: extensionApi(), requestBackground, composer: composerController, workspace: workspaceController,
