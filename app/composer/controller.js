@@ -911,25 +911,28 @@ export function createComposerController(dependencies = {}) {
   function resizeInput(inputNode, expanded = inputNode.classList.contains("prompt-input-expanded")) {
     const hasImages = state.promptImages.length > 0;
     const shell = inputNode.closest?.(".prompt-shell");
+    const centerHost = inputNode.closest?.("#composer-center-host");
+    const grow = expanded || Boolean(centerHost);
     let restoreTransition = null;
-    if (expanded) {
+    if (grow) {
       restoreTransition = inputNode.style.transition;
       inputNode.style.transition = "none";
       inputNode.style.height = "0px";
       inputNode.style.overflowY = "hidden";
     }
-    const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, expanded, { hasImages });
+    const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, grow, { hasImages });
     inputNode.style.height = `${sizing.height}px`;
     inputNode.style.overflowY = sizing.overflowY;
     if (shell) {
-      if (expanded) shell.style.height = `${sizing.height}px`;
+      if (centerHost || shell.classList.contains("prompt-shell-search")) shell.style.height = "";
+      else if (grow) shell.style.height = `${sizing.height}px`;
       else shell.style.height = "";
     }
     if (restoreTransition !== null) {
       void inputNode.offsetHeight;
       inputNode.style.transition = restoreTransition;
     }
-    if (expanded) return;
+    if (grow) return;
     inputNode.scrollTop = 0;
     requestAnimationFrame(() => { inputNode.scrollTop = 0; });
   }
@@ -1224,7 +1227,10 @@ export function createComposerController(dependencies = {}) {
   }
 
   function handleInput(event) {
-    if (searchPanel.handleInput(event)) return;
+    if (searchPanel.handleInput(event)) {
+      if (event.target?.closest?.("#composer-center-host")) resizeInput(event.target, true);
+      return;
+    }
     state.promptText = event.target.value;
     resetHistoryNavigation();
     reconcileDraftContent();
@@ -1271,6 +1277,7 @@ export function createComposerController(dependencies = {}) {
     claimPromptCaret(field);
     field.focus?.({ preventScroll: true });
     collapseInput(field);
+    if (composerPlacementValue() === "center") resizeInput(field, true);
   }
 
   function composerPlacementValue() {

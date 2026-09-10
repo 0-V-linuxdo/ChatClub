@@ -96,6 +96,20 @@ assert.match(agents, /composer-center-launcher/);
 assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?grid-column:\s*6/);
 assert.match(css, /\.composer-center-host \.prompt-pin-button\s*\{[\s\S]*?display:\s*inline-grid/);
 assert.match(css, /\.composer-center-launcher\s*\{[\s\S]*?z-index:\s*var\(--overlay-z-panel\)/);
+assert.match(css, /\.composer-center-host \{[\s\S]*?--composer-center-top:\s*calc\(50vh - 28px\)/);
+assert.match(css, /\.composer-center-host \{[\s\S]*?top:\s*var\(--composer-center-top\)/);
+assert.match(css, /\.composer-center-host \{[\s\S]*?transform:\s*translateX\(-50%\)/);
+assert.match(css, /\.composer-center-launcher \{[\s\S]*?--composer-center-top:\s*calc\(50vh - 28px\)/);
+assert.match(css, /\.composer-center-launcher \{[\s\S]*?top:\s*var\(--composer-center-top\)/);
+assert.match(css, /\.composer-center-launcher \{[\s\S]*?transform:\s*translateX\(-50%\)/);
+assert.doesNotMatch(css, /\.composer-center-host \{[^}]*translate\(-50%, -50%\)/);
+assert.doesNotMatch(css, /\.composer-center-launcher \{[^}]*translate\(-50%, -50%\)/);
+assert.match(css, /\.composer-center-host \.prompt-shell-search \.prompt-input-row\s*\{[\s\S]*?max-height:\s*none/);
+assert.match(functionSource(composer, "resizeInput"), /closest\?\.\("#composer-center-host"\)/);
+assert.match(functionSource(composer, "enterSearchMode"), /resizeInput\(field, true\)/);
+assert.match(functionSource(composer, "handleInput"), /resizeInput\(event\.target, true\)/);
+assert.match(agents, /--composer-center-top/);
+assert.match(agents, /grow with `scrollHeight` downward/);
 
 assert.match(functionSource(composer, "composerCaretStolen"), /chat-frame-wrap/);
 // Frame chrome inside .chat-frame-wrap only receives focus programmatically (selection-overlay

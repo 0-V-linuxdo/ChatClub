@@ -1478,14 +1478,16 @@ button { cursor: pointer; }
 }
 
 .composer-center-host {
+  --composer-center-top: calc(50vh - 28px);
   position: fixed;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: var(--composer-center-top);
+  transform: translateX(-50%);
   z-index: var(--overlay-z-panel);
   width: min(760px, calc(100vw - var(--overlay-gutter-panel)));
   min-width: min(420px, calc(100vw - var(--overlay-gutter-panel)));
   height: auto;
+  max-height: calc(100vh - var(--composer-center-top) - var(--overlay-gutter-panel));
   padding: 0;
   box-sizing: border-box;
   background: transparent;
@@ -1498,10 +1500,11 @@ button { cursor: pointer; }
 }
 
 .composer-center-launcher {
+  --composer-center-top: calc(50vh - 28px);
   position: fixed;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  top: var(--composer-center-top);
+  transform: translateX(-50%);
   z-index: var(--overlay-z-panel);
   display: inline-flex;
   align-items: center;
@@ -1547,6 +1550,39 @@ button { cursor: pointer; }
 
 .composer-center-host .prompt-shell {
   z-index: 0;
+}
+
+.composer-center-host .prompt-shell-search .prompt-input-row {
+  height: auto;
+  min-height: var(--prompt-collapsed-height);
+  max-height: none;
+  overflow: hidden;
+  grid-template-rows: minmax(var(--prompt-collapsed-height), auto);
+}
+
+.composer-center-host .prompt-shell-search .textarea.prompt-input {
+  align-self: stretch;
+  height: auto;
+}
+
+.composer-center-host .prompt-shell-has-images .textarea.prompt-input-expanded {
+  height: auto;
+  min-height: var(--prompt-collapsed-height);
+  padding: calc((var(--prompt-collapsed-height) - var(--prompt-collapsed-line)) / 2) 0;
+  max-height: none;
+}
+
+.composer-center-host .prompt-shell.prompt-shell-expanded.prompt-shell-has-images .prompt-input-row {
+  height: auto;
+  min-height: var(--prompt-collapsed-height);
+  max-height: none;
+}
+
+.composer-center-host .prompt-search-results {
+  max-height: min(
+    calc(var(--prompt-search-row) * 6 + var(--space-3) * 2),
+    calc(100vh - var(--composer-center-top) - var(--prompt-collapsed-height) - var(--overlay-gutter-panel))
+  );
 }
 
 .prompt-shell {
