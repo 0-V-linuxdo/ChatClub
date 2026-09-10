@@ -135,6 +135,26 @@ function responsiveBrandRules(kind) {
     /focusRemainsInPromptShell\(shell, event\.relatedTarget\)[\s\S]*prompt-input-expanded[\s\S]*collapseInput\(inputNode\)/,
     "expanded input must collapse only after focus leaves the entire Composer shell"
   );
+  assert.match(
+    functionSource(composer, "focusRemainsInPromptShell"),
+    /prompt-actions-popover/,
+    "focusing the plus menu must count as remaining in Composer chrome"
+  );
+  assert.match(
+    functionSource(composer, "handleInputBlur"),
+    /prompt-actions-popover/,
+    "Composer blur must not collapse while the plus menu is open"
+  );
+  assert.match(
+    functionSource(composer, "handlePromptShellFocusOut"),
+    /prompt-actions-popover/,
+    "Composer shell focusout must not collapse while the plus menu is open"
+  );
+  assert.match(
+    functionSource(composer, "claimPromptCaret"),
+    /onLeave:[\s\S]*prompt-actions-popover[\s\S]*collapseInput/,
+    "caret leave must not hide the plus by collapsing while its menu is open"
+  );
   assert.match(composer, /if\(n\.value!==state\.promptText\)n\.value=state\.promptText/, "placeholder refresh must not rewrite a focused input with the same draft value");
   assert.match(composer, /if\s*\(\s*!value\s*&&\s*!state\.promptImages\.length\s*\)[\s\S]*leftoverImages[\s\S]*text\.textContent\s*!==\s*collapsed\.text[\s\S]*classList\.add\("prompt-collapsed-preview-empty"\)/, "placeholder refresh must update the empty preview text without rebuilding its DOM subtree");
   assert.match(composer, /leftoverImages = preview\.querySelector\("\.prompt-collapsed-preview-images"\)[\s\S]*if\s*\(\s*text\s*&&\s*!leftoverImages\s*\)/, "an empty preview refresh must rebuild when a prior send left image thumbs behind");

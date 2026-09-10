@@ -537,6 +537,18 @@ function preferredModelStub() {
     actions.dispatch("click");
     let menu = globalThis.document.querySelector(".prompt-actions-popover");
     assert.ok(menu, `${gateState}: prompt actions menu must open`);
+    assert.equal(actions.classList.contains("prompt-actions-button-active"), true, `${gateState}: plus stays marked open`);
+    assert.equal(actions.getAttribute("aria-expanded"), "true", `${gateState}: plus stays expanded while the menu is open`);
+    const menuItem = menu.children[0];
+    input.dispatch("blur", { relatedTarget: menuItem });
+    shell.dispatch("focusout", { target: input, relatedTarget: menuItem });
+    assert.equal(
+      shell.classList.contains("prompt-shell-expanded"),
+      true,
+      `${gateState}: opening the plus menu must not collapse Composer and hide the plus`
+    );
+    assert.equal(actions.classList.contains("prompt-actions-button-active"), true, `${gateState}: plus stays active after menu focus`);
+    assert.ok(globalThis.document.querySelector(".prompt-actions-popover"), `${gateState}: plus menu must remain open after Composer blur`);
     menu.children[1].dispatch("click");
     assert.equal(promptLibraryOpens, 1, `${gateState}: prompt library action must run`);
     actions.dispatch("click");

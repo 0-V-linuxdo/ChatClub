@@ -1894,7 +1894,9 @@ button { cursor: pointer; }
 }
 
 .prompt-clear-button.compact-icon:hover,
-.prompt-actions-button.compact-icon:hover {
+.prompt-actions-button.compact-icon:hover,
+.prompt-actions-button.prompt-actions-button-active,
+.prompt-actions-button[aria-expanded="true"] {
   color: var(--text);
   background: color-mix(in srgb, var(--primary) 14%, var(--panel));
   border-color: transparent;
@@ -3611,7 +3613,7 @@ body.tab-gesture-active * {
   outline-offset: 2px;
 }
 
-.prompt-shell:not(.prompt-shell-expanded):not(.prompt-shell-search) .prompt-actions-button {
+.prompt-shell:not(.prompt-shell-expanded):not(.prompt-shell-search) .prompt-actions-button:not(.prompt-actions-button-active):not([aria-expanded="true"]) {
   display: none;
 }
 
