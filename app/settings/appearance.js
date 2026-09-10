@@ -556,7 +556,7 @@ export function createAppearanceSettingsSection(ctx) {
       "topbar.promptActions": "plus",
       "topbar.promptLibrary": "library",
       "composer.pin": "pin",
-      "composer.open": "edit",
+      "composer.open": "keyboard",
       "topbar.addPhotos": "paperclip",
       "topbar.clearPrompt": "x",
       "topbar.removeImage": "x",

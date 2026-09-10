@@ -116,6 +116,7 @@
   --preferred-model-selection-overlay-opacity: 0.7;
   --topbar-prompt-input-font-size: 15px;
   --topbar-height: 69px;
+  --prompt-collapsed-height: 40px;
   --workspace-tabs-sidebar-width: 320px;
   --workspace-z-sidebar: 15;
   --workspace-z-topbar: 20;
@@ -1447,7 +1448,7 @@ button { cursor: pointer; }
   display: block;
   flex: 1 1 min(58vw, 760px);
   width: 100%;
-  height: 56px;
+  height: var(--prompt-collapsed-height);
   overflow: visible;
   position: relative;
   min-width: 420px;
@@ -1462,35 +1463,40 @@ button { cursor: pointer; }
 .composer.composer-center-slot {
   flex: 0 0 auto;
   width: auto;
-  min-width: var(--ui-compact-height);
+  min-width: var(--ui-chrome-height);
   max-width: none;
-  height: var(--ui-compact-height);
+  height: var(--ui-chrome-height);
 }
 
 .composer-center-mark {
   display: none;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  height: var(--ui-compact-height);
-  min-width: var(--ui-compact-height);
-  padding: 0 var(--space-3);
+  place-items: center;
+  width: var(--ui-chrome-height);
+  height: var(--ui-chrome-height);
+  min-width: var(--ui-chrome-height);
+  min-height: var(--ui-chrome-height);
+  padding: 0;
   box-sizing: border-box;
-  background: var(--panel);
-  border: var(--overlay-border);
-  border-radius: var(--ui-radius-pill);
   color: var(--text);
-  font: inherit;
-  font-weight: var(--font-weight-medium);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius);
   cursor: pointer;
 }
 
 .composer.composer-center-slot .composer-center-mark {
-  display: inline-flex;
+  display: inline-grid;
 }
 
 .composer-center-mark:hover {
-  background: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  border-color: var(--line);
+  background: var(--control-hover);
+}
+
+.composer-center-mark.is-open,
+.composer-center-mark[aria-expanded="true"] {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--panel));
 }
 
 .composer-center-mark:focus-visible {
@@ -1498,18 +1504,8 @@ button { cursor: pointer; }
   outline-offset: 2px;
 }
 
-.composer-center-mark .svg-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--primary);
-}
-
-.composer-center-mark-label {
-  white-space: nowrap;
-}
-
 .composer-center-host {
-  --composer-center-top: calc(var(--topbar-height) + var(--overlay-gutter) * 2);
+  --composer-center-top: calc(var(--topbar-height) + var(--workspace-tab-row-height, 40px) + var(--space-3));
   position: fixed;
   left: 50%;
   top: var(--composer-center-top);
@@ -1569,7 +1565,7 @@ button { cursor: pointer; }
 
 .prompt-shell {
   --prompt-model-gate-width: clamp(132px, 32cqi, 240px);
-  --prompt-collapsed-height: 56px;
+  --prompt-collapsed-height: 40px;
   --prompt-collapsed-line: var(--topbar-prompt-input-font-size);
   --prompt-accessory-top: calc((var(--prompt-collapsed-height) - var(--ui-accessory-height)) / 2);
   --prompt-send-top: calc((var(--prompt-collapsed-height) - var(--ui-compact-height)) / 2);
@@ -1817,8 +1813,8 @@ button { cursor: pointer; }
 
 .composer-center-host .prompt-pin-button.is-pinned,
 .composer-center-host .prompt-pin-button[aria-pressed="true"] {
-  color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 16%, var(--panel));
+  color: var(--on-primary);
+  background: var(--primary);
 }
 
 .composer-center-host .prompt-pin-button:focus-visible {

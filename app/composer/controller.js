@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { matchesSendShortcut } from "../../shared/shortcuts.js";
+import { formatShortcut, matchesSendShortcut } from "../../shared/shortcuts.js";
 import {
   createId,
   normalizePromptImagePasteStrategy,
@@ -1287,6 +1287,29 @@ export function createComposerController(dependencies = {}) {
     return centerPinned ? t("composer.unpin") : t("composer.pin");
   }
 
+  function openComposerTooltip() {
+    const label = t("composer.open");
+    const shortcut = formatShortcut(
+      "focusInput",
+      activeShortcutProfile()?.shortcuts?.focusInput,
+      "",
+      keyboardPlatform
+    );
+    if (!shortcut || shortcut === "Disabled" || shortcut === "Unassigned") return label;
+    return `${label} (${shortcut})`;
+  }
+
+  function syncCenterMark(button = document.querySelector(".composer-center-mark")) {
+    if (!button) return;
+    const host = document.getElementById?.(COMPOSER_CENTER_HOST_ID) || null;
+    const open = composerPlacementValue() === "center" && Boolean(host) && !host.hidden;
+    const tooltip = openComposerTooltip();
+    button.setAttribute("aria-label", tooltip);
+    button.setAttribute("data-tooltip", tooltip);
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+    button.classList.toggle("is-open", open);
+  }
+
   function syncPinButton(button = document.querySelector(".prompt-pin-button")) {
     if (!button) return;
     const label = pinLabel();
@@ -1299,6 +1322,7 @@ export function createComposerController(dependencies = {}) {
   function showCenterHost() {
     if (composerPlacementValue() !== "center") return;
     ensureComposerCenterHost().hidden = false;
+    syncCenterMark();
   }
 
   function hideCenterHost() {
@@ -1308,6 +1332,7 @@ export function createComposerController(dependencies = {}) {
     if (inputNode) collapseInput(inputNode);
     const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
     if (host) host.hidden = true;
+    syncCenterMark();
   }
 
   function toggleCenterPinned(event) {
@@ -1368,6 +1393,7 @@ export function createComposerController(dependencies = {}) {
       composerNode.classList.add("composer-center-slot");
       if (centerPinned) centerHost.hidden = false;
       syncPinButton();
+      syncCenterMark();
       return;
     }
     const duplicate = composerNode.querySelector(".prompt-shell");
@@ -1380,6 +1406,7 @@ export function createComposerController(dependencies = {}) {
       host.hidden = true;
       if (!host.querySelector(".prompt-shell")) host.remove();
     }
+    syncCenterMark();
   }
 
   function modelGateStatusIcon(applying) {
@@ -1417,10 +1444,11 @@ export function createComposerController(dependencies = {}) {
     const collapsed = promptCollapsedPreview(state.promptText, currentPlaceholder);
     const composerNode = el("div", { class: "composer topbar-item topbar-item-composer" },
       el("button", {
-        class: "composer-center-mark tooltip-trigger",
+        class: "composer-center-mark top-icon-action tooltip-trigger",
         type: "button",
-        "aria-label": t("composer.open"),
-        "data-tooltip": t("composer.open"),
+        "aria-label": openComposerTooltip(),
+        "aria-expanded": "false",
+        "data-tooltip": openComposerTooltip(),
         "data-tooltip-id": "composer.open",
         onclick: (event) => {
           event.preventDefault();
@@ -1428,7 +1456,7 @@ export function createComposerController(dependencies = {}) {
           focusInput(true);
         },
         onpointerdown: (event) => event.stopPropagation()
-      }, createSvgIcon("edit"), el("span", { class: "composer-center-mark-label" }, t("composer.open"))),
+      }, createSvgIcon("keyboard")),
       el("div", {
         class: `prompt-shell ${state.promptImages.length ? "prompt-shell-has-images" : ""} ${gateApplying ? "prompt-shell-model-gate-applying" : ""} ${gateFailed ? "prompt-shell-model-gate-failed" : ""}`.trim(),
         dataset: {
@@ -1567,6 +1595,7 @@ export function createComposerController(dependencies = {}) {
     );
     searchPanel.attach(composerNode.querySelector(".prompt-shell"));
     syncPinButton(composerNode.querySelector(".prompt-pin-button"));
+    syncCenterMark(composerNode.querySelector(".composer-center-mark"));
     return composerNode;
   }
 

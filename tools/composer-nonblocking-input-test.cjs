@@ -249,6 +249,10 @@ globalThis.document = {
   },
   addEventListener() {},
   removeEventListener() {},
+  getElementById(id) {
+    if (this.body?.id === id) return this.body;
+    return this.body.querySelector(`#${id}`);
+  },
   querySelector(selector) { return this.body.querySelector(selector); },
   querySelectorAll(selector) { return this.body.querySelectorAll(selector); }
 };
@@ -297,6 +301,9 @@ function preferredModelStub() {
 
 (async () => {
   const { createComposerController } = await import(moduleUrl("app/composer/controller.js"));
+  const { PROMPT_COLLAPSED_HEIGHT } = await import(moduleUrl("app/composer/model.js"));
+  const collapsedHeight = `${PROMPT_COLLAPSED_HEIGHT}px`;
+  const expandedShortHeight = `${Math.max(PROMPT_COLLAPSED_HEIGHT, 42)}px`;
   const { createPreferredModelController } = await import(moduleUrl("app/preferred-model/controller.js"));
 
   for (const gateState of ["applying", "failed"]) {
@@ -408,7 +415,7 @@ function preferredModelStub() {
       false,
       `${gateState}: leaving the prompt shell must collapse multiline input`
     );
-    assert.equal(input.style.height, "56px", `${gateState}: collapsed input must retain its 56px height`);
+    assert.equal(input.style.height, collapsedHeight, `${gateState}: collapsed input must retain its collapsed height`);
     input.dispatch("focus");
 
     const paste = input.dispatch("paste", {
@@ -484,7 +491,7 @@ function preferredModelStub() {
     input.value = "short";
     input.naturalScrollHeight = 42;
     input.dispatch("input");
-    assert.equal(input.style.height, "56px", `${gateState}: deleting multiline text must shrink the input`);
+    assert.equal(input.style.height, expandedShortHeight, `${gateState}: deleting multiline text must shrink the input`);
     assert.equal(input.style.overflowY, "hidden", `${gateState}: short text must hide its scrollbar`);
 
     input.value = "line one\nline two\nline three";
@@ -496,7 +503,7 @@ function preferredModelStub() {
     input.value = "short after multiline";
     input.naturalScrollHeight = 42;
     input.dispatch("input");
-    assert.equal(input.style.height, "56px", `${gateState}: deleting added lines must restore the short-text height`);
+    assert.equal(input.style.height, expandedShortHeight, `${gateState}: deleting added lines must restore the short-text height`);
 
     input.value = Array.from({ length: 16 }, (_, index) => `line-${index}`).join("\n");
     input.naturalScrollHeight = 240;
@@ -507,7 +514,7 @@ function preferredModelStub() {
     input.value = "short again";
     input.naturalScrollHeight = 42;
     input.dispatch("input");
-    assert.equal(input.style.height, "56px", `${gateState}: shortening capped text must shrink the input again`);
+    assert.equal(input.style.height, expandedShortHeight, `${gateState}: shortening capped text must shrink the input again`);
     assert.equal(input.style.overflowY, "hidden", `${gateState}: shrinking capped text must hide its scrollbar`);
 
     state.promptSendHistory = [{ text: "history line one\nhistory line two\nhistory line three", images: [] }];
@@ -524,7 +531,7 @@ function preferredModelStub() {
     const historyDown = input.dispatch("keydown", { key: "ArrowDown" });
     assert.equal(historyDown.defaultPrevented, true, `${gateState}: history draft restore must handle ArrowDown`);
     assert.equal(input.value, "live draft", `${gateState}: history navigation must restore the live draft`);
-    assert.equal(input.style.height, "56px", `${gateState}: short history draft restore must shrink to its natural height`);
+    assert.equal(input.style.height, expandedShortHeight, `${gateState}: short history draft restore must shrink to its natural height`);
     assert.equal(input.style.overflowY, "hidden", `${gateState}: short history draft restore must hide its scrollbar`);
 
     actions.dispatch("click");
@@ -544,7 +551,7 @@ function preferredModelStub() {
     assert.equal(state.promptText, "", `${gateState}: clear must reset text`);
     assert.deepEqual(state.promptImages, [], `${gateState}: clear must reset images`);
     assert.equal(input.value, "", `${gateState}: clear must synchronize the textarea`);
-    assert.equal(input.style.height, "56px", `${gateState}: clear must preserve the empty input's natural height`);
+    assert.equal(input.style.height, expandedShortHeight, `${gateState}: clear must preserve the empty input's natural height`);
     assert.equal(input.style.overflowY, "hidden", `${gateState}: clear must hide the empty input's scrollbar`);
   }
 
