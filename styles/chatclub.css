@@ -1478,7 +1478,7 @@ button { cursor: pointer; }
 }
 
 .composer-center-host {
-  --composer-center-top: calc(50vh - 28px);
+  --composer-center-top: calc(var(--topbar-height) + var(--space-2));
   position: fixed;
   left: 50%;
   top: var(--composer-center-top);
@@ -1500,7 +1500,7 @@ button { cursor: pointer; }
 }
 
 .composer-center-launcher {
-  --composer-center-top: calc(50vh - 28px);
+  --composer-center-top: calc(var(--topbar-height) + var(--space-2));
   position: fixed;
   left: 50%;
   top: var(--composer-center-top);
