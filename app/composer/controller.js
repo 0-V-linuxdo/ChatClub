@@ -178,7 +178,7 @@ export function createComposerController(dependencies = {}) {
       field.placeholder = currentPlaceholder;
       field.setAttribute("aria-label", currentPlaceholder || t("topbar.promptPlaceholder"));
       searchPanel.syncField(field);
-      syncCollapsedPreview(field);
+      syncCollapsedPreview(field); if (document.activeElement === field) expandInput(field);
     },
     onEnter() { enterSearchMode(); }
   });

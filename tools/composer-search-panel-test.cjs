@@ -138,7 +138,10 @@ assert.match(panelSource, /prompt-mode-chip prompt-mode-chip-compose tooltip-tri
 assert.match(panelSource, /prompt-mode-chip prompt-mode-chip-search tooltip-trigger/);
 assert.match(css, /\.prompt-mode-chip\s*\{[\s\S]*?width:\s*var\(--ui-accessory-height\)/);
 assert.match(css, /\.prompt-mode-chip \.svg-icon\s*\{[\s\S]*?width:\s*16px/);
+assert.match(functionSource(panelSource, "searchPlaceholder"), /composer\.search\.placeholder/);
+assert.doesNotMatch(functionSource(panelSource, "searchPlaceholder"), /tabToCompose/);
 assert.doesNotMatch(functionSource(composer, "enterSearchMode"), /expandInput\(/);
+assert.match(composer, /onRestoreField\(field\)[\s\S]*if \(document\.activeElement === field\) expandInput\(field\)/);
 assert.doesNotMatch(functionSource(composer, "collapseInput"), /searchPanel\.exit/);
 assert.match(composer, /onStashField\(field\)/);
 assert.match(composer, /restoreSelectionSoon\(field\)/);
@@ -152,6 +155,8 @@ assert.match(agents, /Inside `#composer-center-host`/);
 assert.match(agents, /visible `\.prompt-mode-switch`/);
 assert.match(agents, /expanded compose must not `display: none` that switch/);
 assert.match(agents, /Tab while `\.prompt-input` owns the caret toggles compose and search/);
+assert.match(agents, /composer\.search\.placeholder/);
+assert.match(agents, /Leaving search while `\.prompt-input` still holds the caret must `expandInput`/);
 assert.doesNotMatch(css, /\.prompt-search-results \{[^}]*transform:/);
 assert.match(agents, /Do not wrap `\.prompt-shell` in `viewerModal`/);
 assert.match(agents, /Topbar Search enters composer search mode/);
@@ -396,7 +401,7 @@ globalThis.document = {
     assert.equal(shell.classList.contains("prompt-shell-search"), true);
     assert.equal(searchChip.getAttribute("aria-pressed"), "true");
     assert.equal(composeChip.getAttribute("aria-pressed"), "false");
-    assert.equal(field.placeholder, "Press Tab to compose");
+    assert.equal(field.placeholder, "Search chats");
     assert.equal(field.getAttribute("aria-label"), "Search chats");
     const shiftTab = tabEvent();
     shiftTab.shiftKey = true;
@@ -500,7 +505,7 @@ globalThis.document = {
     assert.equal(customField.placeholder, "Type", "custom placeholders must not be replaced by the Tab hint");
     assert.equal(customField.getAttribute("aria-label"), "Type");
     customPanel.enter();
-    assert.equal(customField.placeholder, "Press Tab to compose");
+    assert.equal(customField.placeholder, "Search chats");
     assert.equal(customField.getAttribute("aria-label"), "Search chats");
     customPanel.exit({ restoreField: false });
     assert.equal(customField.placeholder, "Type", "exiting search must restore a custom compose placeholder");

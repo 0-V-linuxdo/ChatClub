@@ -126,7 +126,7 @@ export function createComposerSearchPanel(options = {}) {
   }
 
   function searchPlaceholder() {
-    return t("composer.mode.tabToCompose");
+    return t("composer.search.placeholder");
   }
 
   function syncToggle() {
