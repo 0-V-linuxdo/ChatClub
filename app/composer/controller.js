@@ -28,7 +28,7 @@ import {
 } from "./history.js";
 import { createFrameSendQueue } from "./frame-send-queue.js";
 import { createPromptImageModel } from "./images.js";
-import { promptCollapsedPreview, promptCollapsedHeightFor, promptInputHeight } from "./model.js";
+import { promptCollapsedPreview, promptCollapsedHeightFor, promptComposeShouldStack, promptInputHeight } from "./model.js";
 import { createComposerSearchPanel } from "./search-panel.js";
 
 const PROMPT_IMAGE_RETRY_COUNT = 3;
@@ -908,29 +908,64 @@ export function createComposerController(dependencies = {}) {
     return sendPromptToFrames();
   }
 
+  function measurePromptScrollHeight(inputNode) {
+    const restoreHeight = inputNode.style.height;
+    const restoreOverflow = inputNode.style.overflowY;
+    const restoreTransition = inputNode.style.transition;
+    const restoreMaxHeight = inputNode.style.maxHeight;
+    inputNode.style.transition = "none";
+    inputNode.style.overflowY = "hidden";
+    inputNode.style.maxHeight = "none";
+    inputNode.style.height = "auto";
+    const scrollHeight = inputNode.scrollHeight;
+    inputNode.style.height = restoreHeight;
+    inputNode.style.overflowY = restoreOverflow;
+    inputNode.style.maxHeight = restoreMaxHeight;
+    inputNode.style.transition = restoreTransition;
+    return scrollHeight;
+  }
+
+  function applyPromptInputSizing(inputNode, shell, sizing, { stacked, centerHost, search, grow }) {
+    inputNode.style.height = `${sizing.height}px`;
+    inputNode.style.overflowY = sizing.overflowY;
+    if (!shell) return;
+    if (centerHost || search || stacked) shell.style.height = "";
+    else if (grow) shell.style.height = `${sizing.height}px`;
+    else shell.style.height = "";
+  }
+
   function resizeInput(inputNode, expanded = inputNode.classList.contains("prompt-input-expanded")) {
     const shell = inputNode.closest?.(".prompt-shell");
     const centerHost = inputNode.closest?.("#composer-center-host");
+    const search = Boolean(shell?.classList?.contains("prompt-shell-search"));
     const grow = expanded || Boolean(centerHost);
+    const value = String(inputNode.value || "");
     const empty = !String(inputNode.value || "").trim();
+    const collapsedHeight = promptCollapsedHeightFor(inputNode);
+    const canStack = Boolean(expanded) && !search && !empty;
     let restoreTransition = null;
     if (grow && !empty) {
       restoreTransition = inputNode.style.transition;
       inputNode.style.transition = "none";
-      inputNode.style.height = "0px";
-      inputNode.style.overflowY = "hidden";
     }
-    const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, grow, {
-      collapsedHeight: promptCollapsedHeightFor(inputNode),
+    // Measure wrap at 1-row width so a full-width unwrap cannot oscillate.
+    shell?.classList.remove("prompt-shell-stacked");
+    const unstackedHeight = measurePromptScrollHeight(inputNode);
+    const stacked = canStack && promptComposeShouldStack({
+      empty,
+      expanded: true,
+      search: false,
+      naturalHeight: unstackedHeight,
+      collapsedHeight,
+      value
+    });
+    if (stacked) shell?.classList.add("prompt-shell-stacked");
+    const naturalHeight = stacked ? measurePromptScrollHeight(inputNode) : unstackedHeight;
+    const sizing = promptInputHeight(naturalHeight, window.innerHeight, grow, {
+      collapsedHeight,
       empty
     });
-    inputNode.style.height = `${sizing.height}px`;
-    inputNode.style.overflowY = sizing.overflowY;
-    if (shell) {
-      if (centerHost || shell.classList.contains("prompt-shell-search")) shell.style.height = "";
-      else if (grow) shell.style.height = `${sizing.height}px`;
-      else shell.style.height = "";
-    }
+    applyPromptInputSizing(inputNode, shell, sizing, { stacked, centerHost, search, grow });
     if (restoreTransition !== null) {
       void inputNode.offsetHeight;
       inputNode.style.transition = restoreTransition;

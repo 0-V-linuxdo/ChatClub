@@ -491,7 +491,8 @@ function preferredModelStub() {
     input.naturalScrollHeight = 124;
     input.dispatch("input");
     assert.equal(input.style.height, "124px", `${gateState}: image plus multiline text must grow to the text's natural height`);
-    assert.equal(shell.style.height, "124px", `${gateState}: prompt shell must follow the expanded textarea height`);
+    assert.equal(shell.style.height, "", `${gateState}: stacked compose must not copy textarea height onto the shell; the toolbar track is extra`);
+    assert.equal(shell.classList.contains("prompt-shell-stacked"), true, `${gateState}: multiline compose must stack the textarea above the toolbar`);
     assert.equal(input.style.overflowY, "hidden", `${gateState}: image text below the cap must not scroll prematurely`);
     input.naturalScrollHeight = 420;
     input.dispatch("input");
@@ -509,8 +510,8 @@ function preferredModelStub() {
     assert.equal(input.style.height, "96px", `${gateState}: removing the last image must restore the text's natural height`);
     assert.deepEqual(
       input.scrollHeightMeasurements.at(-1),
-      { height: "0px", overflowY: "hidden", transition: "none" },
-      `${gateState}: natural height must be measured from zero with the stale image-height transition disabled`
+      { height: "auto", overflowY: "hidden", transition: "none" },
+      `${gateState}: natural height must be measured at height:auto with the stale image-height transition disabled`
     );
     assert.equal(input.style.transition, "", `${gateState}: natural sizing must restore the authored height transition`);
     input.animatedScrollHeight = 0;
@@ -520,6 +521,7 @@ function preferredModelStub() {
     input.dispatch("input");
     assert.equal(input.style.height, expandedShortHeight, `${gateState}: deleting multiline text must shrink the input`);
     assert.equal(input.style.overflowY, "hidden", `${gateState}: short text must hide its scrollbar`);
+    assert.equal(shell.classList.contains("prompt-shell-stacked"), false, `${gateState}: short compose must return to the 1-row pill`);
 
     input.value = "line one\nline two\nline three";
     input.naturalScrollHeight = 96;

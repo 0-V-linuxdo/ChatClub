@@ -29,6 +29,20 @@ function promptExpandedMaxHeight(viewportHeight = 0) {
   return Math.min(PROMPT_TEXT_EXPANDED_MAX_HEIGHT, Math.max(88, Math.round(Number(viewportHeight || 0) * 0.36)));
 }
 
+export function promptComposeShouldStack({
+  empty,
+  expanded,
+  search,
+  naturalHeight,
+  collapsedHeight,
+  value
+} = {}) {
+  if (empty === true || expanded !== true || search === true) return false;
+  if (String(value || "").includes("\n")) return true;
+  const collapsed = Number(collapsedHeight) > 0 ? Number(collapsedHeight) : PROMPT_COLLAPSED_HEIGHT;
+  return Number(naturalHeight || 0) > collapsed + 8;
+}
+
 // Attached images render as their own in-flow strip above the input line, so
 // the textarea itself sizes from its text alone in every mode.
 // Empty focused/expanded compose must stay on the collapsed token: Chromium

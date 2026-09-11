@@ -1556,6 +1556,7 @@ button { cursor: pointer; }
 
 .prompt-shell {
   --prompt-collapsed-height: 40px;
+  --prompt-expanded-max-height: 180px;
   --prompt-collapsed-line: var(--topbar-prompt-input-font-size);
   --prompt-accessory-top: calc((var(--prompt-collapsed-height) - var(--ui-accessory-height)) / 2);
   --prompt-send-top: calc((var(--prompt-collapsed-height) - var(--ui-accessory-height)) / 2);
@@ -1628,15 +1629,16 @@ button { cursor: pointer; }
 
 /* Image mode stacks the attachment strip above the input line: row 1 is the
    in-flow image list spanning every column, row 2 keeps the normal
-   switch | plus | textarea | clear | gate | send | pin grid. Nothing is overlaid. */
-.prompt-shell.prompt-shell-expanded.prompt-shell-has-images .prompt-input-row {
+   switch | plus | textarea | clear | gate | send | pin grid. Stacked
+   multiline compose uses a dedicated toolbar track instead of this recipe. */
+.prompt-shell.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-stacked) .prompt-input-row {
   height: auto;
   min-height: var(--prompt-collapsed-height);
   max-height: none;
   grid-template-rows: auto minmax(var(--prompt-collapsed-height), auto);
 }
 
-.prompt-shell.prompt-shell-expanded.prompt-shell-has-images .prompt-input-row > :not(.prompt-image-preview-list) {
+.prompt-shell.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-stacked) .prompt-input-row > :not(.prompt-image-preview-list) {
   grid-row: 2;
 }
 
@@ -2127,7 +2129,7 @@ button { cursor: pointer; }
   min-width: 0;
   height: var(--prompt-collapsed-height);
   min-height: 0;
-  max-height: 360px;
+  max-height: var(--prompt-expanded-max-height);
   position: relative;
   inset: auto;
   z-index: 31;
@@ -3487,7 +3489,7 @@ body.tab-gesture-active * {
   align-self: center;
   min-height: 0 !important;
   height: 100%;
-  max-height: none;
+  max-height: var(--prompt-expanded-max-height);
   padding: calc((var(--prompt-collapsed-height) - var(--prompt-collapsed-line)) / 2) 0;
   resize: none;
   border: 0 !important;
@@ -3498,7 +3500,6 @@ body.tab-gesture-active * {
 }
 
 .prompt-shell-has-images .textarea.prompt-input-expanded {
-  max-height: none;
   overflow-y: auto;
 }
 
@@ -3652,6 +3653,72 @@ body.tab-gesture-active * {
 .prompt-shell-expanded:not(.prompt-shell-search) .textarea.prompt-input,
 .prompt-shell-expanded:not(.prompt-shell-search) .prompt-collapsed-preview {
   min-width: 0;
+}
+
+/* Option B: multiline compose stacks a full-width textarea above a 40px
+   toolbar. Search never uses this class. The toolbar track must not contain
+   `.prompt-input`. */
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-input-row {
+  height: auto;
+  min-height: var(--prompt-collapsed-height);
+  max-height: none;
+  align-items: center;
+  align-content: start;
+  grid-template-rows: minmax(0, auto) var(--prompt-collapsed-height);
+}
+
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .textarea.prompt-input {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-self: stretch;
+  width: 100%;
+  height: auto;
+  max-height: var(--prompt-expanded-max-height);
+  padding: calc((var(--prompt-collapsed-height) - var(--prompt-collapsed-line)) / 2) var(--space-2) calc((var(--prompt-collapsed-height) - var(--prompt-collapsed-line)) / 2) 0;
+  box-sizing: border-box;
+}
+
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-collapsed-preview {
+  display: none;
+}
+
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-mode-switch,
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-actions-button,
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-image-file-input,
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-clear-button,
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-model-gate-status,
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-send-button,
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-pin-button,
+.prompt-shell-stacked.prompt-shell-expanded:not(.prompt-shell-search) .prompt-send-queue-status {
+  grid-row: 2;
+}
+
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-input-row {
+  grid-template-rows: auto minmax(0, auto) var(--prompt-collapsed-height);
+}
+
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-image-preview-list {
+  grid-row: 1;
+  grid-column: 1 / -1;
+}
+
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .textarea.prompt-input {
+  grid-row: 2;
+}
+
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-mode-switch,
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-actions-button,
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-image-file-input,
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-clear-button,
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-model-gate-status,
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-send-button,
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-pin-button,
+.prompt-shell-stacked.prompt-shell-expanded.prompt-shell-has-images:not(.prompt-shell-search) .prompt-send-queue-status {
+  grid-row: 3;
+}
+
+.prompt-shell-stacked:not(.prompt-shell-search) .textarea.prompt-input::-webkit-scrollbar {
+  width: 8px;
 }
 
 .prompt-shell.prompt-shell-search,
