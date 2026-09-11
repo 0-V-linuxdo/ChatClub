@@ -93,4 +93,20 @@ assert.match(
   "display truncation stays in CSS, not a JS slice of MAX_LEN"
 );
 
+assert.match(
+  css,
+  /\.prompt-input:placeholder-shown\s*\{[\s\S]*?white-space:\s*nowrap;/,
+  "empty native placeholder layout must stay on one line so scrollHeight cannot add a second line box"
+);
+assert.match(
+  agents,
+  /promptInputHeight` `empty/,
+  "empty focused compose must size to --prompt-collapsed-height instead of placeholder scrollHeight"
+);
+assert.match(
+  agents,
+  /do not grow `--topbar-height` to fit it/,
+  "empty-focus height must not stretch the 51px topbar"
+);
+
 console.log("topbar prompt placeholder ellipsis: ok");

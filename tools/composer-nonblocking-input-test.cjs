@@ -311,6 +311,10 @@ function preferredModelStub() {
   assert.equal(promptInputHeight(20, 800, false, { collapsedHeight: 56 }).height, 56);
   assert.equal(promptInputHeight(42, 800, true, { collapsedHeight: 56 }).height, 56);
   assert.equal(promptInputHeight(80, 800, true, { collapsedHeight: 56 }).height, 80);
+  assert.equal(promptInputHeight(80, 800, true, { empty: true }).height, 40);
+  assert.equal(promptInputHeight(80, 800, true, { collapsedHeight: 38, empty: true }).height, 38);
+  assert.equal(promptInputHeight(80, 800, true, { collapsedHeight: 38, empty: true }).overflowY, "hidden");
+  assert.equal(promptInputHeight(80, 800, false, { empty: true }).height, 40);
   assert.equal(promptCollapsedHeightFor(null), 40);
   const previousGetComputedStyle = globalThis.getComputedStyle;
   globalThis.getComputedStyle = () => ({ getPropertyValue: () => "56px" });
@@ -583,7 +587,7 @@ function preferredModelStub() {
     assert.equal(state.promptText, "", `${gateState}: clear must reset text`);
     assert.deepEqual(state.promptImages, [], `${gateState}: clear must reset images`);
     assert.equal(input.value, "", `${gateState}: clear must synchronize the textarea`);
-    assert.equal(input.style.height, expandedShortHeight, `${gateState}: clear must preserve the empty input's natural height`);
+    assert.equal(input.style.height, collapsedHeight, `${gateState}: clear must restore the empty input to the collapsed height token`);
     assert.equal(input.style.overflowY, "hidden", `${gateState}: clear must hide the empty input's scrollbar`);
   }
 

@@ -912,15 +912,17 @@ export function createComposerController(dependencies = {}) {
     const shell = inputNode.closest?.(".prompt-shell");
     const centerHost = inputNode.closest?.("#composer-center-host");
     const grow = expanded || Boolean(centerHost);
+    const empty = !String(inputNode.value || "").trim();
     let restoreTransition = null;
-    if (grow) {
+    if (grow && !empty) {
       restoreTransition = inputNode.style.transition;
       inputNode.style.transition = "none";
       inputNode.style.height = "0px";
       inputNode.style.overflowY = "hidden";
     }
     const sizing = promptInputHeight(inputNode.scrollHeight, window.innerHeight, grow, {
-      collapsedHeight: promptCollapsedHeightFor(inputNode)
+      collapsedHeight: promptCollapsedHeightFor(inputNode),
+      empty
     });
     inputNode.style.height = `${sizing.height}px`;
     inputNode.style.overflowY = sizing.overflowY;

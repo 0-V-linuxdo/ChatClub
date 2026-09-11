@@ -31,11 +31,13 @@ function promptExpandedMaxHeight(viewportHeight = 0) {
 
 // Attached images render as their own in-flow strip above the input line, so
 // the textarea itself sizes from its text alone in every mode.
+// Empty focused/expanded compose must stay on the collapsed token: Chromium
+// still lays out a wrapping native placeholder and inflates scrollHeight.
 export function promptInputHeight(scrollHeight, viewportHeight, expanded, options = {}) {
   const collapsedHeight = Number(options.collapsedHeight) > 0
     ? Number(options.collapsedHeight)
     : PROMPT_COLLAPSED_HEIGHT;
-  if (!expanded) {
+  if (!expanded || options.empty === true) {
     return {
       height: collapsedHeight,
       overflowY: "hidden"

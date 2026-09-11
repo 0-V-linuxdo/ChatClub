@@ -3573,6 +3573,10 @@ body.tab-gesture-active * {
   color: transparent;
 }
 
+.prompt-input:placeholder-shown {
+  white-space: nowrap;
+}
+
 .prompt-input-expanded + .prompt-collapsed-preview:not(.prompt-collapsed-preview-empty) {
   display: none;
 }

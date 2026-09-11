@@ -167,6 +167,9 @@ assert.doesNotMatch(css, /^\.prompt-shell \{[^}]*--prompt-collapsed-height:\s*56
 assert.match(css, /^\.composer \{[^}]*height:\s*var\(--prompt-collapsed-height\)/m);
 assert.doesNotMatch(css, /^\.composer \{[^}]*height:\s*56px/m);
 assert.match(functionSource(composer, "resizeInput"), /promptCollapsedHeightFor\(inputNode\)/);
+assert.match(functionSource(composer, "resizeInput"), /empty = !String\(inputNode\.value \|\| ""\)\.trim\(\)/);
+assert.match(functionSource(composer, "resizeInput"), /if \(grow && !empty\)/);
+assert.match(functionSource(composer, "resizeInput"), /collapsedHeight: promptCollapsedHeightFor\(inputNode\),\s*empty/);
 assert.match(agents, /topbar slot uses 38px/);
 assert.match(css, /\.composer-center-host \.prompt-shell-search \.prompt-input-row\s*\{[\s\S]*?max-height:\s*none/);
 assert.match(functionSource(composer, "resizeInput"), /closest\?\.\("#composer-center-host"\)/);
