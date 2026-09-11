@@ -1658,6 +1658,7 @@ button { cursor: pointer; }
   gap: var(--space-2);
   background: transparent;
   color: var(--text);
+  font-size: var(--topbar-prompt-input-font-size);
   line-height: var(--prompt-collapsed-line);
   overflow: hidden;
   white-space: nowrap;
@@ -1707,6 +1708,7 @@ button { cursor: pointer; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--topbar-prompt-input-font-size);
 }
 
 .prompt-actions-button {

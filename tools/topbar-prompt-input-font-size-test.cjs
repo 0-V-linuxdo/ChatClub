@@ -152,12 +152,17 @@ function innermostBlockAt(blocks, index) {
   for (let index = stylesheetSource.indexOf(variableConsumer); index >= 0; index = stylesheetSource.indexOf(variableConsumer, index + 1)) {
     consumerIndexes.push(index);
   }
-  assert.equal(consumerIndexes.length, 2, "the input font-size variable must have two CSS consumers");
+  assert.equal(consumerIndexes.length, 4, "the input font-size variable must have four CSS consumers");
   const consumerHeaders = consumerIndexes.map((index) => innermostBlockAt(blocks, index)?.header);
   assert.deepEqual(
     [...consumerHeaders].sort(),
-    [".prompt-input,\n.prompt-input::placeholder", ".prompt-shell"],
-    "placeholder, search, and typed input must share the input font-size variable"
+    [
+      ".prompt-collapsed-preview",
+      ".prompt-collapsed-preview-text",
+      ".prompt-input,\n.prompt-input::placeholder",
+      ".prompt-shell"
+    ],
+    "placeholder, search, typed input, and the collapsed preview must share the input font-size variable"
   );
   const fieldBlock = innermostBlockAt(
     blocks,
@@ -203,17 +208,26 @@ function innermostBlockAt(blocks, index) {
     );
   }
 
-  const collapsedPreviewBlocks = blocks.filter((block) => (
-    block.header.split(",").map((selector) => selector.trim()).includes(".prompt-collapsed-preview-text")
-  ));
-  assert.ok(collapsedPreviewBlocks.length > 0, "the collapsed prompt preview rule must exist");
-  for (const block of collapsedPreviewBlocks) {
-    assert.doesNotMatch(
-      block.body,
-      /--topbar-prompt-input-font-size/,
-      "the collapsed prompt preview must retain its existing font size"
-    );
-  }
+  const previewBlock = innermostBlockAt(
+    blocks,
+    consumerIndexes.find((index) => innermostBlockAt(blocks, index)?.header === ".prompt-collapsed-preview")
+  );
+  assert.ok(previewBlock, "the collapsed prompt preview must consume the custom font-size variable");
+  assert.match(
+    previewBlock.body,
+    /(?:^|;)\s*font-size\s*:\s*var\(--topbar-prompt-input-font-size\)\s*;/,
+    "the collapsed prompt preview must use the same font-size as typed input and ::placeholder"
+  );
+  const previewTextBlock = innermostBlockAt(
+    blocks,
+    consumerIndexes.find((index) => innermostBlockAt(blocks, index)?.header === ".prompt-collapsed-preview-text")
+  );
+  assert.ok(previewTextBlock, "the collapsed prompt preview text must consume the custom font-size variable");
+  assert.match(
+    previewTextBlock.body,
+    /(?:^|;)\s*font-size\s*:\s*var\(--topbar-prompt-input-font-size\)\s*;/,
+    "the collapsed prompt preview text must use the same font-size as typed input and ::placeholder"
+  );
 
   const topbarSource = fs.readFileSync(path.join(root, "app/settings/appearance-topbar.js"), "utf8");
   assert.match(
