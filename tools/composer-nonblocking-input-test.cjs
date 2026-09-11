@@ -372,11 +372,14 @@ function preferredModelStub() {
     assert.ok(input && shell && actions && fileInput && send && status && statusText && modelLive);
     assert.equal(view.querySelectorAll(".prompt-model-gate-status").length, 1, `${gateState}: visual status must be unique`);
     assert.equal(view.querySelectorAll(".prompt-model-gate-live").length, 1, `${gateState}: model live region must be unique`);
-    assert.equal(status.parentElement, shell, `${gateState}: visual status must stay inside the prompt shell`);
     const inputRow = shell.querySelector(".prompt-input-row");
     assert.ok(inputRow, `${gateState}: Composer must wrap field chrome in prompt-input-row`);
     assert.equal(input.parentElement, inputRow, `${gateState}: textarea must live in the input row`);
-    assert.notEqual(status.parentElement, inputRow, `${gateState}: visual status must not overlay the textarea`);
+    assert.equal(status.parentElement, inputRow, `${gateState}: visual status must live in the input row`);
+    assert.equal(modelLive.parentElement, shell, `${gateState}: live region must stay a shell sibling`);
+    const rowChildren = [...inputRow.children];
+    assert.equal(rowChildren.indexOf(status), rowChildren.indexOf(send) - 1, `${gateState}: visual status must sit immediately before send`);
+    assert.notEqual(status.parentElement, input, `${gateState}: visual status must not overlay the textarea`);
     assert.equal(status.hidden, false, `${gateState}: visual status must be visible while unsettled`);
     assert.equal(status.getAttribute("aria-live"), null, `${gateState}: visual status must not duplicate announcements`);
     assert.equal(status.getAttribute("aria-atomic"), null, `${gateState}: visual status must not own live semantics`);
@@ -723,6 +726,11 @@ function preferredModelStub() {
   const syncShell = syncView.querySelector(".prompt-shell");
   const syncedStatus = syncShell.querySelector(".prompt-model-gate-status");
   const syncedLive = syncShell.querySelector(".prompt-model-gate-live");
+  const syncedRow = syncShell.querySelector(".prompt-input-row");
+  const syncedSend = syncShell.querySelector(".prompt-send-button");
+  assert.equal(syncedStatus.parentElement, syncedRow, "Preferred Model sync must keep the visual badge in the input row");
+  assert.equal([...syncedRow.children].indexOf(syncedStatus), [...syncedRow.children].indexOf(syncedSend) - 1, "Preferred Model sync must keep the visual badge immediately before send");
+  assert.equal(syncedLive.parentElement, syncShell, "Preferred Model sync must keep the live region as a shell sibling");
   assert.equal(syncedLive.textContent, syncedStatus.getAttribute("aria-label"), "dedicated live region must announce the inserted visual status");
   assert.equal(syncedStatus.getAttribute("aria-live"), null, "visual status must stay silent after Preferred Model sync");
   assert.equal(syncedLive.hidden, false, "live region must never use hidden while announcing");

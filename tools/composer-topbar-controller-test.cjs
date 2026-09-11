@@ -381,20 +381,22 @@ function responsiveBrandRules(kind) {
   const syncGateSource = functionSource(preferredModel, "syncPreferredModelInputGate");
   assert.match(syncGateSource, /querySelectorAll\("\.prompt-model-gate-status"\)[\s\S]*statusNodes\.forEach\(\(node\) => node\.remove\(\)\)/, "Preferred Model sync must keep exactly one visual badge");
   assert.match(syncGateSource, /querySelectorAll\("\.prompt-model-gate-live"\)[\s\S]*liveNodes\.forEach\(\(node\) => node\.remove\(\)\)/, "Preferred Model sync must keep exactly one live region");
+  assert.match(syncGateSource, /placePreferredModelGateStatus\(shell, statusNode\)/, "Preferred Model sync must park the visual badge through the in-row placer");
+  assert.doesNotMatch(syncGateSource, /shell\.append\(statusNode\)/, "Preferred Model sync must not append the visual badge onto the shell");
+  const placeGateSource = functionSource(preferredModel, "placePreferredModelGateStatus");
+  assert.match(placeGateSource, /prompt-send-button/, "the in-row placer must look up the send button");
+  assert.match(placeGateSource, /send\.before\(statusNode\)/, "Preferred Model sync must insert the visual badge immediately before send");
   assert.match(
     chatclubCss,
     /\.composer\s*\{[\s\S]*?container-name:\s*chatclub-composer;[\s\S]*?container-type:\s*inline-size;/,
-    "the 420px badge breakpoint must use the Composer's own inline size"
+    "Composer keeps an inline-size container even after the 420px badge breakpoint is retired"
   );
+  assert.doesNotMatch(chatclubCss, /--prompt-model-gate-width/, "the in-row badge must not keep a floating width token");
+  assert.doesNotMatch(chatclubCss, /@container chatclub-composer \(max-width:\s*420px\)/, "the in-row badge is icon-only at every width; do not restore the 420px text-collapse");
   assert.match(
     chatclubCss,
-    /@container chatclub-composer \(max-width:\s*420px\)\s*\{[\s\S]*?--prompt-model-gate-width:\s*var\(--ui-accessory-height\);[\s\S]*?\.prompt-model-gate-status-text\s*\{[\s\S]*?display:\s*none;/,
-    "Composer widths up to and including 420px must expose an icon-only model badge"
-  );
-  assert.match(
-    chatclubCss,
-    /--prompt-model-gate-width:\s*clamp\([^)]+\);[\s\S]*?\.prompt-model-gate-status-text\s*\{[\s\S]*?display:\s*block;/,
-    "Composer widths above 420px must expose an icon plus status text"
+    /\.prompt-input-row\s*\{[\s\S]*?grid-template-columns:\s*auto auto minmax\(0, 1fr\) auto auto auto auto;/,
+    "the input row must reserve an auto track for the model gate immediately before send"
   );
   assert.match(
     chatclubCss,
@@ -403,13 +405,28 @@ function responsiveBrandRules(kind) {
   );
   assert.match(
     chatclubCss,
-    /\.prompt-model-gate-status\.tooltip-trigger\s*\{[\s\S]*?position:\s*absolute;\s*top:\s*calc\(100% \+ var\(--space-1\)\);\s*right:\s*0;[\s\S]*?pointer-events:\s*auto;/,
-    "the visual model status must float below the pill's bottom-right corner, outside the textarea, and remain interactive"
+    /\.prompt-model-gate-status\.tooltip-trigger\s*\{[\s\S]*?position:\s*static;[\s\S]*?grid-column:\s*5;[\s\S]*?pointer-events:\s*auto;/,
+    "the visual model status must sit in the input-row accessory track immediately before send"
+  );
+  assert.match(
+    chatclubCss,
+    /\.prompt-send-button\s*\{[\s\S]*?grid-column:\s*6;/,
+    "send must occupy the track after the in-row model gate"
+  );
+  assert.match(
+    chatclubCss,
+    /\.prompt-pin-button\s*\{[\s\S]*?grid-column:\s*7;/,
+    "pin must occupy the track after send once the model gate is in-row"
+  );
+  assert.match(
+    chatclubCss,
+    /\.prompt-model-gate-status-text\s*\{[\s\S]*?display:\s*none;/,
+    "the in-row badge must hide status text at every width"
   );
   assert.doesNotMatch(
     chatclubCss,
     /--topbar-height:\s*calc\(51px/,
-    "a visible model status must never grow --topbar-height; it floats over the workspace instead of pushing it down"
+    "a visible model status must never grow --topbar-height; it lives inside the 51px input row"
   );
   assert.doesNotMatch(
     chatclubCss,
@@ -419,12 +436,12 @@ function responsiveBrandRules(kind) {
   assert.doesNotMatch(
     chatclubCss,
     /\.(?:composer|prompt-shell)(?::has\([^)]*\))?:is\(\.prompt-shell-model-gate-applying, \.prompt-shell-model-gate-failed\)\s*\{[^}]*height:\s*auto/,
-    "the model gate must not switch the shell or composer to height: auto; the chip is out of flow"
+    "the model gate must not switch the shell or composer to height: auto; the chip lives in the input row"
   );
   assert.match(
     chatclubCss,
     /\.topbar-edit-slot-composer \.prompt-model-gate-status\s*\{[\s\S]*?display:\s*none;/,
-    "the edit-mode composer preview must hide the floating chip so the livebar scroll container gains no overflow"
+    "the edit-mode composer preview must hide the in-row chip so the livebar scroll container gains no overflow"
   );
   assert.match(chatclubCss, /\.prompt-shell\.prompt-shell-expanded\.prompt-shell-has-images\s*\{[\s\S]*?height:\s*auto;/, "image mode must allow the prompt shell to grow with multiline text");
   assert.match(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*auto;/, "image mode must allow a capped textarea to scroll instead of clipping text");
@@ -436,7 +453,8 @@ function responsiveBrandRules(kind) {
   assert.match(chatclubCss, /\.prompt-collapsed-preview\s*\{[\s\S]*?pointer-events:\s*none;/, "the collapsed preview must be visual-only so the first click reaches the textarea");
   assert.doesNotMatch(chatclubCss, /\.prompt-shell-has-images \.textarea\.prompt-input-expanded\s*\{[^}]*!important/, "image mode height must remain overridable by measured inline sizing");
   assert.doesNotMatch(chatclubCss, /\.prompt-model-gate-status[^\{]*\{[^}]*top:\s*(?:5px|12px);/, "the model status must not move back inside the prompt field over the textarea glyphs");
-  assert.doesNotMatch(chatclubCss, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-model-gate-status\s*\{[^}]*grid-row/, "the out-of-flow chip must not be placed as a search grid row");
+  assert.doesNotMatch(chatclubCss, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-model-gate-status\s*\{[^}]*grid-row/, "the in-row chip must not be placed as a search grid row");
+  assert.doesNotMatch(chatclubCss, /top:\s*calc\(100% \+ var\(--space-1\)\)/, "the model status must not float below the pill over the tab row");
   assert.match(chatclubCss, /\.prompt-model-gate-live\s*\{[\s\S]*?clip-path:\s*inset\(50%\);/, "the dedicated model live region must be visually hidden without the hidden attribute");
   for (const method of [
     "preferredModelFrameReadiness",

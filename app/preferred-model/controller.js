@@ -464,6 +464,14 @@ export function createPreferredModelController(dependencies = {}) {
     return icon;
   }
 
+  function placePreferredModelGateStatus(shell, statusNode) {
+    const send = shell.querySelector(".prompt-send-button");
+    const host = send?.parentElement || shell.querySelector(".prompt-input-row") || shell;
+    statusNode.remove();
+    if (send && send.parentElement === host) send.before(statusNode);
+    else host.append(statusNode);
+  }
+
   function syncPreferredModelGateVisual(statusNode, { applying, failed, statusText }) {
     const visible = applying || failed;
     statusNode.classList.add("tooltip-trigger");
@@ -584,8 +592,8 @@ export function createPreferredModelController(dependencies = {}) {
           onclick: (event) => event.stopPropagation(),
           onkeydown: (event) => event.stopPropagation()
         });
-        shell.append(statusNode);
       }
+      placePreferredModelGateStatus(shell, statusNode);
       const liveNodes = Array.from(shell.querySelectorAll(".prompt-model-gate-live"));
       let liveNode = liveNodes.shift() || null;
       liveNodes.forEach((node) => node.remove());

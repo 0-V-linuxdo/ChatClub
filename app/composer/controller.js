@@ -1523,6 +1523,26 @@ export function createComposerController(dependencies = {}) {
             onpointerdown: (event) => event.stopPropagation(),
             onkeydown: (event) => event.stopPropagation()
           }, createSvgIcon("x")),
+          el("div", {
+            class: "prompt-model-gate-status tooltip-trigger",
+            hidden: !(gateApplying || gateFailed),
+            role: "note",
+            "aria-label": (gateApplying || gateFailed) ? gateStatusText : null,
+            "data-tooltip": (gateApplying || gateFailed) ? gateStatusText : null,
+            "data-tooltip-id": "topbar.modelGateStatus",
+            "data-tooltip-placement": "left",
+            "data-tooltip-wrap": "true",
+            dataset: {
+              modelGateVisualKey: (gateApplying || gateFailed)
+                ? (gateApplying ? "applying:" : "failed:") + gateStatusText
+                : ""
+            },
+            onpointerdown: (event) => event.stopPropagation(),
+            onclick: (event) => event.stopPropagation()
+          },
+            (gateApplying || gateFailed) ? modelGateStatusIcon(gateApplying) : null,
+            (gateApplying || gateFailed) ? el("span", { class: "prompt-model-gate-status-text" }, gateStatusText) : null
+          ),
           el("button", {
             class: "prompt-send-button tooltip-trigger",
             type: "button",
@@ -1571,26 +1591,6 @@ export function createComposerController(dependencies = {}) {
             },
             onkeydown: (event) => event.stopPropagation()
           }, createSvgIcon("pin"))
-        ),
-        el("div", {
-          class: "prompt-model-gate-status tooltip-trigger",
-          hidden: !(gateApplying || gateFailed),
-          role: "note",
-          "aria-label": (gateApplying || gateFailed) ? gateStatusText : null,
-          "data-tooltip": (gateApplying || gateFailed) ? gateStatusText : null,
-          "data-tooltip-id": "topbar.modelGateStatus",
-          "data-tooltip-placement": "left",
-          "data-tooltip-wrap": "true",
-          dataset: {
-            modelGateVisualKey: (gateApplying || gateFailed)
-              ? (gateApplying ? "applying:" : "failed:") + gateStatusText
-              : ""
-          },
-          onpointerdown: (event) => event.stopPropagation(),
-          onclick: (event) => event.stopPropagation()
-        },
-          (gateApplying || gateFailed) ? modelGateStatusIcon(gateApplying) : null,
-          (gateApplying || gateFailed) ? el("span", { class: "prompt-model-gate-status-text" }, gateStatusText) : null
         ),
         el("div", {
           class: "prompt-model-gate-live",
