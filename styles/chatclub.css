@@ -1704,6 +1704,7 @@ button { cursor: pointer; }
 
 .prompt-collapsed-preview-text {
   display: block;
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1969,7 +1970,13 @@ button { cursor: pointer; }
   color: var(--muted);
 }
 
-.prompt-shell-expanded .prompt-collapsed-preview {
+/* Hide the collapsed preview when the textarea is showing a real draft.
+   Empty compose keeps .prompt-collapsed-preview-empty visible (nowrap +
+   ellipsis) even while focused/expanded: Chromium textarea ::placeholder
+   wraps and will not ellipsize. Attached images have their own expanded
+   strip, so hide the collapsed preview then too. Search still hides it. */
+.prompt-shell-expanded .prompt-collapsed-preview:not(.prompt-collapsed-preview-empty),
+.prompt-shell-expanded.prompt-shell-has-images .prompt-collapsed-preview {
   display: none;
 }
 
@@ -3544,11 +3551,11 @@ body.tab-gesture-active * {
 }
 
 .prompt-input:not(.prompt-input-expanded):focus::placeholder {
-  color: var(--muted);
+  color: transparent;
 }
 
-.prompt-input:not(.prompt-input-expanded):focus + .prompt-collapsed-preview,
-.prompt-shell:has(.prompt-input:not(.prompt-input-expanded):focus) .prompt-collapsed-preview {
+.prompt-input:not(.prompt-input-expanded):focus + .prompt-collapsed-preview:not(.prompt-collapsed-preview-empty),
+.prompt-shell:has(.prompt-input:not(.prompt-input-expanded):focus) .prompt-collapsed-preview:not(.prompt-collapsed-preview-empty) {
   display: none;
 }
 
@@ -3562,7 +3569,11 @@ body.tab-gesture-active * {
   box-shadow: none;
 }
 
-.prompt-input-expanded + .prompt-collapsed-preview {
+.prompt-input-expanded::placeholder {
+  color: transparent;
+}
+
+.prompt-input-expanded + .prompt-collapsed-preview:not(.prompt-collapsed-preview-empty) {
   display: none;
 }
 
