@@ -255,27 +255,21 @@ globalThis.document = {
   assert.match(source, /createIcon\("pin"\)/, "each tab row must expose a pin control");
   assert.match(source, /WORKSPACE_TABS_SIDEBAR_PINNED_KEY/, "pinned tabs must persist independently of live order");
   assert.match(source, /Boolean\(item\.pinned\) !== Boolean\(target\.pinned\)/, "pinned and unpinned tabs must not mix while dragging");
-  assert.match(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must expose a search field");
-  assert.match(source, /function openSearch\(/, "the sidebar Search field can still be focused locally");
-  assert.match(source, /setSearchQuery/, "title search must filter the sidebar list");
+  assert.doesNotMatch(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must not keep a sidebar search field");
+  assert.doesNotMatch(source, /function openSearch\(/, "the sidebar must not expose a leftover Search focus API");
+  assert.doesNotMatch(source, /setSearchQuery/, "the sidebar must not filter tabs locally");
   assert.match(source, /forgetWorkspaceTabFullText/, "deleting a tab must drop its recorded full text");
-  assert.match(css, /\.workspace-tabs-sidebar-search-input/, "the search field must be styled in the sidebar");
-  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*border:\s*1px solid/, "the search glyph must sit inside one bordered field");
-  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*height:\s*var\(--ui-control-height\)/, "the search field height must match tab rows");
-  assert.match(css, /\.workspace-tabs-sidebar-search\s*\{[^}]*margin:\s*10px var\(--space-2\) var\(--space-1\)/, "the search field must align with tab row width");
+  assert.match(source, /loadWorkspaceTabFullTextStore/, "one-click Pocket must load recorded full text on demand");
+  assert.doesNotMatch(css, /\.workspace-tabs-sidebar-search/, "sidebar search styles must leave with the field");
+  assert.doesNotMatch(css, /\.workspace-tabs-sidebar-search-input/, "sidebar search input styles must leave with the field");
   assert.match(css, /\.workspace-tabs-sidebar-item\s*\{[^}]*min-height:\s*36px/);
   assert.match(css, /\.workspace-tabs-sidebar-list\s*\{[^}]*padding:\s*var\(--space-1\) var\(--space-2\) var\(--space-2\)/);
-  assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input/, "sidebar search styles must beat the global .input width");
-  assert.match(tabSearch, /el\("label", \{ class: "workspace-tabs-sidebar-search"/);
-  assert.match(tabSearch, /compositionstart/, "the search field must keep IME composition attached to one input");
-  assert.match(tabSearch, /compositionend/, "committed IME text must refresh search after composition ends");
-  assert.match(tabSearch, /keyCode === 229/, "IME keydown must mark composition before the first composing input");
-  assert.match(source, /searchComposing/, "sidebar rebuilds must wait until IME composition ends");
-  assert.doesNotMatch(tabSearch, /class: "input workspace-tabs-sidebar-search-input"/);
+  assert.doesNotMatch(tabSearch, /workspace-tabs-sidebar-search/, "the shared search helper must not render a sidebar field");
+  assert.doesNotMatch(tabSearch, /renderWorkspaceTabSearchField/, "the sidebar-only search field renderer must be gone");
   assert.doesNotMatch(source, /function previewSearchWorkspace/, "topbar Search must not bounce sidebar rows into History");
   assert.doesNotMatch(source, /renderWorkspaceTabSearchHits/, "leftover Full text cards must leave the sidebar");
-  assert.doesNotMatch(source, /openWorkspaceHistory/, "the sidebar must not open History from local find-in-list");
-  assert.match(icons, /search:\s*\[/, "the sidebar search field must use the Lucide search glyph");
+  assert.doesNotMatch(source, /openWorkspaceHistory/, "the sidebar must not open History");
+  assert.match(icons, /search:\s*\[/, "Composer Search and the Tabs viewer must keep the Lucide search glyph");
   const { createWorkspaceTabsSidebarController } = await import("../app/workspace/tabs-sidebar-controller.js");
   const memory = new Map();
   const widthMemory = new Map();
@@ -1191,68 +1185,46 @@ globalThis.document = {
     await fixture.api.refresh();
     fixture.api.setOpen(true);
     const sidebar = fixture.api.renderSidebar();
-    assert.ok(
+    assert.equal(
       descendants(sidebar).some((node) => node.classList.contains("workspace-tabs-sidebar-search-input")),
-      "the sidebar must keep a title search field"
+      false,
+      "the sidebar must not keep a title search field"
     );
-    fixture.api.setSearchQuery("Closed");
-    const filtered = fixture.api.renderSidebar();
-    const labels = descendants(filtered)
+    assert.equal(
+      descendants(sidebar).some((node) => node.classList.contains("workspace-tabs-sidebar-search")),
+      false,
+      "the sidebar must not keep a search chrome row"
+    );
+    const headerActions = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-header-actions"));
+    assert.equal(headerActions?.children?.length, 3, "the title row must stay folder / sort / close-others");
+    const labels = descendants(sidebar)
       .filter((node) => node.classList.contains("workspace-tabs-sidebar-item-label"))
       .map((node) => nodeText(node));
-    assert.deepEqual(labels, ["Closed research"]);
-    const indexes = descendants(filtered).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
-    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1"]);
-    fixture.api.setSearchQuery("no-such-tab");
-    const empty = fixture.api.renderSidebar();
-    assert.match(nodeText(empty), /No matching tabs|没有匹配的标签页/);
+    assert.equal(labels.length, 3, "without a sidebar filter every remembered tab stays listed");
+    assert.equal(typeof fixture.api.setSearchQuery, "undefined", "the sidebar freeze must drop setSearchQuery");
+    assert.equal(typeof fixture.api.openSearch, "undefined", "the sidebar freeze must drop openSearch");
   }
 
   {
     const fixture = controller();
     await fixture.api.refresh();
     fixture.api.setOpen(true);
-    fixture.api.setSearchQuery("Closed");
     const sidebar = fixture.api.renderSidebar();
-    const row = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-item-focus"));
-    assert.ok(row, "filtered search results must keep an activatable tab row");
+    const closedLabel = descendants(sidebar).find((node) => (
+      node.classList.contains("workspace-tabs-sidebar-item-label") && nodeText(node) === "Closed research"
+    ));
+    const row = closedLabel?.closest?.(".workspace-tabs-sidebar-item-focus")
+      || descendants(sidebar).find((node) => (
+        node.classList.contains("workspace-tabs-sidebar-item-focus")
+        && descendants(node).some((child) => nodeText(child).includes("Closed research"))
+      ));
+    assert.ok(row, "closed sidebar rows must stay activatable");
     row.click();
     assert.equal(
       fixture.calls.filter((call) => call.action === "openWorkspaceTab").length,
       1,
-      "clicking a sidebar find-in-list result must open that tab"
+      "clicking a closed sidebar row must open that tab"
     );
-  }
-
-  {
-    const fixture = controller();
-    await fixture.api.refresh();
-    fixture.api.setOpen(true);
-    const shell = Object.assign(new FakeNode("div"), { isConnected: true, className: "app-shell" });
-    const grid = Object.assign(new FakeNode("div"), { className: "main-grid" });
-    shell.append(grid);
-    fixture.api.syncSidebar(shell);
-    const sidebar = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
-    const field = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-search-input"));
-    assert.ok(field, "the connected sidebar must expose a live search input");
-    field.dispatch("keydown", { key: "a", keyCode: 229, isComposing: false });
-    field.value = "a";
-    field.dispatch("input", { isComposing: true });
-    const during = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
-    const duringField = descendants(during).find((node) => node.classList.contains("workspace-tabs-sidebar-search-input"));
-    assert.equal(during, sidebar, "IME composition must not replace the sidebar");
-    assert.equal(duringField, field, "IME composition must keep the same search input node");
-    assert.equal(
-      descendants(during).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-label")).length,
-      3,
-      "pinyin in composition must not filter tabs yet"
-    );
-    field.value = "阿";
-    field.dispatch("compositionend", { data: "阿" });
-    const committed = descendants(shell).find((node) => node.classList.contains("workspace-tabs-sidebar"));
-    const committedField = descendants(committed).find((node) => node.classList.contains("workspace-tabs-sidebar-search-input"));
-    assert.notEqual(committed, sidebar, "committed IME text may rebuild the filtered list");
-    assert.equal(committedField?.value, "阿");
   }
 
   {
@@ -1260,8 +1232,8 @@ globalThis.document = {
     await fixture.api.refresh();
     fixture.api.setOpen(false);
     assert.equal(fixture.api.isOpen(), false);
-    fixture.api.openSearch();
-    assert.equal(fixture.api.isOpen(), true, "sidebar openSearch must still open ChatClub Tabs locally");
+    fixture.api.setOpen(true);
+    assert.equal(fixture.api.isOpen(), true, "ChatClub Tabs still opens through setOpen");
   }
 
   {

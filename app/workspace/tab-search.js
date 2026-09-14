@@ -1,6 +1,5 @@
 import { groupByDate, timestamp } from "../../shared/date-groups.js";
 import { STORAGE_KEYS } from "../../shared/constants.js";
-import { t } from "../../shared/i18n.js";
 import {
   framesFromSummaryPreviewItems,
   fullTextMessagesHavePair,
@@ -15,10 +14,7 @@ import {
 } from "../../shared/workspace-tab-fulltext.js";
 import { isStorageQuotaError } from "../../shared/storage-schema.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
-import { el, input } from "../../ui/dom.js";
-import { createSvgIcon } from "../../ui/icons.js";
-
-export { workspaceIdsMatchingFullText };
+import { el } from "../../ui/dom.js";
 
 export async function loadRecordFullTextEnabled() {
   const options = await storageGet(STORAGE_KEYS.options);
@@ -90,39 +86,8 @@ function tabTitleSearchValues(item = {}, label = "") {
   ];
 }
 
-export function itemMatchesTitleQuery(item, query, label) {
+function itemMatchesTitleQuery(item, query, label) {
   return matchesFullTextQuery(query, tabTitleSearchValues(item, label));
-}
-
-export function renderWorkspaceTabSearchField({ query, fullTextEnabled, onInput, onFocus, onBlur, onCompositionStart, onCompositionEnd }) {
-  const placeholder = fullTextEnabled
-    ? t("workspace.tabs.searchPlaceholderFullText")
-    : t("workspace.tabs.searchPlaceholder");
-  const field = input(query, {
-    class: "workspace-tabs-sidebar-search-input",
-    type: "search",
-    placeholder,
-    "aria-label": placeholder,
-    autocomplete: "off",
-    spellcheck: "false"
-  });
-  field.value = query;
-  field.addEventListener("keydown", (event) => {
-    if (event?.isComposing || event?.keyCode === 229) onCompositionStart?.(event);
-  });
-  field.addEventListener("compositionstart", (event) => onCompositionStart?.(event));
-  field.addEventListener("compositionend", (event) => {
-    onCompositionEnd?.(String(event?.target?.value || ""), event);
-  });
-  field.addEventListener("input", (event) => {
-    onInput(String(event?.target?.value || ""), event);
-  });
-  field.addEventListener("focus", () => onFocus?.());
-  field.addEventListener("blur", () => onBlur?.());
-  return el("label", { class: "workspace-tabs-sidebar-search" },
-    createSvgIcon("search"),
-    field
-  );
 }
 
 export function highlightQuery(text, query) {

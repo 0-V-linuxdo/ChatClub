@@ -35,7 +35,7 @@ assert.match(focusControllerSource, /event\.type === "pointerdown" \|\| \(event\
 assert.match(focusControllerSource, /isOverlayTarget\(document\.activeElement\)/);
 assert.match(focusControllerSource, /isOverlayTarget\(event\?\.target\)/);
 assert.match(focusControllerSource, /contains\?\.\("modal"\)/);
-assert.match(focusControllerSource, /workspace-tabs-sidebar-search-input/);
+assert.doesNotMatch(focusControllerSource, /workspace-tabs-sidebar-search/, "prompt-focus must not treat a removed sidebar search field as overlay chrome");
 assert.match(focusControllerSource, /document\.querySelector\("\.modal"\)/);
 assert.match(frameController, /document\.documentElement\.dataset\.p/);
 assert.match(viewController, /inert: true/);

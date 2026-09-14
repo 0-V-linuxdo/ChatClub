@@ -18,11 +18,7 @@ import {
 import { createSvgIcon } from "../../ui/icons.js";
 import {
   forgetWorkspaceTabFullText,
-  itemMatchesTitleQuery,
-  loadRecordFullTextEnabled,
-  loadWorkspaceTabFullTextStore,
-  renderWorkspaceTabSearchField,
-  workspaceIdsMatchingFullText
+  loadWorkspaceTabFullTextStore
 } from "./tab-search.js";
 import {
   createFolder,
@@ -216,13 +212,6 @@ export function createWorkspaceTabsSidebarController({
   let suppressActivate = false;
   let editingKey = "";
   let editingDraft = "";
-  let searchQuery = "";
-  let searchFocused = false;
-  let searchSelection = { start: 0, end: 0 };
-  let searchComposing = false;
-  let recordFullTextEnabled = false;
-  let fullTextStore = {};
-  let fullTextLoad = null;
   let sortMenuCleanup = null;
   let pocketBusy = false;
 
@@ -363,47 +352,11 @@ export function createWorkspaceTabsSidebarController({
   }
 
   function visibleItems() {
-    const query = searchQuery.trim();
-    if (!query) return items.map(overlayCurrentWorkspace);
-    const fullTextIds = recordFullTextEnabled
-      ? new Set(workspaceIdsMatchingFullText(fullTextStore, query))
-      : new Set();
-    return items.filter((item, index) => (
-      itemMatchesTitleQuery(item, query, itemDisplayLabel(item, index))
-      || fullTextIds.has(workspaceIdValue(item.workspaceId))
-    )).map(overlayCurrentWorkspace);
+    return items.map(overlayCurrentWorkspace);
   }
 
   function visibleFolders() {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return folders;
-    const visibleIds = new Set(visibleItems().map((item) => item.workspaceId));
-    return folders.filter((folder) => (
-      String(folder.name || "").toLowerCase().includes(query)
-      || folder.workspaceIds.some((id) => visibleIds.has(id))
-    )).map((folder) => ({
-      ...folder,
-      collapsed: false,
-      workspaceIds: folder.workspaceIds.filter((id) => visibleIds.has(id) || String(folder.name || "").toLowerCase().includes(query))
-    }));
-  }
-
-  async function refreshSearchContext() {
-    const query = searchQuery.trim();
-    const run = Promise.all([
-      loadRecordFullTextEnabled().catch(() => false),
-      loadWorkspaceTabFullTextStore().catch(() => ({}))
-    ]).then(([enabled, store]) => {
-      recordFullTextEnabled = enabled === true;
-      fullTextStore = store || {};
-      return { enabled: recordFullTextEnabled, store: fullTextStore, query };
-    });
-    fullTextLoad = run;
-    const result = await run;
-    if (fullTextLoad === run && lastShell?.isConnected && result.query === searchQuery.trim()) {
-      if (!searchComposing) syncSidebar(lastShell);
-    }
-    return result;
+    return folders;
   }
 
   function overlayCurrentWorkspace(item = {}) {
@@ -510,7 +463,6 @@ export function createWorkspaceTabsSidebarController({
   async function refresh() {
     const response = await requestBackground("listLiveWorkspaceTabs");
     setItems(response?.tabs);
-    refreshSearchContext().catch(() => {});
     return currentItems();
   }
 
@@ -628,7 +580,8 @@ export function createWorkspaceTabsSidebarController({
     if (!workspaceId) return { saved: false, count: 0 };
     pocketBusy = true;
     try {
-      let pages = pocketPagesFromWorkspaceFullText(fullTextStore, workspaceId);
+      const store = await loadWorkspaceTabFullTextStore().catch(() => ({}));
+      let pages = pocketPagesFromWorkspaceFullText(store, workspaceId);
       if (!pages.length && item.current === true && typeof collectLivePreview === "function") {
         pages = pocketPagesFromPreviewItems(await collectLivePreview());
       }
@@ -845,7 +798,6 @@ export function createWorkspaceTabsSidebarController({
       || className.includes(" workspace-tabs-sidebar-item-move-up ")
       || className.includes(" workspace-tabs-sidebar-item-move-down ")
       || className.includes(" workspace-tabs-sidebar-item-editor ")
-      || className.includes(" workspace-tabs-sidebar-search-input ")
       || className.includes(" workspace-tabs-sidebar-folder-edit ")
       || className.includes(" workspace-tabs-sidebar-folder-delete ")
       || className.includes(" workspace-tabs-sidebar-folder-move-up ")
@@ -938,7 +890,7 @@ export function createWorkspaceTabsSidebarController({
     if (!row?.addEventListener) return;
     row.addEventListener("pointerdown", (event) => {
       if (event?.button != null && event.button !== 0) return;
-      if (dragIgnored(event) || searchQuery.trim()) return;
+      if (dragIgnored(event)) return;
       if (kind === "tab" && isEditingItem(item)) return;
       if (kind === "folder" && isEditingFolder(item)) return;
       itemDrag = {
@@ -1006,8 +958,6 @@ export function createWorkspaceTabsSidebarController({
     }
     dropForgottenItem(item);
     if (workspaceId) {
-      fullTextStore = { ...fullTextStore };
-      delete fullTextStore[workspaceId];
       forgetWorkspaceTabFullText(workspaceId).catch(() => {});
     }
     if (isCurrent) {
@@ -1037,13 +987,6 @@ export function createWorkspaceTabsSidebarController({
     const field = root?.querySelector?.(".workspace-tabs-sidebar-item-editor");
     try { field?.focus?.(); } catch {}
     try { field?.select?.(); } catch {}
-  }
-
-  function focusSearchField(root) {
-    const field = root?.querySelector?.(".workspace-tabs-sidebar-search-input");
-    if (!field) return;
-    try { field.focus?.(); } catch {}
-    try { field.setSelectionRange?.(searchSelection.start, searchSelection.end); } catch {}
   }
 
   function renderTitleEditor(item = {}, index = 0, kind = "tab") {
@@ -1361,44 +1304,10 @@ export function createWorkspaceTabsSidebarController({
     }
     if (!nodes.length) {
       return el("div", { class: "workspace-tabs-sidebar-empty" },
-        searchQuery.trim() ? t("workspace.tabs.searchEmpty") : t("workspace.tabs.empty")
+        t("workspace.tabs.empty")
       );
     }
     return el("div", { class: "workspace-tabs-sidebar-list", role: "list" }, nodes);
-  }
-
-  function setSearchQuery(next) {
-    searchComposing = false;
-    searchQuery = String(next || "");
-    if (lastShell?.isConnected) syncSidebar(lastShell);
-    if (searchQuery.trim()) refreshSearchContext().catch(() => {});
-  }
-
-  function applySearchInput(value, composing) {
-    searchQuery = String(value || "");
-    const field = lastShell?.querySelector?.(".workspace-tabs-sidebar-search-input");
-    searchSelection = {
-      start: Number(field?.selectionStart) || searchQuery.length,
-      end: Number(field?.selectionEnd) || searchQuery.length
-    };
-    if (composing || searchComposing) return;
-    if (lastShell?.isConnected) syncSidebar(lastShell);
-    refreshSearchContext().catch(() => {});
-  }
-
-  function renderSearchBar() {
-    return renderWorkspaceTabSearchField({
-      query: searchQuery,
-      fullTextEnabled: recordFullTextEnabled,
-      onInput: (value, event) => applySearchInput(value, Boolean(event?.isComposing)),
-      onCompositionStart: () => { searchComposing = true; },
-      onCompositionEnd: (value) => {
-        searchComposing = false;
-        applySearchInput(value, false);
-      },
-      onFocus: () => { searchFocused = true; },
-      onBlur: () => { searchFocused = false; }
-    });
   }
 
   function renderSidebar() {
@@ -1410,8 +1319,7 @@ export function createWorkspaceTabsSidebarController({
       style: { width: `${sidebarWidth}px` }
     },
     renderSidebarHeader(),
-    renderSearchBar(),
-    items.length || searchQuery.trim() || folders.length
+    items.length || folders.length
       ? renderSidebarList()
       : el("div", { class: "workspace-tabs-sidebar-empty" }, t("workspace.tabs.empty")),
     el("div", {
@@ -1480,9 +1388,6 @@ export function createWorkspaceTabsSidebarController({
   function onWorkspaceSessionChanged(changes, areaName) {
     if (areaName && areaName !== "local") return;
     const keys = changes && typeof changes === "object" ? Object.keys(changes) : [];
-    if (keys.includes("workspaceTabFullText") || keys.includes("options")) {
-      refreshSearchContext().catch(() => {});
-    }
     if (!keys.some((key) => workspaceSessionWorkspaceId(key))) return;
     refreshAndSync();
   }
@@ -1534,14 +1439,6 @@ export function createWorkspaceTabsSidebarController({
       if (lastShell?.isConnected) syncSidebar(lastShell);
       return;
     }
-    if (searchQuery) {
-      event.preventDefault?.();
-      event.stopPropagation?.();
-      searchComposing = false;
-      searchQuery = "";
-      if (lastShell?.isConnected) syncSidebar(lastShell);
-      return;
-    }
     if (typeof canDismiss === "function" && !canDismiss()) return;
     event.preventDefault?.();
     event.stopPropagation?.();
@@ -1566,7 +1463,6 @@ export function createWorkspaceTabsSidebarController({
     syncPageTitle();
     if (!shell?.isConnected) return null;
     lastShell = shell;
-    if (searchComposing) return shell.querySelector(".workspace-tabs-sidebar");
     const existing = shell.querySelector(".workspace-tabs-sidebar");
     const next = renderSidebar();
     shell.classList.toggle("has-workspace-tabs-sidebar", Boolean(next));
@@ -1588,7 +1484,6 @@ export function createWorkspaceTabsSidebarController({
     syncTabListeners(true);
     syncEscapeListener();
     if (editingKey) focusTitleEditor(next);
-    else if (searchFocused || searchQuery) focusSearchField(next);
     return next;
   }
 
@@ -1607,22 +1502,9 @@ export function createWorkspaceTabsSidebarController({
     return setOpen(!open);
   }
 
-  function openSearch() {
-    searchFocused = true;
-    if (!open) return setOpen(true);
-    if (lastShell?.isConnected) {
-      focusSearchField(lastShell);
-      return open;
-    }
-    render();
-    return open;
-  }
-
   function close() {
     if (!open) return false;
     stopTitleEditor();
-    searchComposing = false;
-    searchQuery = "";
     setOpen(false);
     return true;
   }
@@ -1644,13 +1526,11 @@ export function createWorkspaceTabsSidebarController({
     moveByDelta,
     moveFolderRow,
     togglePin,
-    setSearchQuery,
     setSortMode,
     addFolder,
     currentFolders: () => folders.slice(),
     currentSortMode: () => sortMode,
     toggle,
-    openSearch,
     close,
     setOpen,
     renderSidebar,

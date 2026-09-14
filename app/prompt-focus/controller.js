@@ -19,8 +19,6 @@ function isOverlayTarget(target) {
     if (
       classes?.contains?.("modal")
       || classes?.contains?.("modal-backdrop")
-      || classes?.contains?.("workspace-tabs-sidebar-search")
-      || classes?.contains?.("workspace-tabs-sidebar-search-input")
     ) {
       return true;
     }

@@ -129,8 +129,9 @@ assert.doesNotMatch(css, /border-radius:\s*10px/, "chips and overlay surfaces mu
 assert.doesNotMatch(css, /var\(--tooltip-bg,\s*#4a4a4a\)/, "tooltip tokens must not fall back to hex");
 assert.match(
   css,
-  /\.workspace-tabs-sidebar-search:focus-within,\s*\n\.shortcut-search:focus-within \{/
+  /\.shortcut-search:focus-within \{/
 );
+assert.doesNotMatch(css, /\.workspace-tabs-sidebar-search/, "the Tabs sidebar must not keep a dedicated search field");
 assert.match(css, /scroll-margin-top:\s*calc\(var\(--topbar-height\) \+ var\(--space-2\)\)/);
 assert.match(css, /\.ui-row-action \.svg-icon \{[^}]*width:\s*16px;/s);
 assert.match(css, /\n\.share-panel-empty \{\s*\n\s*padding:\s*18px;[^}]*border:\s*1px dashed var\(--line\);/s);
@@ -143,7 +144,7 @@ assert.match(css, /\.summary-panel-header \{[^}]*min-height:\s*var\(--ui-chrome-
 assert.match(css, /\.share-panel-header \{[^}]*min-height:\s*var\(--ui-chrome-height\);/s);
 assert.match(css, /\.model-preference-row \{[^}]*grid-template-columns:\s*var\(--ui-reorder-cluster\)/s);
 assert.doesNotMatch(css, /font-size:\s*18px/, "display titles must consume --font-size-display");
-assert.match(css, /\.workspace-tabs-sidebar-search \.workspace-tabs-sidebar-search-input,\s*\n\.workspace-tabs-sidebar-search-input \{[^}]*line-height:\s*var\(--ui-control-height\);/s);
+assert.match(css, /\.shortcut-search-sizer,\s*\n\.shortcut-search-input \{[^}]*line-height:\s*var\(--ui-control-height\);/s);
 assert.match(css, /\.tooltip-preview-brand-logo \{[^}]*border-radius:\s*var\(--ui-radius\);/s);
 assert.doesNotMatch(css, /font-size:\s*17px/, "headings must consume the type scale");
 assert.match(officialRules, /\.official-rules-tab:hover \{[^}]*background:\s*var\(--control-hover\);/s);
