@@ -183,6 +183,7 @@ assert.match(agents, /WCAG 2\.5\.7/);
 assert.match(agents, /--control-selected/);
 assert.match(agents, /do not invent `--control-selected-strong`/);
 assert.match(agents, /Composer `\.prompt-mode-chip\[aria-pressed="true"\]` is filled `--primary`/);
+assert.match(agents, /unpressed composer accessories \(mode chip, plus, clear\) rest `--text`/);
 assert.match(agents, /other segmented checked stays `--control-selected`/);
 assert.match(agents, /not declared-only/);
 assert.match(agents, /heading `17px`/);

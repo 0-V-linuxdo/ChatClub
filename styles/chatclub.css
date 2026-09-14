@@ -1674,7 +1674,7 @@ button { cursor: pointer; }
   min-height: var(--ui-accessory-height);
   display: inline-grid;
   place-items: center;
-  color: var(--muted);
+  color: var(--text);
   background: transparent;
   border: 0;
   border-radius: var(--ui-radius);
@@ -1697,7 +1697,7 @@ button { cursor: pointer; }
   min-height: var(--ui-accessory-height);
   display: inline-grid;
   place-items: center;
-  color: var(--muted);
+  color: var(--text);
   background: transparent;
   border: 0;
   border-radius: var(--ui-radius);
@@ -1855,6 +1855,11 @@ button { cursor: pointer; }
 .prompt-actions-button.compact-icon .svg-icon {
   width: 16px;
   height: 16px;
+}
+
+.prompt-clear-button.compact-icon,
+.prompt-actions-button.compact-icon {
+  color: var(--text);
 }
 
 .prompt-clear-button.compact-icon:hover,
@@ -3541,7 +3546,7 @@ body.tab-gesture-active * {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--muted);
+  color: var(--text);
   background: transparent;
   border: 0;
   border-radius: var(--ui-radius-nested);

@@ -68,6 +68,11 @@ assert.doesNotMatch(
   "pressed search/compose chip must not use the faint --control-selected well"
 );
 assert.match(css, /\.prompt-mode-chip:hover\s*\{[\s\S]*?background:\s*var\(--control-hover\)/);
+assert.match(css, /\.prompt-mode-chip\s*\{[\s\S]*?color:\s*var\(--text\)/);
+assert.doesNotMatch(css, /\.prompt-mode-chip\s*\{[^}]*color:\s*var\(--muted\)/, "unpressed mode chip rest ink is --text, not --muted");
+assert.match(css, /\.prompt-actions-button\s*\{[\s\S]*?color:\s*var\(--text\)/);
+assert.match(css, /\.prompt-clear-button\s*\{[\s\S]*?color:\s*var\(--text\)/);
+assert.match(css, /\.prompt-clear-button\.compact-icon,\s*\n\.prompt-actions-button\.compact-icon\s*\{[\s\S]*?color:\s*var\(--text\)/);
 assert.match(css, /\.prompt-mode-chip\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-nested\)/);
 assert.match(css, /\.prompt-mode-switch\s*\{[\s\S]*?background:\s*transparent/);
 assert.doesNotMatch(css, /\.prompt-mode-switch\s*\{[^}]*box-shadow:\s*inset/, "mode switch is flat tabs without a track well");
@@ -179,6 +184,7 @@ assert.match(agents, /Inside `#composer-center-host`/);
 assert.match(agents, /visible `\.prompt-mode-switch`/);
 assert.match(agents, /expanded compose must not `display: none` that switch/);
 assert.match(agents, /Pressed `\.prompt-mode-chip\[aria-pressed="true"\]` fills `--primary`/);
+assert.match(agents, /unpressed chip, plus, and clear rest ink is `--text`/);
 assert.match(agents, /do not restore `--control-selected` on that chip/);
 assert.match(agents, /FIND marks \(\`\.workspace-tabs-search-mark`/);
 assert.match(css, /\.workspace-tabs-search-mark\s*\{[\s\S]*?color-mix\(in srgb, var\(--primary\) 78%, var\(--panel\)\)/);
