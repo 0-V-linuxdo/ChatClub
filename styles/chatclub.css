@@ -3845,12 +3845,30 @@ body.tab-gesture-active * {
   outline-offset: 2px;
 }
 
-.prompt-search-option-title {
+.prompt-search-option-copy {
   flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.prompt-search-option-title {
   min-width: 0;
   overflow: hidden;
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-search-option-snippet {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

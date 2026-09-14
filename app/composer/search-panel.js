@@ -194,13 +194,18 @@ export function createComposerSearchPanel(options = {}) {
         const title = recordTitle(record, index);
         const liveLabel = record.live ? t("composer.search.live") : t("composer.search.closed");
         const timeLabel = String(formatTime(record) || "");
+        const snippet = String(record?.snippet || "").trim();
+        const titleNodes = record?.matchKind === "body" ? [title] : highlight(title, query);
+        const ariaParts = [title, liveLabel];
+        if (snippet) ariaParts.push(snippet);
+        if (timeLabel) ariaParts.push(timeLabel);
         const option = el("button", {
           class: `prompt-search-option${index === selectedIndex ? " is-active" : ""}`,
           type: "button",
           id: `prompt-search-option-${record.workspaceId}`,
           role: "option",
           "aria-selected": index === selectedIndex ? "true" : "false",
-          "aria-label": timeLabel ? `${title}, ${liveLabel}, ${timeLabel}` : `${title}, ${liveLabel}`,
+          "aria-label": ariaParts.join(", "),
           onclick: (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -209,7 +214,12 @@ export function createComposerSearchPanel(options = {}) {
           }
         },
           renderFavicons(record),
-          el("span", { class: "prompt-search-option-title" }, ...highlight(title, query)),
+          el("span", { class: "prompt-search-option-copy" },
+            el("span", { class: "prompt-search-option-title" }, ...titleNodes),
+            snippet
+              ? el("span", { class: "prompt-search-option-snippet" }, ...highlight(snippet, query))
+              : null
+          ),
           renderTime(record, timeLabel)
         );
         return option;

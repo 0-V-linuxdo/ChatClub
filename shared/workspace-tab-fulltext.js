@@ -34,16 +34,77 @@ export function fullTextTextsOverlap(left, right) {
   return compactA.length <= compactB.length ? includes(compactA, compactB) : includes(compactB, compactA);
 }
 
+function foldFullTextSearchText(value) {
+  const text = String(value || "");
+  if (!text) return "";
+  try {
+    return text.normalize("NFKC").toLowerCase();
+  } catch {
+    return text.toLowerCase();
+  }
+}
+
 function normalizeFullTextQuery(value) {
-  return textValue(value).toLowerCase();
+  return foldFullTextSearchText(textValue(value));
 }
 
 export function matchesFullTextQuery(query, values = []) {
   const needle = normalizeFullTextQuery(query);
   if (!needle) return true;
   return (Array.isArray(values) ? values : [values]).some((value) => (
-    textValue(value).toLowerCase().includes(needle)
+    normalizeFullTextQuery(value).includes(needle)
   ));
+}
+
+function codePointSize(text, index) {
+  const code = String(text || "").codePointAt(index);
+  return Number.isInteger(code) && code > 0xFFFF ? 2 : 1;
+}
+
+function mapFoldedRangeToOriginal(original, foldedStart, foldedEnd) {
+  let foldedIndex = 0;
+  let start = 0;
+  let end = original.length;
+  let seenStart = false;
+  for (let index = 0; index < original.length; ) {
+    const size = codePointSize(original, index);
+    const piece = foldFullTextSearchText(original.slice(index, index + size));
+    const nextFolded = foldedIndex + (piece.length || 0);
+    if (!seenStart && nextFolded > foldedStart) {
+      start = index;
+      seenStart = true;
+    }
+    if (seenStart && nextFolded >= foldedEnd) {
+      end = index + size;
+      break;
+    }
+    foldedIndex = nextFolded;
+    index += size;
+  }
+  if (!seenStart) start = Math.min(foldedStart, original.length);
+  if (end <= start) end = Math.min(original.length, start + codePointSize(original, start));
+  return { start, end };
+}
+
+export function findFullTextQueryRanges(text, query) {
+  const original = String(text || "");
+  const needle = normalizeFullTextQuery(query);
+  if (!needle || !original) return [];
+  const folded = foldFullTextSearchText(original);
+  const ranges = [];
+  let from = 0;
+  let index = folded.indexOf(needle, from);
+  while (index >= 0) {
+    const mapped = folded.length === original.length
+      ? { start: index, end: index + needle.length }
+      : mapFoldedRangeToOriginal(original, index, index + needle.length);
+    if (mapped.end > mapped.start && (!ranges.length || mapped.start >= ranges[ranges.length - 1].end)) {
+      ranges.push(mapped);
+    }
+    from = index + Math.max(needle.length, 1);
+    index = folded.indexOf(needle, from);
+  }
+  return ranges;
 }
 
 function normalizeFullTextMessage(message = {}) {

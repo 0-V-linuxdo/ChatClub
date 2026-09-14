@@ -82,6 +82,10 @@ assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hid
 assert.doesNotMatch(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-input-row\s*\{[^}]*border-bottom-color/);
 assert.match(css, /\.prompt-search-results \{[\s\S]*?padding:\s*0 var\(--space-3\) var\(--space-3\)/);
 assert.match(css, /\.prompt-search-option-time\s*\{[\s\S]*?margin-left:\s*auto/);
+assert.match(css, /\.prompt-search-option-copy\s*\{[\s\S]*?flex-direction:\s*column/);
+assert.match(css, /\.prompt-search-option-snippet\s*\{[\s\S]*?color:\s*var\(--muted\)/);
+assert.match(css, /\.prompt-search-option-snippet\s*\{[\s\S]*?white-space:\s*nowrap/);
+assert.match(css, /\.prompt-search-option-snippet\s*\{[\s\S]*?text-overflow:\s*ellipsis/);
 assert.match(css, /\.prompt-search-results \{[\s\S]*?position:\s*static/);
 assert.doesNotMatch(css, /\.prompt-search-results \{[\s\S]*?border-bottom-left-radius:\s*var\(--ui-radius-pill\)/);
 assert.match(css, /\.prompt-search-option \{[\s\S]*?display:\s*flex/);
@@ -121,6 +125,9 @@ assert.match(panelSource, /tabindex: "-1"/);
 assert.match(panelSource, /function handleTab\(/);
 assert.match(panelSource, /renderTime\(record, timeLabel\)/);
 assert.match(panelSource, /prompt-search-option-time/);
+assert.match(panelSource, /prompt-search-option-copy/);
+assert.match(panelSource, /prompt-search-option-snippet/);
+assert.match(panelSource, /matchKind === "body"/);
 assert.match(panelSource, /workspaceSearch\.formatTime/);
 assert.match(panelSource, /workspaceSearch\.copy/);
 assert.match(panelSource, /workspaceSearch\.highlight/);
@@ -179,6 +186,8 @@ assert.match(agents, /one joined card/);
 assert.match(agents, /no divider seam/);
 assert.match(agents, /renderFavicons/);
 assert.match(agents, /prompt-search-option-time/);
+assert.match(agents, /prompt-search-option-snippet/);
+assert.match(agents, /matchKind: "body"/);
 assert.match(agents, /must not paint `workspace\.tabs\.empty`/);
 assert.match(agents, /`\.ui-empty-state\[hidden\]`/);
 assert.match(agents, /compose draft and search query are independent buffers/);
@@ -332,6 +341,7 @@ globalThis.document = {
   try {
     const { createComposerSearchPanel } = await import(moduleUrl("app/composer/search-panel.js"));
     const {
+      collectWorkspaceSearchRecords,
       formatWorkspaceSearchTime,
       highlightQuery,
       workspaceSearchCopy
@@ -339,9 +349,25 @@ globalThis.document = {
     const { setLanguage } = await import(moduleUrl("shared/i18n.js"));
     setLanguage("en");
     const records = [
-      { workspaceId: "live-1", title: "Live desk", live: true, current: false, appIds: ["Grok"], viewedAt: Date.UTC(2026, 8, 10) },
-      { workspaceId: "closed-1", title: "Closed desk", live: false, current: false, appIds: ["Claude"], updatedAt: Date.UTC(2026, 8, 9) }
+      { workspaceId: "page-live1xxxxxxx", title: "Live desk", live: true, current: false, appIds: ["Grok"], viewedAt: Date.UTC(2026, 8, 10) },
+      { workspaceId: "page-closed1xxxxx", title: "Closed desk", live: false, current: false, appIds: ["Claude"], updatedAt: Date.UTC(2026, 8, 9) }
     ];
+    const fullTextStore = {
+      "page-live1xxxxxxx": {
+        workspaceId: "page-live1xxxxxxx",
+        topicTitle: "Live desk",
+        updatedAt: new Date(Date.UTC(2026, 8, 10)).toISOString(),
+        frames: [{
+          appId: "Grok",
+          appName: "Grok",
+          href: "https://grok.com/c/1",
+          messages: [
+            { role: "user", text: `${"padding ".repeat(40)}leftover-needle sits in the user turn ${"tail ".repeat(40)}` },
+            { role: "assistant", text: "done" }
+          ]
+        }]
+      }
+    };
     const opened = [];
     const viewers = [];
     let panel;
@@ -355,11 +381,13 @@ globalThis.document = {
         return icon;
       },
       workspaceSearch: {
-        listRecords: async (query) => {
-          const needle = String(query || "").trim().toLowerCase();
-          if (!needle) return records;
-          return records.filter((record) => record.title.toLowerCase().includes(needle));
-        },
+        listRecords: async (query) => collectWorkspaceSearchRecords({
+          items: records,
+          store: fullTextStore,
+          query,
+          fullTextEnabled,
+          labelOf: (item) => item.title
+        }),
         openRecord: async (record) => { opened.push(record.workspaceId); },
         openViewer: (opts) => { viewers.push(opts); },
         highlight: highlightQuery,
@@ -474,8 +502,10 @@ globalThis.document = {
     assert.equal(options.length, 2, "empty query lists recency rows");
     assert.equal(emptyNode.hidden, true, "empty query must not show an empty state after recency loads");
     assert.equal(options[0].children[0]?.classList.contains("prompt-search-option-favicons"), true, "site favicons sit to the left of the title");
+    assert.ok(options[0].querySelector(".prompt-search-option-copy"), "title and snippet share one copy column");
     assert.ok(options[0].querySelector(".prompt-search-option-title"), "search rows keep a title after the favicon stack");
     assert.equal(options[0].querySelector(".prompt-search-option-meta"), null, "search rows must not use app-name text meta");
+    assert.equal(options[0].querySelector(".prompt-search-option-snippet"), null, "empty query must not paint a snippet");
     const timeNode = options[0].querySelector(".prompt-search-option-time");
     assert.equal(Boolean(timeNode), true, "search rows show a date on the right");
     assert.ok(String(nodeText(timeNode) || "").trim(), "date label must not be empty");
@@ -486,6 +516,9 @@ globalThis.document = {
     const filtered = shell.querySelectorAll(".prompt-search-option");
     assert.equal(filtered.length, 1, "query filters title hits");
     assert.match(nodeText(filtered[0]), /Closed desk/);
+    assert.equal(filtered[0].querySelector(".prompt-search-option-snippet"), null, "title hits stay one line");
+    const titleHit = filtered[0].querySelector(".prompt-search-option-title");
+    assert.ok(titleHit.querySelector(".workspace-tabs-search-mark"), "title hits mark the title");
     const enter = {
       key: "Enter",
       shiftKey: false,
@@ -494,9 +527,24 @@ globalThis.document = {
     };
     assert.equal(panel.handleKeydown(enter), true);
     await new Promise((resolve) => { setImmediate(resolve); });
-    assert.deepEqual(opened, ["closed-1"]);
+    assert.deepEqual(opened, ["page-closed1xxxxx"]);
     assert.equal(panel.isActive(), false, "activating a row exits search");
     panel.enter();
+    fullTextEnabled = true;
+    field.value = "leftover-needle";
+    panel.handleInput({ target: field });
+    await new Promise((resolve) => { setImmediate(resolve); });
+    const bodyRows = shell.querySelectorAll(".prompt-search-option");
+    assert.equal(bodyRows.length, 1, "body-only hits still render one row");
+    const bodyTitle = bodyRows[0].querySelector(".prompt-search-option-title");
+    const bodySnippet = bodyRows[0].querySelector(".prompt-search-option-snippet");
+    assert.equal(nodeText(bodyTitle), "Live desk", "body-only hits keep the unmarked desk title");
+    assert.equal(bodyTitle.querySelector(".workspace-tabs-search-mark"), null, "body-only hits must not mark the title");
+    assert.equal(Boolean(bodySnippet), true, "body-only hits paint a snippet line");
+    assert.match(nodeText(bodySnippet), /leftover-needle/);
+    assert.ok(bodySnippet.querySelector(".workspace-tabs-search-mark"), "the snippet marks the full-text hit");
+    assert.match(String(bodyRows[0].getAttribute("aria-label") || ""), /leftover-needle/);
+    fullTextEnabled = false;
     field.value = "no-such-desk";
     panel.handleInput({ target: field });
     await new Promise((resolve) => { setImmediate(resolve); });

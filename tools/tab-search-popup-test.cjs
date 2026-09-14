@@ -61,6 +61,11 @@ assert.doesNotMatch(controller, /from "\.\.\/summary\/markdown\.js"/);
 assert.match(tabSearch, /export function collectWorkspaceSearchRecords/);
 assert.match(tabSearch, /export function groupWorkspaceSearchRecords/);
 assert.match(tabSearch, /export function highlightQuery/);
+assert.match(tabSearch, /searchWorkspaceTabFullTextHits/);
+assert.match(tabSearch, /findFullTextQueryRanges/);
+assert.match(tabSearch, /matchKind/);
+assert.match(tabSearch, /prompt-search-option-snippet|clipSearchSnippet|bodySnippetFromHits/);
+assert.doesNotMatch(tabSearch, /workspaceIdsMatchingFullText/);
 assert.match(tabSearch, /export function formatWorkspaceSearchTime/);
 assert.match(tabSearch, /export function workspaceSearchCopy/);
 assert.match(tabSearch, /month: "short", day: "numeric"/);
@@ -129,6 +134,7 @@ globalThis.document = {
       collectWorkspaceSearchRecords,
       formatWorkspaceSearchTime,
       groupWorkspaceSearchRecords,
+      highlightQuery,
       workspaceSearchCopy
     } = await import(pathToFileURL(path.join(root, "app/workspace/tab-search.js")).href);
     const { setLanguage } = await import(pathToFileURL(path.join(root, "shared/i18n.js")).href);
@@ -215,15 +221,59 @@ globalThis.document = {
     assert.deepEqual(recents.map((record) => record.workspaceId), ["page-livexxxxxxxx", "page-closedxxxxxxx", "page-forgottenxxx"]);
     assert.equal(recents.filter((record) => record.workspaceId === "page-livexxxxxxxx").length, 1, "one row per workspaceId");
     assert.equal(recents.find((record) => record.workspaceId === "page-forgottenxxx")?.fromTab, false);
+    assert.equal(recents.every((record) => record.matchKind == null && record.snippet == null), true, "empty query must not set matchKind or snippet");
 
     const titleHits = collectWorkspaceSearchRecords({ items, store, query: "Closed", fullTextEnabled: true });
     assert.deepEqual(titleHits.map((record) => record.workspaceId), ["page-closedxxxxxxx"]);
+    assert.equal(titleHits[0].matchKind, "title");
+    assert.equal(titleHits[0].snippet, undefined);
+
+    const appHits = collectWorkspaceSearchRecords({ items, store, query: "ChatGPT", fullTextEnabled: false });
+    assert.deepEqual(appHits.map((record) => record.workspaceId), ["page-closedxxxxxxx"]);
+    assert.equal(appHits[0].matchKind, "app");
+    assert.equal(appHits[0].snippet, undefined);
 
     const fulltextHits = collectWorkspaceSearchRecords({ items, store, query: "unique-fulltext-hit", fullTextEnabled: true });
     assert.deepEqual(fulltextHits.map((record) => record.workspaceId).sort(), ["page-forgottenxxx", "page-livexxxxxxxx"]);
+    const liveBody = fulltextHits.find((record) => record.workspaceId === "page-livexxxxxxxx");
+    const forgottenBody = fulltextHits.find((record) => record.workspaceId === "page-forgottenxxx");
+    assert.equal(liveBody.matchKind, "body");
+    assert.match(String(liveBody.snippet || ""), /unique-fulltext-hit/);
+    assert.equal(forgottenBody.matchKind, "body");
+    assert.match(String(forgottenBody.snippet || ""), /unique-fulltext-hit/);
+    assert.ok(String(liveBody.snippet || "").length <= 98, "body snippet must stay a single clipped line");
+
+    const longBody = collectWorkspaceSearchRecords({
+      items,
+      store: {
+        ...store,
+        "page-livexxxxxxxx": {
+          ...store["page-livexxxxxxxx"],
+          frames: [{
+            ...store["page-livexxxxxxxx"].frames[0],
+            messages: [
+              { role: "user", text: `${"padding ".repeat(40)}unique-fulltext-hit sits far from the start ${"tail ".repeat(40)}` },
+              { role: "assistant", text: "done" }
+            ]
+          }]
+        }
+      },
+      query: "unique-fulltext-hit",
+      fullTextEnabled: true
+    }).find((record) => record.workspaceId === "page-livexxxxxxxx");
+    assert.equal(longBody.matchKind, "body");
+    assert.match(String(longBody.snippet || ""), /unique-fulltext-hit/);
+    assert.match(String(longBody.snippet || ""), /…/);
+    assert.ok(String(longBody.snippet || "").length <= 98, "long body hits clip to one ellipsis line");
 
     const disabled = collectWorkspaceSearchRecords({ items, store, query: "unique-fulltext-hit", fullTextEnabled: false });
     assert.deepEqual(disabled, [], "full-text leftover must stay hidden while Record full text is off");
+    assert.equal(disabled.every((record) => record.matchKind !== "body"), true);
+
+    const marked = highlightQuery("Closed research ＡＢＣ", "abc");
+    const mark = marked.find((node) => node?.className === "workspace-tabs-search-mark");
+    assert.equal(Boolean(mark), true, "highlightQuery must mark NFKC-folded fullwidth hits");
+    assert.equal(mark.children[0]?.textContent, "ＡＢＣ");
 
     const groups = groupWorkspaceSearchRecords(recents, now);
     assert.deepEqual(groups.map((group) => group.id), ["today", "pastWeek", "pastMonth"]);

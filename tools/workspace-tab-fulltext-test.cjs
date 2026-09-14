@@ -12,6 +12,7 @@ const root = path.resolve(__dirname, "..");
     fullTextMessagesHavePair,
     fullTextMessagesMatchPrompt,
     fullTextTextsOverlap,
+    findFullTextQueryRanges,
     matchesFullTextQuery,
     mergeWorkspaceTabFullTextFrames,
     normalizeWorkspaceTabFullTextStore,
@@ -73,6 +74,8 @@ const root = path.resolve(__dirname, "..");
     page: { href: "https://chatgpt.com/c/1", messages }
   }])[0].appId, "ChatGPT");
   assert.equal(matchesFullTextQuery("claude", ["Claude is stronger at long documents."]), true);
+  assert.equal(matchesFullTextQuery("abc", ["fullwidth ＡＢＣ"]), true, "FIND matcher must NFKC-fold fullwidth letters");
+  assert.deepEqual(findFullTextQueryRanges("fullwidth ＡＢＣ", "abc"), [{ start: 10, end: 13 }]);
   assert.deepEqual(workspaceIdsMatchingFullText(store, "long documents"), [workspaceId]);
   const hits = searchWorkspaceTabFullTextHits(store, "Claude", [
     { workspaceId, topicTitle: "Research desk", live: true }

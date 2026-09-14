@@ -3,14 +3,15 @@ import { STORAGE_KEYS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
   framesFromSummaryPreviewItems,
+  findFullTextQueryRanges,
   fullTextMessagesHavePair,
   matchesFullTextQuery,
   mergeWorkspaceTabFullTextFrames,
   normalizeWorkspaceTabFullTextStore,
   pruneWorkspaceTabFullTextStore,
   removeWorkspaceTabFullText,
+  searchWorkspaceTabFullTextHits,
   upsertWorkspaceTabFullText,
-  workspaceIdsMatchingFullText,
   workspaceTabFullTextFramesEqual
 } from "../../shared/workspace-tab-fulltext.js";
 import { isStorageQuotaError } from "../../shared/storage-schema.js";
@@ -18,6 +19,7 @@ import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { el } from "../../ui/dom.js";
 
 const SEARCH_TIME_FORMAT = Object.freeze({ month: "short", day: "numeric" });
+const SEARCH_SNIPPET_MAX = 96;
 
 export async function loadRecordFullTextEnabled() {
   const options = await storageGet(STORAGE_KEYS.options);
@@ -84,8 +86,14 @@ function tabTitleSearchValues(item = {}, label = "") {
     label,
     item.topicTitle,
     item.layoutName,
-    item.title,
-    ...(Array.isArray(item.appIds) ? item.appIds : [])
+    item.title
+  ];
+}
+
+function tabAppSearchValues(item = {}, stored = {}) {
+  return [
+    ...(Array.isArray(item.appIds) ? item.appIds : []),
+    ...((Array.isArray(stored?.frames) ? stored.frames : []).map((frame) => frame.appName))
   ];
 }
 
@@ -93,20 +101,85 @@ function itemMatchesTitleQuery(item, query, label) {
   return matchesFullTextQuery(query, tabTitleSearchValues(item, label));
 }
 
+function itemMatchesAppQuery(item, query, stored) {
+  return matchesFullTextQuery(query, tabAppSearchValues(item, stored));
+}
+
+function workspaceFullTextHitsById(store, query) {
+  const grouped = new Map();
+  for (const hit of searchWorkspaceTabFullTextHits(store, query)) {
+    const id = workspaceIdOf(hit);
+    if (!id) continue;
+    const list = grouped.get(id);
+    if (list) list.push(hit);
+    else grouped.set(id, [hit]);
+  }
+  return grouped;
+}
+
+function clipSearchSnippet(text, query, max = SEARCH_SNIPPET_MAX) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (!value) return "";
+  const limit = Number.isInteger(max) && max > 0 ? max : SEARCH_SNIPPET_MAX;
+  const match = findFullTextQueryRanges(value, query)[0];
+  let start = 0;
+  let end = Math.min(value.length, limit);
+  if (match) {
+    const width = match.end - match.start;
+    if (width >= limit) {
+      start = match.start;
+      end = Math.min(value.length, match.start + limit);
+    } else {
+      const before = Math.min(match.start, Math.ceil((limit - width) / 2));
+      start = match.start - before;
+      end = Math.min(value.length, start + limit);
+      if (end - start < limit) start = Math.max(0, end - limit);
+    }
+  }
+  let snippet = value.slice(start, end);
+  if (start > 0) snippet = `…${snippet.replace(/^\s+/, "")}`;
+  if (end < value.length) snippet = `${snippet.replace(/\s+$/, "")}…`;
+  return snippet;
+}
+
+function bodySnippetFromHits(hits, query) {
+  for (const hit of Array.isArray(hits) ? hits : []) {
+    if (matchesFullTextQuery(query, [hit?.userMessage])) {
+      const snippet = clipSearchSnippet(hit.userMessage, query);
+      if (snippet) return snippet;
+    }
+    if (matchesFullTextQuery(query, [hit?.assistantMessage])) {
+      const snippet = clipSearchSnippet(hit.assistantMessage, query);
+      if (snippet) return snippet;
+    }
+  }
+  return "";
+}
+
+function matchFieldsForRecord({ item, stored, title, needle, fullTextEnabled, hits }) {
+  if (!needle) return {};
+  if (itemMatchesTitleQuery(item, needle, title) || matchesFullTextQuery(needle, [title])) {
+    return { matchKind: "title" };
+  }
+  if (fullTextEnabled) {
+    const snippet = bodySnippetFromHits(hits, needle);
+    if (snippet) return { matchKind: "body", snippet };
+  }
+  if (itemMatchesAppQuery(item, needle, stored)) return { matchKind: "app" };
+  if (fullTextEnabled && (Array.isArray(hits) ? hits : []).length) return { matchKind: "title" };
+  return {};
+}
+
 export function highlightQuery(text, query) {
   const value = String(text || "");
-  const needle = String(query || "").trim();
-  if (!needle) return [value];
-  const lower = value.toLowerCase();
-  const match = needle.toLowerCase();
+  const ranges = findFullTextQueryRanges(value, query);
+  if (!ranges.length) return [value];
   const nodes = [];
   let from = 0;
-  let index = lower.indexOf(match, from);
-  while (index >= 0) {
-    if (index > from) nodes.push(value.slice(from, index));
-    nodes.push(el("mark", { class: "workspace-tabs-search-mark" }, value.slice(index, index + needle.length)));
-    from = index + needle.length;
-    index = lower.indexOf(match, from);
+  for (const range of ranges) {
+    if (range.start > from) nodes.push(value.slice(from, range.start));
+    nodes.push(el("mark", { class: "workspace-tabs-search-mark" }, value.slice(range.start, range.end)));
+    from = range.end;
   }
   if (from < value.length) nodes.push(value.slice(from));
   return nodes.length ? nodes : [value];
@@ -154,9 +227,8 @@ export function collectWorkspaceSearchRecords({
   labelOf
 } = {}) {
   const needle = String(query || "").trim();
-  const fullTextIds = needle && fullTextEnabled
-    ? new Set(workspaceIdsMatchingFullText(store, needle))
-    : new Set();
+  const hitsById = needle && fullTextEnabled ? workspaceFullTextHitsById(store, needle) : new Map();
+  const fullTextIds = new Set(hitsById.keys());
   const records = [];
   const seen = new Set();
   const titleOf = (item, index) => {
@@ -169,10 +241,12 @@ export function collectWorkspaceSearchRecords({
     const id = workspaceIdOf(item);
     if (!id || seen.has(id)) return;
     const title = titleOf(item, index);
-    const titleMatch = !needle || itemMatchesTitleQuery(item, needle, title);
+    const stored = store?.[id];
+    const titleMatch = !needle || itemMatchesTitleQuery(item, needle, title)
+      || matchesFullTextQuery(needle, Array.isArray(item.appIds) ? item.appIds : []);
     if (needle && !titleMatch && !fullTextIds.has(id)) return;
     seen.add(id);
-    const stored = store?.[id];
+    const hits = hitsById.get(id) || [];
     records.push({
       workspaceId: id,
       title: title || String(stored?.topicTitle || "").trim(),
@@ -184,7 +258,15 @@ export function collectWorkspaceSearchRecords({
       createdAt: item.createdAt,
       updatedAt: item.updatedAt || stored?.updatedAt,
       detachedAt: item.detachedAt,
-      fromTab: true
+      fromTab: true,
+      ...matchFieldsForRecord({
+        item,
+        stored,
+        title: title || String(stored?.topicTitle || "").trim(),
+        needle,
+        fullTextEnabled,
+        hits
+      })
     });
   });
   if (fullTextEnabled) {
@@ -192,6 +274,7 @@ export function collectWorkspaceSearchRecords({
       const id = workspaceIdOf(stored);
       if (!id || seen.has(id)) continue;
       const title = String(stored.topicTitle || "").trim();
+      const hits = hitsById.get(id) || [];
       const titleMatch = !needle || matchesFullTextQuery(needle, [title]);
       if (needle && !titleMatch && !fullTextIds.has(id)) continue;
       seen.add(id);
@@ -203,7 +286,15 @@ export function collectWorkspaceSearchRecords({
         tabId: null,
         appIds: (stored.frames || []).map((frame) => frame.appId).filter(Boolean),
         updatedAt: stored.updatedAt,
-        fromTab: false
+        fromTab: false,
+        ...matchFieldsForRecord({
+          item: stored,
+          stored,
+          title,
+          needle,
+          fullTextEnabled,
+          hits
+        })
       });
     }
   }

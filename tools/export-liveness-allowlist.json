@@ -3,9 +3,9 @@
     "kind": "test-only",
     "reason": "Tooltip-id alias regressions import the canonical retired-id map so persistence and live hover suppression cannot drift."
   },
-  "shared/workspace-tab-fulltext.js#searchWorkspaceTabFullTextHits": {
+  "shared/workspace-tab-fulltext.js#workspaceIdsMatchingFullText": {
     "kind": "test-only",
-    "reason": "Pair-grain full-text search remains the engine under unique workspace grouping, and regressions assert it still matches every overlapping turn."
+    "reason": "Workspace-id full-text matching remains the unique-id seam under pair-grain hits, and regressions assert leftover ids after Composer Search consumes searchWorkspaceTabFullTextHits directly."
   },
   "shared/workspace-tab-fulltext.js#uniqueWorkspaceTabFullTextHits": {
     "kind": "test-only",
