@@ -164,8 +164,11 @@ assert.match(officialRules, /outline:\s*2px solid var\(--focus-ring\);/);
 assert.match(officialRules, /border-radius:\s*var\(--ui-radius\)/);
 
 assert.match(runtime, /setProperty\("--primary"/);
+assert.match(runtime, /setProperty\("--on-primary"/);
+assert.match(runtime, /onPrimaryForPrimaryColor\(primaryColor\)/);
 assert.match(runtime, /setProperty\("--primary-2"/);
 assert.doesNotMatch(runtime, /setProperty\("--accent"/);
+assert.doesNotMatch(runtime, /setProperty\("--on-primary", "#ffffff"/);
 
 assert.match(agents, /## Component Tokens/);
 assert.match(agents, /tools\/component-tokens-test\.cjs/);
@@ -193,6 +196,9 @@ assert.match(agents, /--ui-radius-nested/);
 assert.match(agents, /--ui-radius-pill/);
 assert.match(agents, /--ui-accessory-height/);
 assert.match(agents, /Send hover mixes `--on-primary`, not `#ffffff`/);
+assert.match(agents, /`applyTheme\(\)` can keep setting `--primary`, `--primary-2`, and a luminance-paired `--on-primary`/);
+assert.match(agents, /paper `#ffffff` vs ink `#082018`/);
+assert.match(css, /:root\[data-theme="dark"\] \{[\s\S]*?--on-primary:\s*#082018;/);
 assert.match(agents, /## Overlay Chrome Contract/);
 
 assert.match(css, /\.workspace-tabs-sidebar-item:hover,[\s\S]*?background:\s*var\(--control-hover\);/);
@@ -275,4 +281,22 @@ assert.doesNotMatch(css, /^\s*(?:min-|max-)?(?:width|height):\s*28px/m, "28px ac
 assert.match(css, /\.workspace-tabs-sidebar-count \{[^}]*padding:\s*0 var\(--space-2\);/s);
 assert.match(officialRules, /\.official-rules-status \{[^}]*min-height:\s*var\(--ui-accessory-height\);/s);
 
-console.log("component tokens: ok");
+const { pathToFileURL } = require("node:url");
+const html = read("chatClub.html");
+const optionsHtml = read("options.html");
+assert.match(html, /styles\/chatclub\.css\?chatclub-runtime=/);
+assert.match(optionsHtml, /styles\/chatclub\.css\?chatclub-runtime=/);
+
+(async () => {
+  const { onPrimaryForPrimaryColor } = await import(pathToFileURL(path.join(root, "shared/storage-schema.js")).href);
+  const { DEFAULT_OPTIONS } = await import(pathToFileURL(path.join(root, "shared/constants.js")).href);
+  assert.equal(DEFAULT_OPTIONS.primaryColor, "#1f7a5f");
+  assert.equal(onPrimaryForPrimaryColor("#1f7a5f"), "#ffffff");
+  assert.equal(onPrimaryForPrimaryColor(DEFAULT_OPTIONS.primaryColor), "#ffffff");
+  assert.equal(onPrimaryForPrimaryColor("#40b889"), "#082018");
+  assert.equal(onPrimaryForPrimaryColor("not-a-color"), "#ffffff");
+  console.log("component tokens: ok");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

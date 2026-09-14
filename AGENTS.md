@@ -101,7 +101,7 @@ Confirmation/task primary actions stay visible in `.modal-footer`, hoisted out o
 
 ## Component Tokens
 
-Page chrome besides overlays uses the forest-green 8px system through tokens on `:root` in `styles/chatclub.css`. Keep aliases declared so `applyTheme()` can keep setting only `--primary` / `--primary-2`.
+Page chrome besides overlays uses the forest-green 8px system through tokens on `:root` in `styles/chatclub.css`. Keep aliases declared so `applyTheme()` can keep setting `--primary`, `--primary-2`, and a luminance-paired `--on-primary` (paper `#ffffff` vs ink `#082018`).
 
 - `--accent` / `--link` → `--primary`; `--soft` → `--primary-2`
 - Status: `--success`, `--warning`, `--warning-fill`, `--info`, `--danger`, `--danger-soft`, `--danger-hover`, `--danger-active`, `--on-primary`

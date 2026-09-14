@@ -69,6 +69,17 @@ if (!validNumericManifestVersion(chromeVersion)) {
 verifyBackgroundCachebuster("background/service-worker.js", "./runtime.js", chromeVersion);
 verifyBackgroundCachebuster("background/firefox-background.js", "./service-worker.js", chromeVersion);
 
+function verifyHtmlStylesheetCachebuster(owner, manifestVersion) {
+  const matches = [...read(owner).matchAll(/href="([^"]*chatclub\.css[^"]*)"/g)].map((entry) => entry[1]);
+  const expected = `styles/chatclub.css?chatclub-runtime=${manifestVersion}`;
+  if (matches.length !== 1 || matches[0] !== expected) {
+    fail(`${owner} stylesheet href must equal ${expected}; found ${matches.join(", ") || "(none)"}`);
+  }
+}
+
+verifyHtmlStylesheetCachebuster("chatClub.html", chromeVersion);
+verifyHtmlStylesheetCachebuster("options.html", chromeVersion);
+
 if (versionMatch) {
   const [, year, month, day, hour, minute, second] = versionMatch;
   const expectedNumericPrefix = [year, String(Number(month)), String(Number(day))];

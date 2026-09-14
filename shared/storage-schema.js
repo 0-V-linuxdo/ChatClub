@@ -117,6 +117,35 @@ export function normalizePrimaryColor(value, fallback = DEFAULT_OPTIONS.primaryC
   return fallback;
 }
 
+const ON_PRIMARY_PAPER = "#ffffff";
+const ON_PRIMARY_INK = "#082018";
+
+function srgbChannelToLinear(channel) {
+  return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+function relativeLuminance(hex) {
+  const value = hex.slice(1);
+  return 0.2126 * srgbChannelToLinear(parseInt(value.slice(0, 2), 16) / 255)
+    + 0.7152 * srgbChannelToLinear(parseInt(value.slice(2, 4), 16) / 255)
+    + 0.0722 * srgbChannelToLinear(parseInt(value.slice(4, 6), 16) / 255);
+}
+
+function contrastRatio(left, right) {
+  const first = relativeLuminance(left);
+  const second = relativeLuminance(right);
+  const lighter = Math.max(first, second);
+  const darker = Math.min(first, second);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+export function onPrimaryForPrimaryColor(value, fallback = DEFAULT_OPTIONS.primaryColor) {
+  const primary = normalizePrimaryColor(value, fallback);
+  return contrastRatio(primary, ON_PRIMARY_PAPER) >= contrastRatio(primary, ON_PRIMARY_INK)
+    ? ON_PRIMARY_PAPER
+    : ON_PRIMARY_INK;
+}
+
 function boundedNumber(value, fallback, min, max) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;

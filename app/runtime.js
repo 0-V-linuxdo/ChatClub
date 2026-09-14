@@ -18,6 +18,7 @@ import {
   normalizeModelPreferenceSelectionOverlayOpacity,
   normalizeOptions,
   normalizePrimaryColor,
+  onPrimaryForPrimaryColor,
   normalizeTopbarPromptInputFontSize
 } from "../shared/storage-schema.js";
 import {
@@ -933,6 +934,7 @@ function inferAppName(app) {
   const frameToastPosition = normalizeFrameToastPosition(state.options?.frameToastPosition);
   const topbarPromptInputFontSize = normalizeTopbarPromptInputFontSize(state.options?.topbarPromptInputFontSize);
   document.documentElement.style.setProperty("--primary", primaryColor);
+  document.documentElement.style.setProperty("--on-primary", onPrimaryForPrimaryColor(primaryColor));
   document.documentElement.style.setProperty("--primary-2", `color-mix(in srgb, ${primaryColor} ${isDark ? "22%" : "14%"}, ${isDark ? "#020617" : "#ffffff"})`);
   document.documentElement.style.setProperty("--summary-panel-link", primaryColor);
   document.documentElement.style.setProperty("--frame-loading-overlay-opacity", String(frameLoadingOverlayOpacity));
