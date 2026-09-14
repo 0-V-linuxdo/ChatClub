@@ -427,10 +427,18 @@ button { cursor: pointer; }
 }
 
 .workspace-tabs-search-mark {
-  background: color-mix(in srgb, var(--primary) 32%, transparent);
-  color: inherit;
+  background: color-mix(in srgb, var(--primary) 78%, var(--panel));
+  color: var(--on-primary);
+  font-weight: var(--font-weight-medium);
   border-radius: 3px;
   padding: 0 1px;
+}
+
+@media (forced-colors: active) {
+  .workspace-tabs-search-mark {
+    background: Mark;
+    color: MarkText;
+  }
 }
 
 .workspace-tabs-sidebar-list {
@@ -3556,9 +3564,10 @@ body.tab-gesture-active * {
   background: var(--control-hover);
 }
 
-.prompt-mode-chip[aria-pressed="true"] {
-  color: var(--text);
-  background: var(--control-selected);
+.prompt-mode-chip[aria-pressed="true"],
+.prompt-mode-chip[aria-pressed="true"]:hover {
+  color: var(--on-primary);
+  background: var(--primary);
   box-shadow: none;
 }
 

@@ -59,7 +59,14 @@ assert.match(css, /\.textarea\.prompt-input \{[\s\S]*?min-height:\s*0 !important
 assert.match(css, /line-height:\s*var\(--prompt-collapsed-line\)/);
 assert.match(css, /:focus \+ \.prompt-collapsed-preview/);
 assert.match(css, /\.prompt-mode-switch/);
-assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\]\s*\{[\s\S]*?background:\s*var\(--control-selected\)/);
+assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\](?:,\s*\n\.prompt-mode-chip\[aria-pressed="true"\]:hover)?\s*\{[\s\S]*?background:\s*var\(--primary\)/);
+assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\][\s\S]{0,180}color:\s*var\(--on-primary\)/);
+assert.match(css, /\.prompt-mode-chip\[aria-pressed="true"\]:hover/);
+assert.doesNotMatch(
+  css,
+  /\.prompt-mode-chip\[aria-pressed="true"\][^{]*\{[^}]*background:\s*var\(--control-selected\)/,
+  "pressed search/compose chip must not use the faint --control-selected well"
+);
 assert.match(css, /\.prompt-mode-chip:hover\s*\{[\s\S]*?background:\s*var\(--control-hover\)/);
 assert.match(css, /\.prompt-mode-chip\s*\{[\s\S]*?border-radius:\s*var\(--ui-radius-nested\)/);
 assert.match(css, /\.prompt-mode-switch\s*\{[\s\S]*?background:\s*transparent/);
@@ -171,6 +178,14 @@ assert.match(agents, /Search mode stays single-line in the topbar slot/);
 assert.match(agents, /Inside `#composer-center-host`/);
 assert.match(agents, /visible `\.prompt-mode-switch`/);
 assert.match(agents, /expanded compose must not `display: none` that switch/);
+assert.match(agents, /Pressed `\.prompt-mode-chip\[aria-pressed="true"\]` fills `--primary`/);
+assert.match(agents, /do not restore `--control-selected` on that chip/);
+assert.match(agents, /FIND marks \(\`\.workspace-tabs-search-mark`/);
+assert.match(css, /\.workspace-tabs-search-mark\s*\{[\s\S]*?color-mix\(in srgb, var\(--primary\) 78%, var\(--panel\)\)/);
+assert.match(css, /\.workspace-tabs-search-mark\s*\{[\s\S]*?color:\s*var\(--on-primary\)/);
+assert.match(css, /\.workspace-tabs-search-mark\s*\{[\s\S]*?font-weight:\s*var\(--font-weight-medium\)/);
+assert.doesNotMatch(css, /\.workspace-tabs-search-mark\s*\{[^}]*color:\s*inherit/);
+assert.match(css, /forced-colors:\s*active[\s\S]{0,120}\.workspace-tabs-search-mark[\s\S]{0,80}background:\s*Mark/);
 assert.match(agents, /Tab while `\.prompt-input` owns the caret toggles compose and search/);
 assert.match(agents, /factory-on `enterSearchMode`/);
 assert.match(agents, /Mac ⌥⇧F \/ Windows Alt\+Shift\+F/);
