@@ -61,6 +61,15 @@ assert.doesNotMatch(controller, /from "\.\.\/summary\/markdown\.js"/);
 assert.match(tabSearch, /export function collectWorkspaceSearchRecords/);
 assert.match(tabSearch, /export function groupWorkspaceSearchRecords/);
 assert.match(tabSearch, /export function highlightQuery/);
+assert.match(tabSearch, /export function formatWorkspaceSearchTime/);
+assert.match(tabSearch, /export function workspaceSearchCopy/);
+assert.match(tabSearch, /month: "short", day: "numeric"/);
+assert.doesNotMatch(tabSearch, /export function workspaceSearchRecordTime/);
+assert.match(controller, /formatWorkspaceSearchTime/);
+assert.match(controller, /workspaceSearchCopy\(\{[\s\S]*voice:\s*"viewer"/);
+assert.doesNotMatch(controller, /workspaceSearchRecordTime/);
+assert.match(runtime, /formatTime:\s*formatWorkspaceSearchTime/);
+assert.match(runtime, /workspaceSearchCopy\(\{[\s\S]*voice:\s*"composer"/);
 assert.doesNotMatch(tabSearch, /leftoverWorkspaceTabFullTextHits/);
 assert.doesNotMatch(tabSearch, /renderWorkspaceTabSearchHits/);
 assert.doesNotMatch(sidebar, /previewSearchWorkspace/);
@@ -76,6 +85,13 @@ assert.match(i18n, /"workspace\.tabs\.searchPreviewEmpty"/);
 assert.match(i18n, /"workspace\.tabs\.searchOpenTab"/);
 assert.match(i18n, /"workspace\.tabs\.searchClear"/);
 assert.match(i18n, /"workspace\.tabs\.searchSidebar"/);
+assert.match(i18n, /"composer\.search\.placeholderFullText": "Search chats or full text"/);
+assert.match(i18n, /"composer\.search\.placeholderFullText": "搜索对话或全文"/);
+assert.match(i18n, /"composer\.search\.results": "Search results"/);
+assert.match(i18n, /"composer\.search\.results": "搜索结果"/);
+assert.match(agents, /workspaceSearchCopy/);
+assert.match(agents, /formatWorkspaceSearchTime/);
+assert.match(agents, /composer\.search\.placeholderFullText/);
 assert.match(agents, /Topbar Search enters composer search mode/);
 assert.match(agents, /lazy `viewerModal` Tabs search viewer remains the deep-link preview/);
 assert.match(agents, /titlebar search inputs stay mounted across query redraws/);
@@ -111,8 +127,32 @@ globalThis.document = {
   try {
     const {
       collectWorkspaceSearchRecords,
-      groupWorkspaceSearchRecords
+      formatWorkspaceSearchTime,
+      groupWorkspaceSearchRecords,
+      workspaceSearchCopy
     } = await import(pathToFileURL(path.join(root, "app/workspace/tab-search.js")).href);
+    const { setLanguage } = await import(pathToFileURL(path.join(root, "shared/i18n.js")).href);
+    setLanguage("en");
+
+    const composerCopy = workspaceSearchCopy({ fullTextEnabled: false, voice: "composer" });
+    assert.equal(composerCopy.placeholder, "Search chats");
+    assert.equal(composerCopy.empty, "No matching chats");
+    assert.equal(composerCopy.results, "Search results");
+    assert.equal(
+      workspaceSearchCopy({ fullTextEnabled: true, voice: "composer" }).placeholder,
+      "Search chats or full text"
+    );
+    const viewerCopy = workspaceSearchCopy({ fullTextEnabled: false, voice: "viewer" });
+    assert.equal(viewerCopy.placeholder, "Search titles");
+    assert.equal(viewerCopy.empty, "No matching tabs");
+    assert.equal(viewerCopy.results, "Search results");
+    assert.equal(
+      workspaceSearchCopy({ fullTextEnabled: true, voice: "viewer" }).placeholder,
+      "Search titles or full text"
+    );
+    const recencyLabel = formatWorkspaceSearchTime({ viewedAt: Date.UTC(2026, 8, 10) });
+    assert.equal(recencyLabel, formatWorkspaceSearchTime(Date.UTC(2026, 8, 10)));
+    assert.ok(String(recencyLabel || "").trim(), "recency time must render a short month-day label");
 
     const now = Date.parse("2026-09-09T08:00:00.000Z");
     const items = [

@@ -1,5 +1,6 @@
 import { groupByDate, timestamp } from "../../shared/date-groups.js";
 import { STORAGE_KEYS } from "../../shared/constants.js";
+import { t } from "../../shared/i18n.js";
 import {
   framesFromSummaryPreviewItems,
   fullTextMessagesHavePair,
@@ -15,6 +16,8 @@ import {
 import { isStorageQuotaError } from "../../shared/storage-schema.js";
 import { storageGet, storageSet } from "../../shared/storage-adapter.js";
 import { el } from "../../ui/dom.js";
+
+const SEARCH_TIME_FORMAT = Object.freeze({ month: "short", day: "numeric" });
 
 export async function loadRecordFullTextEnabled() {
   const options = await storageGet(STORAGE_KEYS.options);
@@ -113,11 +116,34 @@ function workspaceIdOf(value) {
   return String(value?.workspaceId || "").trim();
 }
 
-export function workspaceSearchRecordTime(record = {}) {
+function workspaceSearchRecordTime(record = {}) {
   return timestamp(record.viewedAt)
     ?? timestamp(record.updatedAt)
     ?? timestamp(record.createdAt)
     ?? timestamp(record.detachedAt);
+}
+
+export function formatWorkspaceSearchTime(value) {
+  const ms = value != null && typeof value === "object" && !(value instanceof Date)
+    ? workspaceSearchRecordTime(value)
+    : timestamp(value);
+  if (ms == null) return "";
+  try {
+    return new Date(ms).toLocaleString(undefined, SEARCH_TIME_FORMAT);
+  } catch {
+    return "";
+  }
+}
+
+export function workspaceSearchCopy({ fullTextEnabled = false, voice = "viewer" } = {}) {
+  const composer = voice === "composer";
+  return {
+    placeholder: t(composer
+      ? (fullTextEnabled ? "composer.search.placeholderFullText" : "composer.search.placeholder")
+      : (fullTextEnabled ? "workspace.tabs.searchPlaceholderFullText" : "workspace.tabs.searchPlaceholder")),
+    empty: t(composer ? "composer.search.empty" : "workspace.tabs.searchEmpty"),
+    results: t(composer ? "composer.search.results" : "workspace.tabs.searchSidebar")
+  };
 }
 
 export function collectWorkspaceSearchRecords({

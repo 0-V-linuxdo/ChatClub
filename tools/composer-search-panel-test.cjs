@@ -121,7 +121,12 @@ assert.match(panelSource, /tabindex: "-1"/);
 assert.match(panelSource, /function handleTab\(/);
 assert.match(panelSource, /renderTime\(record, timeLabel\)/);
 assert.match(panelSource, /prompt-search-option-time/);
-assert.match(panelSource, /month: "short", day: "numeric"/);
+assert.match(panelSource, /workspaceSearch\.formatTime/);
+assert.match(panelSource, /workspaceSearch\.copy/);
+assert.match(panelSource, /workspaceSearch\.highlight/);
+assert.doesNotMatch(panelSource, /function highlightQuery\(/);
+assert.doesNotMatch(panelSource, /month: "short", day: "numeric"/);
+assert.doesNotMatch(panelSource, /workspace\.tabs\.searchSidebar/);
 assert.doesNotMatch(panelSource, /prompt-search-option-meta/);
 assert.doesNotMatch(panelSource, /workspace\.tabs\.empty/);
 assert.doesNotMatch(panelSource, /prompt-search-toggle/);
@@ -142,6 +147,9 @@ assert.match(css, /\.prompt-mode-chip\s*\{[\s\S]*?width:\s*var\(--ui-accessory-h
 assert.match(css, /\.prompt-mode-chip \.svg-icon\s*\{[\s\S]*?width:\s*16px/);
 assert.match(functionSource(panelSource, "searchPlaceholder"), /composer\.search\.placeholder/);
 assert.doesNotMatch(functionSource(panelSource, "searchPlaceholder"), /tabToCompose/);
+assert.match(runtime, /formatTime:\s*formatWorkspaceSearchTime/);
+assert.match(runtime, /workspaceSearchCopy\(\{[\s\S]*voice:\s*"composer"/);
+assert.match(runtime, /highlight:\s*highlightQuery/);
 assert.doesNotMatch(functionSource(composer, "enterSearchMode"), /expandInput\(/);
 assert.match(composer, /onRestoreField\(field\)[\s\S]*if \(document\.activeElement === field\) expandInput\(field\)/);
 assert.doesNotMatch(functionSource(composer, "collapseInput"), /searchPanel\.exit/);
@@ -320,6 +328,13 @@ globalThis.document = {
 (async () => {
   try {
     const { createComposerSearchPanel } = await import(moduleUrl("app/composer/search-panel.js"));
+    const {
+      formatWorkspaceSearchTime,
+      highlightQuery,
+      workspaceSearchCopy
+    } = await import(moduleUrl("app/workspace/tab-search.js"));
+    const { setLanguage } = await import(moduleUrl("shared/i18n.js"));
+    setLanguage("en");
     const records = [
       { workspaceId: "live-1", title: "Live desk", live: true, current: false, appIds: ["Grok"], viewedAt: Date.UTC(2026, 8, 10) },
       { workspaceId: "closed-1", title: "Closed desk", live: false, current: false, appIds: ["Claude"], updatedAt: Date.UTC(2026, 8, 9) }
@@ -327,6 +342,7 @@ globalThis.document = {
     const opened = [];
     const viewers = [];
     let panel;
+    let fullTextEnabled = false;
     panel = createComposerSearchPanel({
       onEnter() { panel.enter(); },
       renderIcon: (name) => {
@@ -343,6 +359,9 @@ globalThis.document = {
         },
         openRecord: async (record) => { opened.push(record.workspaceId); },
         openViewer: (opts) => { viewers.push(opts); },
+        highlight: highlightQuery,
+        formatTime: formatWorkspaceSearchTime,
+        copy: () => workspaceSearchCopy({ fullTextEnabled, voice: "composer" }),
         renderFavicons: () => {
           const node = new FakeNode("span");
           node.className = "prompt-search-option-favicons";
@@ -405,6 +424,14 @@ globalThis.document = {
     assert.equal(composeChip.getAttribute("aria-pressed"), "false");
     assert.equal(field.placeholder, "Search chats");
     assert.equal(field.getAttribute("aria-label"), "Search chats");
+    assert.equal(shell.querySelector(".prompt-search-list")?.getAttribute("aria-label"), "Search results");
+    fullTextEnabled = true;
+    panel.syncField();
+    assert.equal(field.placeholder, "Search chats or full text");
+    assert.equal(field.getAttribute("aria-label"), "Search chats or full text");
+    fullTextEnabled = false;
+    panel.syncField();
+    assert.equal(field.placeholder, "Search chats");
     const shiftTab = tabEvent();
     shiftTab.shiftKey = true;
     assert.equal(panel.handleTab(shiftTab), true);

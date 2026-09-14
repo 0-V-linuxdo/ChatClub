@@ -15,11 +15,12 @@ import {
 } from "../controller-contract.js";
 import {
   collectWorkspaceSearchRecords,
+  formatWorkspaceSearchTime,
   groupWorkspaceSearchRecords,
   highlightQuery,
   loadRecordFullTextEnabled,
   loadWorkspaceTabFullTextStore,
-  workspaceSearchRecordTime
+  workspaceSearchCopy
 } from "./tab-search.js";
 
 const SEARCH_PANEL_SIZE_KEY = "chatclub.tabsSearchPanelSize.v1";
@@ -147,10 +148,15 @@ export function createTabSearchController(ctx) {
     });
   }
 
+  function searchCopy() {
+    return workspaceSearchCopy({
+      fullTextEnabled: recordFullTextEnabled,
+      voice: "viewer"
+    });
+  }
+
   function searchPlaceholder() {
-    return recordFullTextEnabled
-      ? t("workspace.tabs.searchPlaceholderFullText")
-      : t("workspace.tabs.searchPlaceholder");
+    return searchCopy().placeholder;
   }
 
   function syncSearchChrome(root) {
@@ -222,16 +228,6 @@ export function createTabSearchController(ctx) {
       const app = appById(appId) || { id: appId };
       return { app, appId, href: app?.url || "", title: inferAppName(app) || appId };
     }), { ...faviconDeps(), omitTitle: true, stackClass: "workspace-tabs-search-favicons" });
-  }
-
-  function timeLabel(value) {
-    const ms = workspaceSearchRecordTime({ viewedAt: value, updatedAt: value });
-    if (ms == null) return "";
-    try {
-      return new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric" });
-    } catch {
-      return "";
-    }
   }
 
   function previewPages(record) {
@@ -528,6 +524,7 @@ export function createTabSearchController(ctx) {
   }
 
   function listItem(record, active, redraw, close) {
+    const recency = formatWorkspaceSearchTime(record);
     return el("div", {
       class: `workspace-tabs-search-item${active ? " active" : ""}`
     },
@@ -548,9 +545,7 @@ export function createTabSearchController(ctx) {
         el("span", { class: "workspace-tabs-search-item-title" }, ...highlightQuery(record.title || t("workspace.tabs.untitled", { index: 1 }), searchQuery)),
         el("span", { class: "workspace-tabs-search-item-foot" },
           recordFavicons(record, previewPages(record)),
-          timeLabel(record.viewedAt || record.updatedAt || record.createdAt || record.detachedAt)
-            ? el("time", { class: "workspace-tabs-search-item-time" }, timeLabel(record.viewedAt || record.updatedAt || record.createdAt || record.detachedAt))
-            : null
+          recency ? el("time", { class: "workspace-tabs-search-item-time" }, recency) : null
         )
       )
     );
@@ -559,9 +554,10 @@ export function createTabSearchController(ctx) {
   function sidebar(records, active, redraw, close) {
     const searching = Boolean(String(searchQuery || "").trim());
     const groups = groupWorkspaceSearchRecords(records);
+    const copy = searchCopy();
     return el("aside", {
       class: "workspace-tabs-search-sidebar",
-      "aria-label": t("workspace.tabs.searchSidebar")
+      "aria-label": copy.results
     },
       records.length
         ? el("div", { class: "workspace-tabs-search-list", role: "list" },
@@ -573,7 +569,7 @@ export function createTabSearchController(ctx) {
           ])
         )
         : el("div", { class: "workspace-tabs-search-sidebar-empty pocket-sidebar-empty" },
-          t(searching ? "workspace.tabs.searchEmpty" : "workspace.tabs.empty")
+          searching ? copy.empty : t("workspace.tabs.empty")
         )
     );
   }

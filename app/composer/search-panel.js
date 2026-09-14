@@ -3,25 +3,6 @@ import { el } from "../../ui/dom.js";
 
 const SEARCH_RESULTS_LIMIT = 12;
 
-function highlightQuery(text, query) {
-  const value = String(text || "");
-  const needle = String(query || "").trim();
-  if (!needle) return [value];
-  const lower = value.toLowerCase();
-  const match = needle.toLowerCase();
-  const nodes = [];
-  let from = 0;
-  let index = lower.indexOf(match, from);
-  while (index >= 0) {
-    if (index > from) nodes.push(value.slice(from, index));
-    nodes.push(el("mark", { class: "workspace-tabs-search-mark" }, value.slice(index, index + needle.length)));
-    from = index + needle.length;
-    index = lower.indexOf(match, from);
-  }
-  if (from < value.length) nodes.push(value.slice(from));
-  return nodes.length ? nodes : [value];
-}
-
 function recordTitle(record, index) {
   const title = String(record?.title || "").trim();
   if (title) return title;
@@ -41,16 +22,6 @@ function recordTimestamp(record) {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
-}
-
-function recordTimeLabel(record) {
-  const ms = recordTimestamp(record);
-  if (ms == null) return "";
-  try {
-    return new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric" });
-  } catch {
-    return "";
-  }
 }
 
 function renderTime(record, label) {
@@ -84,7 +55,21 @@ export function createComposerSearchPanel(options = {}) {
     : () => {};
   const highlight = typeof workspaceSearch.highlight === "function"
     ? workspaceSearch.highlight
-    : highlightQuery;
+    : (text) => [String(text || "")];
+  const formatTime = typeof workspaceSearch.formatTime === "function"
+    ? workspaceSearch.formatTime
+    : (record) => {
+      const ms = recordTimestamp(record);
+      if (ms == null) return "";
+      return new Date(ms).toLocaleDateString();
+    };
+  const searchCopy = typeof workspaceSearch.copy === "function"
+    ? workspaceSearch.copy
+    : () => ({
+      placeholder: t("composer.search.placeholder"),
+      empty: t("composer.search.empty"),
+      results: t("composer.search.results")
+    });
   const renderFavicons = typeof workspaceSearch.renderFavicons === "function"
     ? workspaceSearch.renderFavicons
     : () => null;
@@ -121,12 +106,13 @@ export function createComposerSearchPanel(options = {}) {
       || value === t("composer.mode.tabToSearch")
       || value === t("composer.mode.tabToCompose")
       || value === t("composer.search.placeholder")
+      || value === t("composer.search.placeholderFullText")
     ) return "";
     return value;
   }
 
   function searchPlaceholder() {
-    return t("composer.search.placeholder");
+    return String(searchCopy()?.placeholder || t("composer.search.placeholder"));
   }
 
   function syncToggle() {
@@ -161,7 +147,7 @@ export function createComposerSearchPanel(options = {}) {
       if (inputNode.value !== query) inputNode.value = query;
       inputNode.placeholder = searchPlaceholder();
       if (!canMark) return;
-      inputNode.setAttribute("aria-label", t("composer.search.placeholder"));
+      inputNode.setAttribute("aria-label", searchPlaceholder());
       inputNode.setAttribute("role", "combobox");
       inputNode.setAttribute("aria-expanded", records.length ? "true" : "false");
       inputNode.setAttribute("aria-autocomplete", "list");
@@ -207,7 +193,7 @@ export function createComposerSearchPanel(options = {}) {
       listNode.replaceChildren(...items.map((record, index) => {
         const title = recordTitle(record, index);
         const liveLabel = record.live ? t("composer.search.live") : t("composer.search.closed");
-        const timeLabel = recordTimeLabel(record);
+        const timeLabel = String(formatTime(record) || "");
         const option = el("button", {
           class: `prompt-search-option${index === selectedIndex ? " is-active" : ""}`,
           type: "button",
@@ -229,10 +215,11 @@ export function createComposerSearchPanel(options = {}) {
         return option;
       }));
       listNode.hidden = !items.length;
+      listNode.setAttribute?.("aria-label", String(searchCopy()?.results || t("composer.search.results")));
     }
     if (emptyNode) {
       emptyNode.hidden = !showEmpty;
-      emptyNode.textContent = t("composer.search.empty");
+      emptyNode.textContent = String(searchCopy()?.empty || t("composer.search.empty"));
     }
     if (hintNode) {
       hintNode.hidden = !items.length;
@@ -463,9 +450,9 @@ export function createComposerSearchPanel(options = {}) {
         class: "prompt-search-list",
         id: "prompt-search-results",
         role: "listbox",
-        "aria-label": t("workspace.tabs.searchSidebar")
+        "aria-label": String(searchCopy()?.results || t("composer.search.results"))
       });
-      emptyNode = el("div", { class: "prompt-search-empty ui-empty-state", hidden: true }, t("composer.search.empty"));
+      emptyNode = el("div", { class: "prompt-search-empty ui-empty-state", hidden: true }, String(searchCopy()?.empty || t("composer.search.empty")));
       hintNode = el("div", { class: "prompt-search-footer" },
         el("span", { class: "prompt-search-hint" }, t("composer.search.hint")),
         el("button", {

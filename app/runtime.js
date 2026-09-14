@@ -45,7 +45,15 @@ import { createTopbarWorkspaceQuickSave } from "./topbar/workspace-quick-save.js
 import { createWorkspaceController } from "./workspace/controller.js";
 import { PROMPT_HANDOFF_LAUNCH_REASON, createWorkspacePromptHandoffController } from "./workspace/prompt-handoff-controller.js";
 import { attachWorkspaceTabsSidebarController } from "./workspace/tabs-sidebar-controller.js";
-import { collectWorkspaceSearchRecords, highlightQuery, loadRecordFullTextEnabled, loadWorkspaceTabFullTextStore, persistWorkspaceTabFullTextFromPreview } from "./workspace/tab-search.js";
+import {
+  collectWorkspaceSearchRecords,
+  formatWorkspaceSearchTime,
+  highlightQuery,
+  loadRecordFullTextEnabled,
+  loadWorkspaceTabFullTextStore,
+  persistWorkspaceTabFullTextFromPreview,
+  workspaceSearchCopy
+} from "./workspace/tab-search.js";
 import { createWorkspaceTopicTitleController } from "./workspace/topic-title-controller.js";
 import { createWorkspaceAutoTitleController, openingPromptFromPocketEntries } from "./workspace/auto-title-controller.js";
 import { createWorkspaceSessionStore } from "./workspace/session-store.js";
@@ -179,6 +187,11 @@ const composerController = createComposerController({
     openRecord: openComposerSearchRecord,
     openViewer: openComposerSearchViewer,
     highlight: highlightQuery,
+    formatTime: formatWorkspaceSearchTime,
+    copy: () => workspaceSearchCopy({
+      fullTextEnabled: state.options?.recordFullText === true,
+      voice: "composer"
+    }),
     renderFavicons: renderComposerSearchFavicons
   }
 });

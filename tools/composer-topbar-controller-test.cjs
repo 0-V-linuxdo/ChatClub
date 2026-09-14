@@ -80,10 +80,10 @@ function responsiveBrandRules(kind) {
   assert.match(runtime, /ensureTabSearchController/, "the Tabs search viewer remains a lazy deep link");
   assert.doesNotMatch(runtime, /workspaceTabsSidebarController\.openSearch/, "topbar Search must not open the ChatClub Tabs sidebar");
   assert.match(topbarView, /item\.id === "search"/, "the topbar must render a dedicated Search control");
-  assert.match(topbarView, /actions\.openWorkspaceTabsSearch\(\)/, "Search must open the ChatClub Tabs search popup");
+  assert.match(topbarView, /actions\.openWorkspaceTabsSearch\(\)/, "Search must enter Composer Search");
   assert.match(topbarView, /createSvgIcon\("search"\)/, "Search must use the Lucide search glyph");
   assert.match(topbarView, /className: topbarItemClass\("search"\)/, "Search must keep a stable topbar item class");
-  assert.match(functionSource(topbar, "runMenuItem"), /item\.id === "search"[\s\S]*actions\.openWorkspaceTabsSearch\(\)/, "a folded Search item must still open tab search");
+  assert.match(functionSource(topbar, "runMenuItem"), /item\.id === "search"[\s\S]*actions\.openWorkspaceTabsSearch\(\)/, "a folded Search item must still enter Composer Search");
   assert.match(runtime, /workspaceBinding\.bind\(workspaceController\)/, "runtime must bind the stable workspace port once");
   assert.match(runtime, /topbarBinding\.bind\(topbarController\)/, "runtime must bind the stable topbar port once");
   assert.doesNotMatch(runtime, /workspace:\s*\(\)\s*=>\s*workspaceController/, "runtime must not expose an uninitialized workspace controller through a provider thunk");
