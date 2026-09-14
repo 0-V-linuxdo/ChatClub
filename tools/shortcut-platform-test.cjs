@@ -397,6 +397,59 @@ assert.equal(
   "Ctrl+B"
 );
 assert.equal(
+  shortcuts.formatShortcut("enterSearchMode", sharedDefault.profiles.mac.shortcuts.enterSearchMode, "", "mac"),
+  "⌥⇧F"
+);
+assert.equal(
+  shortcuts.formatShortcut("enterSearchMode", sharedDefault.profiles.windows.shortcuts.enterSearchMode, "", "windows"),
+  "Alt+Shift+F"
+);
+assert.equal(
+  shortcuts.matchShortcut(event({ code: "KeyF", altKey: true, shiftKey: true }), sharedDefault, "mac")?.action,
+  "enterSearchMode"
+);
+assert.equal(
+  shortcuts.matchShortcut(event({ code: "KeyF", altKey: true, shiftKey: true }), sharedDefault, "windows")?.action,
+  "enterSearchMode"
+);
+assert.equal(
+  shortcuts.matchShortcut(event({ code: "KeyF", altKey: true }), sharedDefault, "mac")?.action,
+  "enterFullscreen",
+  "Option+F stays Full Screen; Option+Shift+F is Composer Search"
+);
+assert.equal(
+  shortcuts.matchShortcut(event({ code: "KeyF", altKey: true }), sharedDefault, "windows")?.action,
+  "enterFullscreen",
+  "Alt+F stays Full Screen; Alt+Shift+F is Composer Search"
+);
+assert.equal(sharedDefault.profiles.mac.shortcuts.enterSearchMode.disabled, false);
+assert.equal(sharedDefault.profiles.windows.shortcuts.enterSearchMode.disabled, false);
+{
+  const storedWithoutSearch = plain(sharedDefault);
+  delete storedWithoutSearch.profiles.mac.shortcuts.enterSearchMode;
+  delete storedWithoutSearch.profiles.windows.shortcuts.enterSearchMode;
+  const filled = shortcuts.normalizeShortcutConfig(storedWithoutSearch);
+  assert.deepEqual(
+    plain(filled.profiles.mac.shortcuts.enterSearchMode),
+    plain(sharedDefault.profiles.mac.shortcuts.enterSearchMode),
+    "schemaVersion 2 configs must receive factory-on enterSearchMode without a schema bump"
+  );
+  assert.deepEqual(
+    plain(filled.profiles.windows.shortcuts.enterSearchMode),
+    plain(sharedDefault.profiles.windows.shortcuts.enterSearchMode),
+    "Windows schemaVersion 2 configs must receive factory-on enterSearchMode without a schema bump"
+  );
+}
+assert.ok(i18nSource.includes('"shortcut.enterSearchMode.label": "Enter Composer Search"'));
+assert.ok(i18nSource.includes('"shortcut.enterSearchMode.desc": "Open Composer Search for ChatClub Tabs."'));
+assert.ok(i18nSource.includes('"shortcut.enterSearchMode.label": "进入 Composer Search"'));
+assert.ok(i18nSource.includes('"shortcut.enterSearchMode.desc": "打开 Composer Search，查找 ChatClub 标签页。"'));
+assert.match(shortcutSettingsSource, /TOPBAR_SHORTCUT_ACTIONS\.search/);
+assert.match(shortcutSettingsSource, /enterSearchMode: \{ icon: "search"/);
+assert.match(topbarSource, /search: "enterSearchMode"/);
+assert.match(mainSource, /action === "enterSearchMode"/);
+assert.match(mainSource, /else if \(action === "enterSearchMode"\) openWorkspaceTabsSearch\(\)/);
+assert.equal(
   shortcuts.matchShortcut(event({ code: "KeyB", metaKey: true }), sharedDefault, "mac")?.action,
   "toggleWorkspaceTabsSidebar"
 );
@@ -651,10 +704,10 @@ assert.match(
   /\.settings-modal-section-tools:empty \{[\s\S]*?display: none;/,
   "empty settings header tools must not reserve titlebar space"
 );
-for (const itemId of ["settings", "addGroup", "settingsJumpMenu"]) {
+for (const itemId of ["settings", "addGroup", "settingsJumpMenu", "search"]) {
   assert.match(shortcutSettingsSource, new RegExp(`TOPBAR_SHORTCUT_ACTIONS\\.${itemId}`), `shortcut settings must include the ${itemId} topbar action`);
 }
-for (const [itemId, action] of [["settings", "openSettings"], ["addGroup", "openAppPicker"], ["settingsJumpMenu", "openSettingsMenu"]]) {
+for (const [itemId, action] of [["settings", "openSettings"], ["addGroup", "openAppPicker"], ["settingsJumpMenu", "openSettingsMenu"], ["search", "enterSearchMode"]]) {
   assert.match(topbarSource, new RegExp(`${itemId}: "${action}"`), `topbar ${itemId} must map to ${action}`);
 }
 assert.match(mainSource, /action === "openSettings"/);

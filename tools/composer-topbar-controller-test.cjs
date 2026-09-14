@@ -81,6 +81,12 @@ function responsiveBrandRules(kind) {
   assert.doesNotMatch(runtime, /workspaceTabsSidebarController\.openSearch/, "topbar Search must not open the ChatClub Tabs sidebar");
   assert.match(topbarView, /item\.id === "search"/, "the topbar must render a dedicated Search control");
   assert.match(topbarView, /actions\.openWorkspaceTabsSearch\(\)/, "Search must enter Composer Search");
+  assert.match(
+    topbarView,
+    /formatTopbarShortcut\(t\("topbar\.search"\),\s*"search"\)/,
+    "Search must expose the configured enterSearchMode shortcut"
+  );
+  assert.match(runtime, /action === "enterSearchMode"/, "Option/Alt+Shift+F must enter Composer Search");
   assert.match(topbarView, /createSvgIcon\("search"\)/, "Search must use the Lucide search glyph");
   assert.match(topbarView, /className: topbarItemClass\("search"\)/, "Search must keep a stable topbar item class");
   assert.match(functionSource(topbar, "runMenuItem"), /item\.id === "search"[\s\S]*actions\.openWorkspaceTabsSearch\(\)/, "a folded Search item must still enter Composer Search");

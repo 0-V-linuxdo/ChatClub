@@ -59,6 +59,7 @@ export const TOPBAR_SHORTCUT_ACTIONS = Object.freeze({
   brand: "openNewWorkspaceTab",
   settings: "openSettings",
   composer: "focusInput",
+  search: "enterSearchMode",
   newChat: "newChatAll",
   deleteThread: "deleteThread",
   summary: "openSummaryPanel",

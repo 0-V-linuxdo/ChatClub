@@ -247,7 +247,7 @@ export function createTopbarView(dependencies = {}) {
         label: t("topbar.search"),
         icon: createSvgIcon("search"),
         onClick: () => actions.openWorkspaceTabsSearch(),
-        tooltipLabel: t("topbar.search"),
+        tooltipLabel: formatTopbarShortcut(t("topbar.search"), "search"),
         tooltipPlacement: "left",
         tooltipId: "topbar.search",
         className: topbarItemClass("search")

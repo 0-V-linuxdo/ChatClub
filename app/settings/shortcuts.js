@@ -22,6 +22,7 @@ const SHORTCUT_SETTING_GROUPS = [
     descriptionKey: "shortcuts.topbarDesc",
     actions: [
       TOPBAR_SHORTCUT_ACTIONS.composer,
+      TOPBAR_SHORTCUT_ACTIONS.search,
       TOPBAR_SHORTCUT_ACTIONS.brand,
       "toggleWorkspaceTabsSidebar",
       TOPBAR_SHORTCUT_ACTIONS.settings,
@@ -49,6 +50,7 @@ const SHORTCUT_SETTING_GROUPS = [
 const SHORTCUT_PREVIEW_META = Object.freeze({
   sendMessage: { icon: "send", labelKey: "topbar.send", tooltipLabelKey: "topbar.sendTooltip", tooltipId: "topbar.send", showLabel: true, primary: true },
   focusInput: { icon: "keyboard", labelKey: "shortcut.focusInput.label" },
+  enterSearchMode: { icon: "search", labelKey: "shortcut.enterSearchMode.label", tooltipId: "topbar.search" },
   openNewWorkspaceTab: { icon: "external", labelKey: "shortcut.openNewWorkspaceTab.label", showLabel: true },
   toggleWorkspaceTabsSidebar: { icon: "sidebarExpand", labelKey: "shortcut.toggleWorkspaceTabsSidebar.label", tooltipId: "topbar.workspaceTabs" },
   openSettings: { icon: "settings", labelKey: "shortcut.openSettings.label", showLabel: true },

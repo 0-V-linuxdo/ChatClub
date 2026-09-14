@@ -21,7 +21,7 @@ const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
   // Exact base cost after preparePageCaretLease joined the isolated
   // content contract with adoptPageCaretLease / releasePageCaretLease.
-  "content/content.js": 110_961,
+  "content/content.js": 111_193,
   "content/send.js": 85_000,
   // Bundles that embed the shared frame-command contract each carry the
   // page-caret lease spec entries (about one hundred bytes more).
@@ -43,11 +43,11 @@ const byteBudgets = Object.freeze({
 });
 // Exact base-plus-capabilities closure after preparePageCaretLease joined
 // the isolated content contract.
-const aggregateByteBudget = 801_776;
+const aggregateByteBudget = 802_008;
 // Exact all-bundle closure after MAIN-world page-caret document_start
 // bootstrap plus the isolated command-contract growth, then the shield's
 // trusted-pointer report, late-handback refocus, and nested-frame pointer relay.
-const allBundlesByteBudget = 1_592_443;
+const allBundlesByteBudget = 1_592_675;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

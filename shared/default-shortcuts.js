@@ -5,6 +5,7 @@ export const DEFAULT_SHORTCUT_CONFIG = {
       sendKeyMode: "enter",
       shortcuts: {
         focusInput: { disabled: false, command: false, control: false, option: true, shift: false, code: "KeyK" },
+        enterSearchMode: { disabled: false, command: false, control: false, option: true, shift: true, code: "KeyF" },
         openNewWorkspaceTab: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyN" },
         toggleWorkspaceTabsSidebar: { disabled: false, command: true, control: false, option: false, shift: false, code: "KeyB" },
         openSettings: { disabled: false, command: true, control: false, option: true, shift: true, code: "KeyS" },
@@ -32,6 +33,7 @@ export const DEFAULT_SHORTCUT_CONFIG = {
       sendKeyMode: "enter",
       shortcuts: {
         focusInput: { disabled: false, control: false, alt: true, shift: false, code: "KeyK" },
+        enterSearchMode: { disabled: false, control: false, alt: true, shift: true, code: "KeyF" },
         openNewWorkspaceTab: { disabled: false, control: true, alt: true, shift: true, code: "KeyN" },
         toggleWorkspaceTabsSidebar: { disabled: false, control: true, alt: false, shift: false, code: "KeyB" },
         openSettings: { disabled: false, control: true, alt: true, shift: true, code: "KeyS" },
