@@ -203,6 +203,7 @@ assert.match(agents, /renderFavicons/);
 assert.match(agents, /prompt-search-option-time/);
 assert.match(agents, /prompt-search-option-snippet/);
 assert.match(agents, /matchKind: "body"/);
+assert.match(agents, /markdown emphasis, code ticks, heading hashes/);
 assert.match(agents, /must not paint `workspace\.tabs\.empty`/);
 assert.match(agents, /`\.ui-empty-state\[hidden\]`/);
 assert.match(agents, /compose draft and search query are independent buffers/);
@@ -378,7 +379,7 @@ globalThis.document = {
           href: "https://grok.com/c/1",
           messages: [
             { role: "user", text: `${"padding ".repeat(40)}leftover-needle sits in the user turn ${"tail ".repeat(40)}` },
-            { role: "assistant", text: "done" }
+            { role: "assistant", text: "以下是关于**菲利普·K·迪克 (PKD) 尚未出中文版的长篇小说**的调研结果。" }
           ]
         }]
       }
@@ -559,6 +560,16 @@ globalThis.document = {
     assert.match(nodeText(bodySnippet), /leftover-needle/);
     assert.ok(bodySnippet.querySelector(".workspace-tabs-search-mark"), "the snippet marks the full-text hit");
     assert.match(String(bodyRows[0].getAttribute("aria-label") || ""), /leftover-needle/);
+    field.value = "pkd";
+    panel.handleInput({ target: field });
+    await new Promise((resolve) => { setImmediate(resolve); });
+    const markdownRows = shell.querySelectorAll(".prompt-search-option");
+    assert.equal(markdownRows.length, 1, "markdown body hits still render one row");
+    const markdownSnippet = markdownRows[0].querySelector(".prompt-search-option-snippet");
+    assert.equal(Boolean(markdownSnippet), true, "markdown body hits paint a snippet line");
+    assert.match(nodeText(markdownSnippet), /PKD/);
+    assert.doesNotMatch(nodeText(markdownSnippet), /\*\*/, "composer snippets must not leak markdown emphasis markers");
+    assert.ok(markdownSnippet.querySelector(".workspace-tabs-search-mark"), "flattened snippets still mark the full-text hit");
     fullTextEnabled = false;
     field.value = "no-such-desk";
     panel.handleInput({ target: field });

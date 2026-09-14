@@ -117,8 +117,20 @@ function workspaceFullTextHitsById(store, query) {
   return grouped;
 }
 
+function flattenSearchSnippetText(text) {
+  let value = String(text || "").replace(/\s+/g, " ").trim();
+  if (!value) return "";
+  value = value.replace(/\[([^\]\n]{1,200})\]\([^)\n]{0,400}\)/g, "$1");
+  value = value.replace(/`([^`\n]{1,200})`/g, "$1");
+  value = value.replace(/\*\*\*([^*]{1,400})\*\*\*/g, "$1");
+  value = value.replace(/\*\*([^*]{1,400})\*\*/g, "$1");
+  value = value.replace(/__([^_\n]{1,400})__/g, "$1");
+  value = value.replace(/^#{1,6}\s+/g, "");
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function clipSearchSnippet(text, query, max = SEARCH_SNIPPET_MAX) {
-  const value = String(text || "").replace(/\s+/g, " ").trim();
+  const value = flattenSearchSnippetText(text);
   if (!value) return "";
   const limit = Number.isInteger(max) && max > 0 ? max : SEARCH_SNIPPET_MAX;
   const match = findFullTextQueryRanges(value, query)[0];

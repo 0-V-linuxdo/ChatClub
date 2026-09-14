@@ -65,6 +65,7 @@ assert.match(tabSearch, /searchWorkspaceTabFullTextHits/);
 assert.match(tabSearch, /findFullTextQueryRanges/);
 assert.match(tabSearch, /matchKind/);
 assert.match(tabSearch, /prompt-search-option-snippet|clipSearchSnippet|bodySnippetFromHits/);
+assert.match(tabSearch, /function flattenSearchSnippetText/);
 assert.doesNotMatch(tabSearch, /workspaceIdsMatchingFullText/);
 assert.match(tabSearch, /export function formatWorkspaceSearchTime/);
 assert.match(tabSearch, /export function workspaceSearchCopy/);
@@ -105,6 +106,7 @@ assert.match(agents, /lazy `viewerModal` Tabs search viewer remains the deep-lin
 assert.match(agents, /titlebar search inputs stay mounted across query redraws/);
 assert.match(agents, /iframe load and frame restore must not move focus back to `\.prompt-input`/);
 assert.match(agents, /the titlebar search is the unique caret owner/);
+assert.match(agents, /markdown emphasis, code ticks, heading hashes/);
 assert.equal(budgets.lazyBoundaries["app/workspace/tab-search-controller.js"]?.owner, "app/runtime.js");
 
 class FakeNode {
@@ -268,6 +270,29 @@ globalThis.document = {
     assert.match(String(longBody.snippet || ""), /unique-fulltext-hit/);
     assert.match(String(longBody.snippet || ""), /…/);
     assert.ok(String(longBody.snippet || "").length <= 98, "long body hits clip to one ellipsis line");
+
+    const markdownBody = collectWorkspaceSearchRecords({
+      items,
+      store: {
+        ...store,
+        "page-livexxxxxxxx": {
+          ...store["page-livexxxxxxxx"],
+          frames: [{
+            ...store["page-livexxxxxxxx"].frames[0],
+            messages: [
+              { role: "user", text: "list titles" },
+              { role: "assistant", text: "以下是关于**菲利普·K·迪克 (PKD) 尚未出中文版的长篇小说**的调研结果。" }
+            ]
+          }]
+        }
+      },
+      query: "pkd",
+      fullTextEnabled: true
+    }).find((record) => record.workspaceId === "page-livexxxxxxxx");
+    assert.equal(markdownBody.matchKind, "body");
+    assert.match(String(markdownBody.snippet || ""), /PKD/);
+    assert.doesNotMatch(String(markdownBody.snippet || ""), /\*\*/, "body snippets must flatten markdown emphasis markers");
+    assert.doesNotMatch(String(markdownBody.snippet || ""), /\]\(/);
 
     const disabled = collectWorkspaceSearchRecords({ items, store, query: "unique-fulltext-hit", fullTextEnabled: false });
     assert.deepEqual(disabled, [], "full-text leftover must stay hidden while Record full text is off");
