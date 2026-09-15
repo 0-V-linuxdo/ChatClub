@@ -14,11 +14,12 @@ const MODE_CLASS = AUTO_HIDE_TOPBAR_CLASS;
 // shipping a taller one, so travelling to a chat tab a few pixels below never summons the bar over
 // that tab row.
 const TOPBAR_REVEAL_ZONE_PX = 3;
-// A reveal displaces the workspace, so it waits out an intent window instead of firing on a cursor that
-// is only passing through. That window is the whole felt latency of the gesture, so it stays near the
-// low end of the hover-intent range: measured in Chromium 149 on 2026-09-15, the earlier 340 ms read as
-// the bar lagging behind the pointer, and the 3px band already rejects a cursor travelling to a tab.
-const TOPBAR_REVEAL_DWELL_MS = 110;
+// The macOS Dock tradeoff, which is the one this bar follows: the reveal barely waits (Apple ships a
+// 0 s delay with a 0.5 s slide) and the motion, not a hover-intent timer, is what keeps the gesture from
+// feeling abrupt. A delay long enough to read as composure also reads as lag, which is exactly what the
+// 340 ms window did. This is only long enough that a cursor crossing the band on its way somewhere else
+// registers a sample below it first, and the 3px band already rejects a cursor travelling to a tab.
+const TOPBAR_REVEAL_DWELL_MS = 60;
 const TOPBAR_REVEAL_HIDE_GRACE_MS = 180;
 // The fallback for a pointer that left across a chat frame instead of the parent's own pixels, where no
 // further parent event will ever arrive. Measured in Chromium 149 on 2026-09-15: a one-motion flick from
@@ -30,6 +31,13 @@ const TOPBAR_REVEAL_IDLE_MS = 700;
 // pointer long gone. It therefore buys one extra idle window instead of holding the bar open, which is
 // also what keeps a shortened idle window from collapsing the bar under a pointer that is reading it.
 const IDLE_SOFT_HOLD_LIMIT = 1;
+// Enter, exit and the tail that clears the inline transform. Kept a little longer than the CSS durations
+// so an interrupted or dropped `transitionend` still cannot leave the shell displaced.
+const SLIDE_ENTER_CLASS = "topbar-motion-enter";
+const SLIDE_EXIT_CLASS = "topbar-motion-exit";
+const SLIDE_ENTER_MS = 220;
+const SLIDE_EXIT_MS = 170;
+const SLIDE_TAIL_MS = 60;
 
 // The top bar costs a permanent 51px strip across the whole window. Auto-hide gives that grid row to
 // the chats and lets a peek bring the same bar back in flow, so a revealed bar looks exactly like the
@@ -67,6 +75,7 @@ export function createTopbarAutoHideController(dependencies = {}) {
   let idleTimer = 0;
   let softHolds = 0;
   let revealedBarBottom = 0;
+  let slideTimer = 0;
 
   function visibility() {
     return normalizeTopbarVisibility(state.options?.topbarVisibility);
@@ -127,6 +136,46 @@ export function createTopbarAutoHideController(dependencies = {}) {
     idleTimer = clearTimer(idleTimer);
   }
 
+  function reducedMotion() {
+    try { return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches); }
+    catch { return false; }
+  }
+
+  // How far the shell is displaced right now, which is 0 unless a slide is mid-flight. Read from the
+  // computed matrix rather than remembered, because a transition that is interrupted has to resume from
+  // the pixel the user can see.
+  function slideOffset(shell) {
+    try {
+      const value = getComputedStyle(shell).transform;
+      if (!value || value === "none") return 0;
+      return new DOMMatrixReadOnly(value).f || 0;
+    } catch { return 0; }
+  }
+
+  function endSlide(shell) {
+    slideTimer = clearTimer(slideTimer);
+    shell.classList.remove(SLIDE_ENTER_CLASS, SLIDE_EXIT_CLASS);
+    shell.style.transform = "";
+  }
+
+  // The layout has already committed, so the workspace has jumped by the bar's height. Put it back where
+  // the user last saw it and let one compositor transition carry it home, which is what makes an instant
+  // grid change read as the bar pushing the chats. Visual position is layout plus transform, so an
+  // interrupted slide starts from its current offset plus that same jump and never snaps.
+  function startSlide(shell, collapsed, height) {
+    // Edit mode grows the row past the bar's own height, so the measured distance would not match the
+    // layout it is meant to explain. It is never collapsed anyway.
+    if (!height || state.topbarEditMode || reducedMotion()) return endSlide(shell);
+    const from = slideOffset(shell) + (collapsed ? height : -height);
+    slideTimer = clearTimer(slideTimer);
+    shell.classList.remove(SLIDE_ENTER_CLASS, SLIDE_EXIT_CLASS);
+    shell.style.transform = `translateY(${from}px)`;
+    void shell.offsetHeight;
+    shell.classList.add(collapsed ? SLIDE_EXIT_CLASS : SLIDE_ENTER_CLASS);
+    shell.style.transform = "translateY(0)";
+    slideTimer = setTimeout(() => endSlide(shell), (collapsed ? SLIDE_EXIT_MS : SLIDE_ENTER_MS) + SLIDE_TAIL_MS);
+  }
+
   // The single choke point for the geometry, so a peek, a redraw, the Settings select and the shortcut
   // all land on the same two classes.
   function apply() {
@@ -135,12 +184,18 @@ export function createTopbarAutoHideController(dependencies = {}) {
     const active = autoHideActive();
     const collapsed = active && !peeking;
     const changed = shell.classList.contains(COLLAPSED_CLASS) !== collapsed;
+    // Measured before the flip, and from offsetHeight rather than a rect, because a rect read during a
+    // slide is already displaced by that slide's own transform.
+    const height = changed ? Number(topbarNode()?.offsetHeight) || 0 : 0;
     shell.classList.toggle(MODE_CLASS, active);
     shell.classList.toggle(COLLAPSED_CLASS, collapsed);
     // The ChatClub Tabs sidebar tracks the workspace grid's real top through an inline style it measures
     // once per render, so the row this class collapses has to tell it to measure again. It knows nothing
-    // about auto-hide and must not: it simply follows the bar's height, open or closed either way.
-    if (changed) alignSidebar?.();
+    // about auto-hide and must not: it simply follows the bar's height, open or closed either way. The
+    // slide moves it with everything else because it is a descendant of the shell being transformed.
+    if (!changed) return;
+    alignSidebar?.();
+    startSlide(shell, collapsed, height);
   }
 
   function collapse() {
@@ -180,8 +235,9 @@ export function createTopbarAutoHideController(dependencies = {}) {
       apply();
     }
     // Sampled once per reveal instead of per pointer move: the bar is a fixed 51px and reading its
-    // rect on the hottest event in the page would force layout on every move.
-    revealedBarBottom = topbarNode()?.getBoundingClientRect().bottom || 0;
+    // rect on the hottest event in the page would force layout on every move. `offsetHeight` rather than
+    // a rect, because the bar sits at the top of the shell and a rect is displaced while the slide runs.
+    revealedBarBottom = Number(topbarNode()?.offsetHeight) || 0;
     softHolds = 0;
     armIdleCollapse();
   }

@@ -45,6 +45,28 @@ const revealTiming = (name) => Number(autoHide.match(new RegExp(`const ${name} =
 assert.ok(revealTiming("TOPBAR_REVEAL_DWELL_MS") <= 150, "the reveal must not lag behind the pointer");
 assert.ok(revealTiming("TOPBAR_REVEAL_HIDE_GRACE_MS") <= 250, "leaving the bar must hand the strip back promptly");
 assert.ok(revealTiming("TOPBAR_REVEAL_IDLE_MS") <= 900, "the chat-frame fallback must not read as a stuck bar");
+
+// The bar slides instead of cutting, and the slide is a FLIP on the shell rather than an animated grid
+// row: measured in Chromium 149 on 2026-09-15, one layout switch costs 0.5 ms median because the parent
+// only resizes the frame boxes, but animating that row would hand three third-party pages a resize on
+// every animation frame instead of one per state change. Enter is longer than exit and reduced motion
+// opts out in JS, which also guarantees no inline transform can be left behind.
+assert.match(css, /--topbar-motion-enter: (\d+)ms/);
+assert.match(css, /--topbar-motion-exit: (\d+)ms/);
+const motionMs = (name) => Number(css.match(new RegExp(`--topbar-motion-${name}: (\\d+)ms`))?.[1]);
+assert.ok(motionMs("enter") >= 150 && motionMs("enter") <= 320, "a displacing surface stays near the desktop band");
+assert.ok(motionMs("exit") < motionMs("enter"), "a departing surface needs less attention than an arriving one");
+assert.match(css, /\.app-shell\.topbar-motion-enter \{\n  transition: transform var\(--topbar-motion-enter\)/);
+assert.match(css, /\.app-shell\.topbar-motion-exit \{\n  transition: transform var\(--topbar-motion-exit\)/);
+assert.match(functionSource(autoHide, "startSlide"), /reducedMotion\(\)/);
+assert.match(functionSource(autoHide, "reducedMotion"), /prefers-reduced-motion: reduce/);
+assert.match(functionSource(autoHide, "startSlide"), /slideOffset\(shell\) \+ \(collapsed \? height : -height\)/);
+assert.doesNotMatch(autoHide, /gridTemplateRows/, "the slide must not animate the layout row");
+// The shell is the one node that carries the bar, the tab rows, every chat frame and the Tabs sidebar,
+// so transforming it is what keeps them in register without the sidebar learning about this feature.
+assert.match(functionSource(autoHide, "apply"), /startSlide\(shell, collapsed, height\)/);
+assert.match(functionSource(autoHide, "apply"), /topbarNode\(\)\?\.offsetHeight/);
+assert.doesNotMatch(functionSource(autoHide, "reveal"), /getBoundingClientRect/, "a rect is displaced mid-slide");
 // Reveal timings are page-only chrome behavior and must not ride along in every content bundle.
 assert.match(constants, /TOPBAR_VISIBILITY_MODES = Object\.freeze\(\["always", "auto"\]\)/);
 assert.doesNotMatch(constants, /TOPBAR_REVEAL_(?:ZONE_PX|DWELL_MS|HIDE_GRACE_MS|IDLE_MS)/);
@@ -160,6 +182,18 @@ class FakeElement {
     this.children = [];
     this.parentNode = null;
     this.rect = { top: 0, bottom: 51 };
+    // Real enough for the FLIP: the slide reads the bar's offsetHeight, writes an inline transform on
+    // the shell, and forces a reflow, so a fake without these would silently skip the whole path. The
+    // writes are recorded because the interesting value is the start offset, which the very next
+    // statement overwrites with the resting one.
+    this.transformWrites = [];
+    const writes = this.transformWrites;
+    this.style = {
+      value: "",
+      get transform() { return this.value; },
+      set transform(next) { this.value = next; writes.push(next); }
+    };
+    this.offsetHeight = 51;
   }
 
   get classList() {
@@ -172,9 +206,9 @@ class FakeElement {
         next.add(name);
         self.className = [...next].join(" ");
       },
-      remove(name) {
+      remove(...names) {
         const next = values();
-        next.delete(name);
+        for (const name of names) next.delete(name);
         self.className = [...next].join(" ");
       },
       toggle(name, force) {
@@ -278,6 +312,16 @@ function createEventTarget() {
     }
   });
   const fakeWindow = createEventTarget();
+  // The slide resumes an interrupted transition from the pixel on screen, so the computed transform has
+  // to be readable here or that branch would only ever be exercised at its zero default.
+  const realGetComputedStyle = globalThis.getComputedStyle;
+  const realDomMatrix = globalThis.DOMMatrixReadOnly;
+  globalThis.getComputedStyle = (node) => ({ transform: node?.style?.transform || "none" });
+  globalThis.DOMMatrixReadOnly = class {
+    constructor(value) {
+      this.f = Number(String(value).match(/translateY\((-?[\d.]+)px\)/)?.[1]) || 0;
+    }
+  };
 
   let now = 0;
   const timers = new Map();
@@ -339,7 +383,7 @@ function createEventTarget() {
 
   // A cursor only passing along the top edge must not displace the workspace.
   fakeWindow.dispatch("pointermove", { clientY: 2 });
-  advance(80);
+  advance(40);
   assert.equal(shell.classList.contains("topbar-collapsed"), true, "the reveal waits out the dwell window");
   fakeWindow.dispatch("pointermove", { clientY: 400 });
   advance(1000);
@@ -350,6 +394,20 @@ function createEventTarget() {
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "dwelling at the top edge peeks the bar");
   assert.equal(controller.isCollapsed(), false);
   assert.deepEqual(aligned, [true, false], "and a peek re-aligns it back under the revealed bar");
+
+  // The layout has already committed by now, so the shell is put back where the user last saw it and one
+  // compositor transition carries it home. Anything else would have to animate the grid row itself, which
+  // resizes three cross-site frames on every animation frame instead of once per state change.
+  assert.equal(shell.classList.contains("topbar-motion-enter"), true, "entering slides on the enter curve");
+  assert.equal(shell.classList.contains("topbar-motion-exit"), false);
+  assert.deepEqual(
+    shell.transformWrites.slice(-2),
+    ["translateY(-51px)", "translateY(0)"],
+    "a reveal starts a bar height above its committed position and slides down into it"
+  );
+  advance(300);
+  assert.equal(shell.className.includes("topbar-motion"), false, "the tail clears the motion class");
+  assert.equal(shell.style.transform, "", "and the inline transform, so a redraw is never displaced");
 
   // Inside the revealed bar the peek holds, and each move restarts the idle window.
   fakeWindow.dispatch("pointermove", { clientY: 30 });
@@ -364,6 +422,30 @@ function createEventTarget() {
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "the collapse waits out the grace window");
   advance(200);
   assert.equal(shell.classList.contains("topbar-collapsed"), true);
+  assert.equal(shell.classList.contains("topbar-motion-exit"), true, "leaving slides on the shorter exit curve");
+  assert.deepEqual(
+    shell.transformWrites.slice(-2),
+    ["translateY(51px)", "translateY(0)"],
+    "a collapse starts a bar height below its committed position and slides up out of it"
+  );
+  advance(300);
+  assert.equal(shell.style.transform, "");
+
+  // Interruption is the normal case at these window lengths, so the new direction resumes from the pixel
+  // on screen plus the jump the layout just made, never from a fresh full-height offset that would snap.
+  fakeWindow.dispatch("pointermove", { clientY: 0 });
+  advance(70);
+  assert.equal(shell.classList.contains("topbar-collapsed"), false);
+  shell.style.transform = "translateY(-20px)";
+  fakeWindow.dispatch("pointermove", { clientY: 300 });
+  advance(200);
+  assert.equal(shell.classList.contains("topbar-collapsed"), true);
+  assert.deepEqual(
+    shell.transformWrites.slice(-2),
+    ["translateY(31px)", "translateY(0)"],
+    "a slide interrupted 20px above rest resumes from 31px below it, not from a full 51px"
+  );
+  advance(300);
 
   // Measured in Chromium 149: a pointer that jumps straight from the bar into a cross-site frame
   // sends the parent no event at all, so only the idle window can end that peek.
@@ -474,6 +556,8 @@ function createEventTarget() {
 
   globalThis.setTimeout = realSetTimeout;
   globalThis.clearTimeout = realClearTimeout;
+  globalThis.getComputedStyle = realGetComputedStyle;
+  globalThis.DOMMatrixReadOnly = realDomMatrix;
   delete globalThis.document;
   delete globalThis.window;
   console.log("topbar auto-hide: ok");

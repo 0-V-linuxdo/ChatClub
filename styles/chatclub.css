@@ -99,6 +99,14 @@
   --overlay-header-height: 46px;
   --overlay-backdrop: rgba(13, 19, 17, 0.36);
   --overlay-motion: 160ms ease;
+  /* The top bar auto-hide slide. Material asks desktop motion to stay in the 150-200ms band, then to
+     lengthen and smooth the curve when the moving surface displaces other content, and to exit faster
+     than it enters because a departing surface needs less attention. This bar displaces every chat, so
+     enter sits just above that band on a decelerate curve and exit just inside it on an accelerate one. */
+  --topbar-motion-enter: 220ms;
+  --topbar-motion-exit: 170ms;
+  --topbar-motion-enter-ease: cubic-bezier(0, 0, 0.2, 1);
+  --topbar-motion-exit-ease: cubic-bezier(0.4, 0, 1, 1);
   --overlay-panel-offset: 52px;
   --overlay-panel-offset-raised: 64px;
   --overlay-width: min(720px, calc(100vw - var(--overlay-gutter)));
@@ -308,6 +316,22 @@ button { cursor: pointer; }
 .app-shell.topbar-collapsed:not(.topbar-editing-mode) {
   grid-template-rows: minmax(0, 1fr);
   --workspace-tabs-sidebar-top: 0px;
+}
+
+/* The slide is a FLIP on the whole shell, not on the bar alone. Entering and leaving move the bar and
+   the workspace by the same distance in the same direction, so one transform on their common ancestor
+   keeps the bar, the tab rows, every chat frame and the Tabs sidebar in exact register, and the layout
+   still commits in a single step: the chat frames get one resize per state change rather than one per
+   animation frame. `app/topbar/auto-hide.js` writes the transform and owns the reduced-motion opt-out;
+   these classes only declare when a transform is allowed to take time. */
+.app-shell.topbar-motion-enter {
+  transition: transform var(--topbar-motion-enter) var(--topbar-motion-enter-ease);
+  will-change: transform;
+}
+
+.app-shell.topbar-motion-exit {
+  transition: transform var(--topbar-motion-exit) var(--topbar-motion-exit-ease);
+  will-change: transform;
 }
 
 /* Never display: none here. The docked composer keeps the draft, the images and the send queue in
