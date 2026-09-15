@@ -103,12 +103,22 @@ assert.match(modalBlock, /max-height:\s*calc\(100vh - var\(--overlay-gutter\)\);
 assert.doesNotMatch(modalBlock, /border-radius:/, ".modal must inherit radius from overlay-surface");
 assert.doesNotMatch(modalBlock, /background:/, ".modal must inherit surface fill from overlay-surface");
 
-const fullscreenStart = css.indexOf("\n.overlay-surface-fullscreen {");
-assert.ok(fullscreenStart >= 0, "shared fill-viewport class must exist");
+// .modal, .modal-wide, and the two-class family rules declare their own
+// width/height later in the sheet, so the shared geometry keeps a .modal
+// two-class selector. Settings fullscreen was 1120x680 in a 1280x720 viewport
+// while only the one-class form existed.
+const fullscreenStart = css.indexOf("\n.overlay-surface-fullscreen,\n.modal.overlay-surface-fullscreen {");
+assert.ok(fullscreenStart >= 0, "shared fill-viewport class must exist and outrank modal width/height");
 const fullscreenBlock = css.slice(fullscreenStart, css.indexOf("\n}", fullscreenStart) + 2);
 assert.match(fullscreenBlock, /inset:\s*0;/);
+assert.match(fullscreenBlock, /width:\s*auto;/);
+assert.match(fullscreenBlock, /height:\s*auto;/);
 assert.match(fullscreenBlock, /border-radius:\s*0;/);
 assert.match(fullscreenBlock, /box-shadow:\s*none;/);
+assert.match(css, /\.modal\.settings-modal \{[\s\S]*?width:\s*var\(--overlay-width-workspace\);/);
+assert.doesNotMatch(css, /^\.settings-modal \{/m, "the Settings family rule must outrank .modal-wide");
+assert.match(agents, /`\.modal\.overlay-surface-fullscreen`/);
+assert.match(agents, /a one-class family rule silently loses to `\.modal-wide`/);
 assert.doesNotMatch(css, /\.settings-modal-fullscreen/);
 assert.match(css, /\.modal-backdrop\s*~\s*\.modal-backdrop\s*\{[^}]*z-index:\s*var\(--overlay-z-modal-nested\);[^}]*background:\s*transparent;/s);
 assert.match(css, /\.summary-panel \{[^}]*top:\s*var\(--overlay-panel-offset\);/s);

@@ -4012,7 +4012,10 @@ body.tab-gesture-active * {
 
 .field > span { font-weight: var(--font-weight-semibold); }
 
-.settings-modal {
+/* Two-class form like .modal.workspace-tabs-search-modal: .modal-wide declares
+   its own width later in this file, so a one-class family rule here never won
+   and the dialog resolved --overlay-width-wide instead. */
+.modal.settings-modal {
   --settings-sidebar-width: 260px;
   --settings-radius: 8px;
   --settings-control-height: 36px;
@@ -11060,7 +11063,12 @@ html:not([data-settings-click-reorder="always"]) .layout-preset-item {
   box-shadow: none;
 }
 
-.overlay-surface-fullscreen {
+/* `.modal`, `.modal-wide`, and the two-class family rules all declare their own
+   width/height, so the shared fill-viewport geometry needs the two-class form to
+   win on a modal. Without it Settings fullscreen stayed 1120x680 inside a
+   1280x720 viewport: inset: 0 applied while the wide width still governed. */
+.overlay-surface-fullscreen,
+.modal.overlay-surface-fullscreen {
   position: fixed;
   inset: 0;
   width: auto;
