@@ -1,9 +1,11 @@
 import { normalizeTopbarVisibility } from "../../shared/storage-schema.js";
-import { AUTO_HIDE_TOPBAR_CLASS } from "../../ui/dom.js";
+import { AUTO_HIDE_TOPBAR_CLASS, COLLAPSED_TOPBAR_CLASS } from "../../ui/dom.js";
 import { validateControllerContract } from "../controller-contract.js";
 
 const CHAT_FRAME_POINTER_EVENT = "chatclub:chat-frame-pointer";
-const COLLAPSED_CLASS = "topbar-collapsed";
+// Both class names come from `ui/dom.js`: the caret pin reads the collapsed one to decide that a field
+// is off screen, so this module must stamp the same name it reads.
+const COLLAPSED_CLASS = COLLAPSED_TOPBAR_CLASS;
 // Marks the mode, not the peek, so hovering the top edge cannot pull the caret into the bar. The name
 // comes from `ui/dom.js` because `isInsideAutoHiddenTopbar` there is what the focus guards read; those
 // guards live in App domains that cannot import this module.
@@ -12,14 +14,21 @@ const MODE_CLASS = AUTO_HIDE_TOPBAR_CLASS;
 // shipping a taller one, so travelling to a chat tab a few pixels below never summons the bar over
 // that tab row.
 const TOPBAR_REVEAL_ZONE_PX = 3;
-// A reveal displaces the workspace, so it waits out an intent window instead of firing on a cursor
-// that is only passing through.
-const TOPBAR_REVEAL_DWELL_MS = 340;
-const TOPBAR_REVEAL_HIDE_GRACE_MS = 420;
-const TOPBAR_REVEAL_IDLE_MS = 2000;
+// A reveal displaces the workspace, so it waits out an intent window instead of firing on a cursor that
+// is only passing through. That window is the whole felt latency of the gesture, so it stays near the
+// low end of the hover-intent range: measured in Chromium 149 on 2026-09-15, the earlier 340 ms read as
+// the bar lagging behind the pointer, and the 3px band already rejects a cursor travelling to a tab.
+const TOPBAR_REVEAL_DWELL_MS = 110;
+const TOPBAR_REVEAL_HIDE_GRACE_MS = 180;
+// The fallback for a pointer that left across a chat frame instead of the parent's own pixels, where no
+// further parent event will ever arrive. Measured in Chromium 149 on 2026-09-15: a one-motion flick from
+// the bar deep into a cross-site frame skipped the parent strip under the bar entirely and took the old
+// 2000 ms window to collapse, which is the case that read as "not following the hand".
+const TOPBAR_REVEAL_IDLE_MS = 700;
 // A tooltip proves the pointer is resting on a bar control, but a pointer that jumps straight into a
 // chat frame never sends that control a leave event either, so the tooltip can stay open with the
-// pointer long gone. It therefore buys one extra idle window instead of holding the bar open.
+// pointer long gone. It therefore buys one extra idle window instead of holding the bar open, which is
+// also what keeps a shortened idle window from collapsing the bar under a pointer that is reading it.
 const IDLE_SOFT_HOLD_LIMIT = 1;
 
 // The top bar costs a permanent 51px strip across the whole window. Auto-hide gives that grid row to

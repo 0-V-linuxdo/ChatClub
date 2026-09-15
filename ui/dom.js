@@ -506,17 +506,14 @@ function overlayCaretPinHolds(field) {
   return overlayCaretDocumentHasFocus() && overlayCaretFieldHasFrameFocus(field);
 }
 
-// A top bar the user asked to auto-hide is not a place to park a caret: focusing a node inside it reveals
-// the bar rather than typing into thin air, which reads as the bar reopening by itself. The class is
-// stamped by `app/topbar/auto-hide.js`, but the predicate lives here beside the rest of caret ownership
-// because the three focus guards that need it (the initial prompt-focus lock, its frame-load restore, and
-// `armPromptFocusRestore` in the workspace frame controller) sit in three App domains that may not import
-// each other, and none of them may keep a private copy of the selector.
+// Caret ownership owns these two predicates: focusing a node in a hidden top bar reveals that bar instead
+// of typing into thin air, and the guards that read them cannot import `app/topbar/auto-hide.js`, which
+// stamps the classes. Mode guards programmatic focus; collapsed guards the pin and the dock. See AGENTS.md.
 export const AUTO_HIDE_TOPBAR_CLASS = "topbar-auto-hide";
-
-export function isInsideAutoHiddenTopbar(node) {
-  return Boolean(node?.closest?.(`.app-shell.${AUTO_HIDE_TOPBAR_CLASS} .topbar`));
-}
+export const COLLAPSED_TOPBAR_CLASS = "topbar-collapsed";
+const insideTopbar = (node, cls) => Boolean(node?.closest?.(`.app-shell.${cls} .topbar`));
+export const isInsideAutoHiddenTopbar = (node) => insideTopbar(node, AUTO_HIDE_TOPBAR_CLASS);
+export const isInsideCollapsedTopbar = (node) => insideTopbar(node, COLLAPSED_TOPBAR_CLASS);
 
 export function overlaySearchCaretMode() {
   return overlaySearchCaret?.mode || "";
@@ -553,6 +550,11 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
   }
   const modal = typeof document.querySelector === "function" ? document.querySelector(".modal") : null;
   if (modal && field.closest?.(".modal") !== modal && !modal.contains?.(field)) {
+    clearOverlaySearchCaret(true);
+    return false;
+  }
+  // Re-binding a field the dock just moved into a hidden bar reveals it, then the peek times out again.
+  if (isInsideCollapsedTopbar(field)) {
     clearOverlaySearchCaret(true);
     return false;
   }

@@ -11,6 +11,7 @@ import {
   claimOverlaySearchCaret,
   claimTopmostPopoverEscape,
   el,
+  isInsideCollapsedTopbar,
   pinOverlaySearchCaret,
   overlaySearchCaretComposer,
   scheduleFrameOwnedBlurDismissal,
@@ -1418,7 +1419,11 @@ export function createComposerController(dependencies = {}) {
     if (shell) searchPanel.attach(shell);
     searchPanel.syncField(field);
     syncCollapsedPreview(field);
-    const takeCaret = focus || heldCaret;
+    // Docking into a collapsed top bar must not carry the caret in with it. Focusing a node in a hidden
+    // bar reveals it, and the peek then times out, so dismissing the float made the bar flash open and
+    // shut. A peeked bar is on screen and still takes the caret. The draft, images and send queue live in
+    // this same node either way, so dropping it costs nothing; Tab or a top-edge peek reaches the field.
+    const takeCaret = (focus || heldCaret) && !isInsideCollapsedTopbar(field);
     if (takeCaret) {
       claimPromptCaret(field);
       field.focus?.({ preventScroll: true });

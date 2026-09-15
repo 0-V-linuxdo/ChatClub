@@ -23,6 +23,7 @@ const statePorts = read("app/settings/state-ports.js");
 const promptFocus = read("app/prompt-focus/controller.js");
 const frameController = read("app/workspace/frame-controller.js");
 const tabsSidebar = read("app/workspace/tabs-sidebar-controller.js");
+const composer = read("app/composer/controller.js");
 const uiDom = read("ui/dom.js");
 
 // The parent cannot observe a pointer that is inside a site-isolated chat frame, so the reveal must
@@ -36,6 +37,14 @@ assert.doesNotMatch(autoHideCode, /:hover/);
 assert.doesNotMatch(css, /topbar[^\n]*:hover[^\n]*translateY/);
 assert.match(autoHide, /chatclub:chat-frame-pointer/);
 assert.match(autoHide, /TOPBAR_REVEAL_IDLE_MS/);
+// Felt latency is the whole point of these three windows, so they are bounded rather than merely
+// present. Measured in Chromium 149 on 2026-09-15 before the retune: 350 ms to reveal, 457 ms to
+// collapse across the parent's own pixels, and 1941 ms for a one-motion flick into a cross-site frame,
+// which the user reported as the bar not following the pointer.
+const revealTiming = (name) => Number(autoHide.match(new RegExp(`const ${name} = (\\d+);`))?.[1]);
+assert.ok(revealTiming("TOPBAR_REVEAL_DWELL_MS") <= 150, "the reveal must not lag behind the pointer");
+assert.ok(revealTiming("TOPBAR_REVEAL_HIDE_GRACE_MS") <= 250, "leaving the bar must hand the strip back promptly");
+assert.ok(revealTiming("TOPBAR_REVEAL_IDLE_MS") <= 900, "the chat-frame fallback must not read as a stuck bar");
 // Reveal timings are page-only chrome behavior and must not ride along in every content bundle.
 assert.match(constants, /TOPBAR_VISIBILITY_MODES = Object\.freeze\(\["always", "auto"\]\)/);
 assert.doesNotMatch(constants, /TOPBAR_REVEAL_(?:ZONE_PX|DWELL_MS|HIDE_GRACE_MS|IDLE_MS)/);
@@ -70,14 +79,25 @@ assert.match(runtime, /action === "toggleTopbar"/);
 // or this module, so the predicate lives with the rest of caret ownership in ui/dom.js and the mode
 // class name travels with it instead of being spelled out at four call sites.
 assert.match(uiDom, /export const AUTO_HIDE_TOPBAR_CLASS = "topbar-auto-hide"/);
-assert.match(uiDom, /export function isInsideAutoHiddenTopbar\(/);
-assert.match(autoHide, /import \{ AUTO_HIDE_TOPBAR_CLASS \} from "\.\.\/\.\.\/ui\/dom\.js"/);
+assert.match(uiDom, /export const isInsideAutoHiddenTopbar = /);
+assert.match(autoHide, /import \{ AUTO_HIDE_TOPBAR_CLASS, COLLAPSED_TOPBAR_CLASS \} from "\.\.\/\.\.\/ui\/dom\.js"/);
 assert.match(autoHide, /const MODE_CLASS = AUTO_HIDE_TOPBAR_CLASS/);
 for (const [name, source] of [["prompt focus", promptFocus], ["workspace frame", frameController]]) {
   assert.match(source, /isInsideAutoHiddenTopbar/, `${name} must use the shared auto-hidden-bar predicate`);
   assert.doesNotMatch(source, /topbar-auto-hide/, `${name} must not copy the mode class selector`);
   assert.doesNotMatch(source, /topbar\/auto-hide\.js/, `${name} must not reach across App domains for it`);
 }
+
+// Docking the floating composer must not carry the caret into a bar that is off screen. The reparent
+// blurs the field, and the composer caret intent would otherwise re-bind it inside the hidden bar, so
+// dismissing the float made the bar flash open and shut. That question is about the peek, not the mode:
+// a revealed bar is on screen and still owns the caret, so it gets its own narrower predicate.
+assert.match(uiDom, /export const COLLAPSED_TOPBAR_CLASS = "topbar-collapsed"/);
+assert.match(uiDom, /export const isInsideCollapsedTopbar = /);
+assert.match(autoHide, /const COLLAPSED_CLASS = COLLAPSED_TOPBAR_CLASS/, "the stamper must read the same class name");
+assert.match(functionSource(uiDom, "pinOverlaySearchCaret"), /isInsideCollapsedTopbar\(field\)/);
+assert.match(functionSource(composer, "relocateComposer"), /isInsideCollapsedTopbar\(field\)/);
+assert.doesNotMatch(composer, /topbar-collapsed/, "the composer must not copy the collapsed class selector");
 assert.equal(
   (promptFocus.match(/isInsideAutoHiddenTopbar\(prompt\)/g) || []).length,
   2,
@@ -319,30 +339,30 @@ function createEventTarget() {
 
   // A cursor only passing along the top edge must not displace the workspace.
   fakeWindow.dispatch("pointermove", { clientY: 2 });
-  advance(200);
+  advance(80);
   assert.equal(shell.classList.contains("topbar-collapsed"), true, "the reveal waits out the dwell window");
   fakeWindow.dispatch("pointermove", { clientY: 400 });
   advance(1000);
   assert.equal(shell.classList.contains("topbar-collapsed"), true, "leaving the band cancels the pending reveal");
 
   fakeWindow.dispatch("pointermove", { clientY: 1 });
-  advance(400);
+  advance(200);
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "dwelling at the top edge peeks the bar");
   assert.equal(controller.isCollapsed(), false);
   assert.deepEqual(aligned, [true, false], "and a peek re-aligns it back under the revealed bar");
 
   // Inside the revealed bar the peek holds, and each move restarts the idle window.
   fakeWindow.dispatch("pointermove", { clientY: 30 });
-  advance(1500);
+  advance(500);
   fakeWindow.dispatch("pointermove", { clientY: 30 });
-  advance(1500);
+  advance(500);
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "a pointer inside the bar keeps it revealed");
 
   // Moving down into the workspace collapses after the grace window.
   fakeWindow.dispatch("pointermove", { clientY: 300 });
-  advance(200);
+  advance(120);
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "the collapse waits out the grace window");
-  advance(400);
+  advance(200);
   assert.equal(shell.classList.contains("topbar-collapsed"), true);
 
   // Measured in Chromium 149: a pointer that jumps straight from the bar into a cross-site frame
@@ -405,13 +425,15 @@ function createEventTarget() {
   assert.equal(shell.classList.contains("topbar-collapsed"), true, "an open sidebar cannot hold the bar open");
   sidebarToggle.remove();
 
+  // The soft hold is also what keeps a shortened idle window from collapsing the bar under a pointer
+  // that is resting on a control reading its tooltip.
   fakeWindow.dispatch("pointermove", { clientY: 0 });
-  advance(400);
+  advance(200);
   const tooltip = new FakeElement("tooltip-open", "button");
   bar.appendChild(tooltip);
-  advance(2100);
+  advance(800);
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "a visible tooltip buys one idle window");
-  advance(2100);
+  advance(800);
   assert.equal(shell.classList.contains("topbar-collapsed"), true, "a stuck tooltip cannot hold the bar forever");
   tooltip.remove();
 
