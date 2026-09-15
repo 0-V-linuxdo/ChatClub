@@ -454,7 +454,15 @@ function createEventTarget() {
   advance(500);
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "a pointer inside the bar keeps it revealed");
 
+  // A motionless pointer sends nothing at all, so re-arming that window per move was not enough: the bar
+  // collapsed out from under a pointer that had stopped on it. The Dock holds while the pointer is on it.
+  advance(5000);
+  assert.equal(shell.classList.contains("topbar-collapsed"), false, "a pointer resting in the bar holds it open");
+
   // Moving down into the workspace collapses after the grace window.
+  // One jitter first, so the idle window this rest left nearly expired cannot collapse the bar ahead of
+  // the grace window being measured. Either one ends the peek; only their order is at stake here.
+  fakeWindow.dispatch("pointermove", { clientY: 30 });
   fakeWindow.dispatch("pointermove", { clientY: 300 });
   advance(120);
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "the collapse waits out the grace window");
@@ -489,16 +497,22 @@ function createEventTarget() {
   advance(300);
 
   // Measured in Chromium 149: a pointer that jumps straight from the bar into a cross-site frame
-  // sends the parent no event at all, so only the idle window can end that peek.
+  // sends the parent no event at all, so only the idle window can end that peek. Resting in the reveal
+  // band looks exactly the same from here, which is why the hold above starts inside the bar proper:
+  // the top 3px is also the strip a pointer crosses on its way to the browser's own tabs.
   fakeWindow.dispatch("pointermove", { clientY: 0 });
   advance(400);
   assert.equal(shell.classList.contains("topbar-collapsed"), false);
   advance(2100);
-  assert.equal(shell.classList.contains("topbar-collapsed"), true, "the idle window is the guaranteed way back");
+  assert.equal(shell.classList.contains("topbar-collapsed"), true, "a pointer left in the band is still transient");
 
-  // The child shield reports the trusted pointer the parent never sees, which ends the peek at once.
+  // The child shield reports the trusted pointer the parent never sees, which ends the peek at once. That
+  // report proves where the pointer is, so the in-bar sample it leaves behind must not hold the bar
+  // through it: a flick from the bar into a frame delivers no parent move to clear that sample.
   fakeWindow.dispatch("pointermove", { clientY: 0 });
   advance(400);
+  fakeWindow.dispatch("pointermove", { clientY: 30 });
+  advance(100);
   assert.equal(shell.classList.contains("topbar-collapsed"), false);
   fakeDocument.dispatch("chatclub:chat-frame-pointer", {});
   assert.equal(shell.classList.contains("topbar-collapsed"), true, "a click inside a chat hands the strip back");

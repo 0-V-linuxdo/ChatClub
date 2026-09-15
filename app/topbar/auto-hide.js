@@ -77,6 +77,7 @@ export function createTopbarAutoHideController(dependencies = {}) {
   let revealedBarBottom = 0;
   let slideTimer = 0;
   let caretOffered = false;
+  let pointerInBar = false;
 
   function visibility() {
     return normalizeTopbarVisibility(state.options?.topbarVisibility);
@@ -163,8 +164,19 @@ export function createTopbarAutoHideController(dependencies = {}) {
     return Boolean(document.querySelector(".topbar-settings-popover, .prompt-actions-popover"));
   }
 
+  // The Dock keeps its bar for as long as the pointer is on it, and a pointer that came down into this bar
+  // is that same deliberate hover, so it is a hard hold. This is the last position the parent observed,
+  // not live truth: a motionless pointer sends nothing, which is why re-arming the idle window on each
+  // move was not enough — the bar collapsed out from under a pointer that had stopped on it. The reveal
+  // band is deliberately excluded. A pointer resting in the top 3px cannot be told apart from one that
+  // brushed the edge on its way to the browser's own tabs, and the idle window is still that case's only
+  // way back, so the hold starts once the pointer has moved into the bar proper.
+  function pointerHoldsBar() {
+    return pointerInBar;
+  }
+
   function holdsWork() {
-    return focusHoldsBar() || menuHoldsBar();
+    return pointerHoldsBar() || focusHoldsBar() || menuHoldsBar();
   }
 
   function tooltipHoldsBar() {
@@ -252,12 +264,13 @@ export function createTopbarAutoHideController(dependencies = {}) {
     if (!peeking) return;
     cancelPending();
     peeking = false;
+    pointerInBar = false;
     apply();
   }
 
-  // The guaranteed way back to hidden. A pointer that jumped into a chat frame produces no further
-  // parent event, so nothing else can prove the peek is over; any parent pointer move inside the
-  // revealed bar restarts this window.
+  // The way back to hidden when the parent cannot see the pointer at all: one that jumped into a chat
+  // frame produces no further parent event, so nothing else can prove the peek is over. A pointer the
+  // parent last saw inside the bar proper is a hold instead and restarts this window indefinitely.
   function armIdleCollapse() {
     idleTimer = clearTimer(idleTimer);
     if (!peeking) return;
@@ -284,6 +297,8 @@ export function createTopbarAutoHideController(dependencies = {}) {
     hideTimer = clearTimer(hideTimer);
     if (!peeking) {
       peeking = true;
+      // A fresh peek starts with the pointer in the band, or nowhere the parent can see it at all.
+      pointerInBar = false;
       apply();
       if (offer) offerCaret();
     }
@@ -329,9 +344,13 @@ export function createTopbarAutoHideController(dependencies = {}) {
     if (y <= revealedBarBottom) {
       hideTimer = clearTimer(hideTimer);
       softHolds = 0;
+      // Recomputed on every sample rather than latched: a pointer that ends up back in the band is on its
+      // way out of the window as often as not, and a latched hold would keep the bar after it left.
+      pointerInBar = y > TOPBAR_REVEAL_ZONE_PX;
       armIdleCollapse();
       return;
     }
+    pointerInBar = false;
     scheduleCollapse();
   }
 
@@ -351,7 +370,10 @@ export function createTopbarAutoHideController(dependencies = {}) {
   // The user chose the site: the child shield reports that trusted pointer because the parent never
   // sees it, and it is the only signal that arrives while the pointer is already inside a frame.
   function onChatFramePointer() {
-    if (autoHideActive() && peeking && !holdsWork()) collapse();
+    if (!autoHideActive() || !peeking) return;
+    // That report proves where the pointer is, so a stale in-bar sample must not hold the bar through it.
+    pointerInBar = false;
+    if (!holdsWork()) collapse();
   }
 
   // Nothing listens while the bar rests: pointermove is the hottest event on the page and the default
@@ -361,7 +383,10 @@ export function createTopbarAutoHideController(dependencies = {}) {
     listening = next;
     // A bar that no longer hides keeps any caret it happens to hold: the offer only means something while
     // a collapse can still take it back.
-    if (!next) caretOffered = false;
+    if (!next) {
+      caretOffered = false;
+      pointerInBar = false;
+    }
     const bind = next ? "addEventListener" : "removeEventListener";
     window[bind]("pointermove", onPointerMove, true);
     window[bind]("focusin", onFocusIn, true);
