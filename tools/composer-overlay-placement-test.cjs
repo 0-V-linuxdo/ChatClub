@@ -107,6 +107,32 @@ assert.doesNotMatch(css, /--prompt-model-gate-width/);
 assert.doesNotMatch(css, /--topbar-height:\s*calc\(51px/);
 assert.match(css, /\.composer-center-host \{[\s\S]*z-index:\s*var\(--overlay-z-panel\)/);
 assert.doesNotMatch(css, /--overlay-z-composer/);
+// One width token for both placements. The 2026-09-15 report was that the same
+// field measured 366-1104px in the bar while the popup was pinned at 760px,
+// because the slot resolved a flex share against the user's topbar items while
+// the host carried its own literal. Keep them on --composer-width.
+assert.match(css, /^:root \{[\s\S]*?--composer-width:\s*clamp\(min\(320px, calc\(100vw - var\(--overlay-gutter-panel\)\)\), 48vw, 760px\);/m);
+assert.match(css, /^\.composer \{[^}]*flex:\s*0 1 var\(--composer-width\)/m);
+assert.match(css, /^\.composer \{[^}]*min-width:\s*0/m);
+assert.match(css, /\.composer-center-host \{[\s\S]*?width:\s*var\(--composer-width\)/);
+assert.match(css, /\.topbar-edit-slot-composer \{[^}]*flex:\s*0 1 var\(--composer-width\)/);
+assert.doesNotMatch(css, /58vw/, "the composer must not resolve its own flex share next to the shared width token");
+assert.doesNotMatch(css, /\.composer-center-host \{[^}]*min\(760px/, "the center host must consume the shared token instead of its own literal");
+assert.doesNotMatch(css, /^\.composer \{[^}]*min-width:\s*420px/m);
+assert.doesNotMatch(css, /\.composer \{\s*min-width:\s*(?:360|260)px;\s*\}/, "responsive min-width floors would force the pill wider than the bar can give");
+// A definite width on the slot enters the topbar's intrinsic minimum, so the bar
+// overflows the viewport and .app-shell clips the right-hand controls instead of
+// letting the pill shrink. The token stays a flex basis.
+assert.match(css, /^\.composer \{[^}]*width:\s*100%/m);
+assert.doesNotMatch(css, /^\.composer \{[^}]*width:\s*var\(--composer-width\)/m);
+// A live spacer with a basis competes with the token while the bar is full and
+// pulls the pill below the shared width.
+assert.match(css, /^\.topbar-flex-space \{[^}]*flex:\s*1 1 0/m);
+assert.doesNotMatch(css, /^\.topbar-flex-space \{[^}]*flex:\s*1 1 54px/m);
+assert.match(agents, /Both placements are the same width through one `:root` token, `--composer-width`/);
+assert.match(agents, /Do not restore that share, those floors, or a second literal at either call site\./);
+assert.match(agents, /a definite `width` on the slot enters the topbar's intrinsic minimum/);
+assert.match(agents, /a live `\.topbar-flex-space` is therefore `flex: 1 1 0`/);
 assert.match(i18n, /"topbar\.input\.placement": "Placement"/);
 assert.match(i18n, /"topbar\.input\.placement": "位置"/);
 assert.match(i18n, /"topbar\.input\.placementCenter": "Center"/);

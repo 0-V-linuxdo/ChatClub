@@ -117,6 +117,10 @@
   --topbar-prompt-input-font-size: 16px;
   --topbar-height: 51px;
   --prompt-collapsed-height: 40px;
+  /* One width for both composer placements. The topbar slot may only shrink
+     below this when the configured icons leave less room, because the topbar
+     grows past the viewport and .app-shell clips it instead of wrapping. */
+  --composer-width: clamp(min(320px, calc(100vw - var(--overlay-gutter-panel))), 48vw, 760px);
   --workspace-tabs-sidebar-width: 320px;
   --workspace-z-sidebar: 15;
   --workspace-z-topbar: 20;
@@ -1222,8 +1226,8 @@ button { cursor: pointer; }
 }
 
 .topbar-edit-slot-composer {
-  flex: 1 1 min(58vw, 760px);
-  min-width: 420px;
+  flex: 0 1 var(--composer-width);
+  min-width: 0;
 }
 
 .topbar-edit-slot-flex {
@@ -1332,9 +1336,12 @@ button { cursor: pointer; }
   flex: 0 0 auto;
 }
 
+/* A live spacer only absorbs leftover room. Giving it a basis would make it
+   compete with --composer-width while the bar is full, which is what pulled the
+   pill below the shared width. The draggable edit slot keeps its own size. */
 .topbar-flex-space {
-  flex: 1 1 54px;
-  min-width: 24px;
+  flex: 1 1 0;
+  min-width: 0;
   height: 1px;
   pointer-events: none;
 }
@@ -1386,14 +1393,17 @@ button { cursor: pointer; }
   border-radius: var(--ui-radius);
 }
 
+/* --composer-width is carried as the flex basis only. A definite width here
+   would enter the topbar's intrinsic minimum, and the bar would overflow the
+   viewport (and get clipped) instead of letting the pill shrink. */
 .composer {
   display: block;
-  flex: 1 1 min(58vw, 760px);
+  flex: 0 1 var(--composer-width);
   width: 100%;
   height: var(--prompt-collapsed-height);
   overflow: visible;
   position: relative;
-  min-width: 420px;
+  min-width: 0;
   container-name: chatclub-composer;
   container-type: inline-size;
 }
@@ -1461,8 +1471,8 @@ button { cursor: pointer; }
   top: var(--composer-center-top);
   transform: translateX(-50%);
   z-index: var(--overlay-z-panel);
-  width: min(760px, calc(100vw - var(--overlay-gutter-panel)));
-  min-width: min(420px, calc(100vw - var(--overlay-gutter-panel)));
+  width: var(--composer-width);
+  min-width: 0;
   height: auto;
   max-height: calc(100vh - var(--composer-center-top) - var(--overlay-gutter-panel));
   padding: 0;
@@ -2691,10 +2701,6 @@ button { cursor: pointer; }
     display: none;
   }
 
-  .composer {
-    min-width: 360px;
-  }
-
   .action-button:not(.button-primary) {
     width: 34px;
     min-width: 34px;
@@ -2711,10 +2717,6 @@ button { cursor: pointer; }
 }
 
 @container chatclub-topbar (max-width: 2200px) {
-  .composer {
-    min-width: 360px;
-  }
-
   .action-button:not(.button-primary) {
     width: 34px;
     min-width: 34px;
@@ -2739,18 +2741,6 @@ button { cursor: pointer; }
 
   .brand > div {
     display: none;
-  }
-}
-
-@media (max-width: 920px) {
-  .composer {
-    min-width: 260px;
-  }
-}
-
-@container chatclub-topbar (max-width: 920px) {
-  .composer {
-    min-width: 260px;
   }
 }
 
