@@ -1419,11 +1419,16 @@ button { cursor: pointer; }
   --prompt-collapsed-height: 38px;
 }
 
+/* Center placement keeps the same --composer-width slot, and the 34px mark centers
+   inside it, so no other topbar item moves when the shell leaves the bar. A
+   collapsing slot released that width to .topbar-flex-space instead, and every
+   control between the composer and a spacer slid by --composer-width - 34px times
+   the share of spacers still to its right. */
 .composer.composer-center-slot {
-  flex: 0 0 auto;
-  width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: var(--ui-chrome-height);
-  max-width: none;
   height: var(--ui-chrome-height);
 }
 

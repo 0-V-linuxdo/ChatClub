@@ -129,6 +129,28 @@ assert.doesNotMatch(css, /^\.composer \{[^}]*width:\s*var\(--composer-width\)/m)
 // pulls the pill below the shared width.
 assert.match(css, /^\.topbar-flex-space \{[^}]*flex:\s*1 1 0/m);
 assert.doesNotMatch(css, /^\.topbar-flex-space \{[^}]*flex:\s*1 1 54px/m);
+// Center placement keeps the same slot and centers the 34px mark inside it, so no
+// other topbar item moves when the shell is reparented. The 2026-09-15 report was
+// that a collapsing slot released --composer-width - 34px to the flex spacers and
+// slid every control between the composer and a spacer: 155px for the right-hand
+// cluster at 1043px with three spacers, 433px for the six buttons the shipped
+// default layout keeps ahead of its only spacer.
+assert.match(css, /\.composer\.composer-center-slot \{[^}]*display:\s*flex/);
+assert.match(css, /\.composer\.composer-center-slot \{[^}]*justify-content:\s*center/);
+assert.match(css, /\.composer\.composer-center-slot \{[^}]*min-width:\s*var\(--ui-chrome-height\)/);
+assert.match(css, /\.composer\.composer-center-slot \{[^}]*height:\s*var\(--ui-chrome-height\)/);
+assert.doesNotMatch(
+  css,
+  /\.composer\.composer-center-slot \{[^}]*flex:\s*0 0 auto/,
+  "a collapsing center slot hands --composer-width to the flex spacers and moves the other topbar items"
+);
+assert.doesNotMatch(
+  css,
+  /\.composer\.composer-center-slot \{[^}]*width:\s*auto/,
+  "the center slot must keep the shared --composer-width basis so the bar geometry is placement-invariant"
+);
+assert.match(agents, /Center placement keeps that same slot in the bar and centers the 34px mark inside it/);
+assert.match(agents, /Do not collapse that slot, redistribute the freed width to one neighbouring spacer, or right-anchor a cluster/);
 assert.match(agents, /Both placements are the same width through one `:root` token, `--composer-width`/);
 assert.match(agents, /Do not restore that share, those floors, or a second literal at either call site\./);
 assert.match(agents, /a definite `width` on the slot enters the topbar's intrinsic minimum/);
