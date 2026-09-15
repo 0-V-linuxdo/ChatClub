@@ -1,5 +1,5 @@
 import { normalizeTopbarVisibility } from "../../shared/storage-schema.js";
-import { AUTO_HIDE_TOPBAR_CLASS, COLLAPSED_TOPBAR_CLASS } from "../../ui/dom.js";
+import { AUTO_HIDE_TOPBAR_CLASS, COLLAPSED_TOPBAR_CLASS, focusFieldOverFrames } from "../../ui/dom.js";
 import { validateControllerContract } from "../controller-contract.js";
 
 const CHAT_FRAME_POINTER_EVENT = "chatclub:chat-frame-pointer";
@@ -76,6 +76,7 @@ export function createTopbarAutoHideController(dependencies = {}) {
   let softHolds = 0;
   let revealedBarBottom = 0;
   let slideTimer = 0;
+  let caretOffered = false;
 
   function visibility() {
     return normalizeTopbarVisibility(state.options?.topbarVisibility);
@@ -103,7 +104,52 @@ export function createTopbarAutoHideController(dependencies = {}) {
   // then. The initial prompt-focus guard already declines to park that caret in an auto-hidden bar, so
   // a fresh page starts collapsed with the caret nowhere.
   function focusHoldsBar() {
+    // One exception to that hold: a caret this module offered on reveal has not been earned yet. Without
+    // it, a peek that hands the caret to the docked composer would keep the strip for the rest of the
+    // session, since one brush of the top edge is enough to place it.
+    if (caretOffered) return false;
     return Boolean(topbarNode()?.contains(document.activeElement));
+  }
+
+  function dockedPromptInput() {
+    return topbarNode()?.querySelector?.(".prompt-input") || null;
+  }
+
+  // A peek is only useful if it is typeable, so the reveal hands the caret to the docked composer. It is
+  // an offer, not a claim: `focusHoldsBar` does not hold for it and the collapse takes it back unless the
+  // user has used it. Center placement keeps no field in the bar and gets nothing here, which is fine
+  // because that float is already on screen with the caret wherever the user last put it.
+  function offerCaret() {
+    if (state.topbarEditMode) return;
+    const field = dockedPromptInput();
+    if (!field || document.activeElement === field) return;
+    // A typed modal is the unique caret owner, and any other field on this page belongs to whoever is
+    // typing in it. Nothing at all, or a chat frame, is what a peek may take the caret from.
+    if (document.querySelector(".modal")) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== document.documentElement && active.tagName !== "IFRAME") return;
+    // A plain field.focus() is a no-op while a site-isolated chat frame owns the browser's focused frame,
+    // which is the case this offer exists for, so it goes through the shared reacquire.
+    caretOffered = focusFieldOverFrames(field, active);
+  }
+
+  // Handing the caret back is what lets the offer exist at all. This runs after the collapsed class is on
+  // the shell, so the composer's own blur settle sees a field inside a collapsed bar and releases the
+  // page-caret lease instead of re-claiming it, which is what used to reopen the bar on the next frame.
+  function withdrawCaretOffer() {
+    if (!caretOffered) return;
+    caretOffered = false;
+    const field = dockedPromptInput();
+    if (field && document.activeElement === field) {
+      try { field.blur(); } catch {}
+    }
+  }
+
+  // The first keystroke or click inside the bar turns the offer into an ordinary caret hold, so the peek
+  // stops timing out the moment the user actually starts using what it offered.
+  function earnCaret(event) {
+    if (!caretOffered) return;
+    if (topbarNode()?.contains(event?.target)) caretOffered = false;
   }
 
   // `aria-expanded="true"` alone is not a menu: the ChatClub Tabs toggle is a two-state disclosure for a
@@ -189,6 +235,7 @@ export function createTopbarAutoHideController(dependencies = {}) {
     const height = changed ? Number(topbarNode()?.offsetHeight) || 0 : 0;
     shell.classList.toggle(MODE_CLASS, active);
     shell.classList.toggle(COLLAPSED_CLASS, collapsed);
+    if (collapsed) withdrawCaretOffer();
     // The ChatClub Tabs sidebar tracks the workspace grid's real top through an inline style it measures
     // once per render, so the row this class collapses has to tell it to measure again. It knows nothing
     // about auto-hide and must not: it simply follows the bar's height, open or closed either way. The
@@ -198,9 +245,12 @@ export function createTopbarAutoHideController(dependencies = {}) {
     startSlide(shell, collapsed, height);
   }
 
+  // The guard comes first so this cannot cancel a dwell it has no business cancelling: a collapse with
+  // nothing to collapse would otherwise drop a reveal the pointer already asked for. Every caller happens
+  // to check `peeking` too, so this is only correctness that does not depend on them keeping that check.
   function collapse() {
-    cancelPending();
     if (!peeking) return;
+    cancelPending();
     peeking = false;
     apply();
   }
@@ -227,12 +277,15 @@ export function createTopbarAutoHideController(dependencies = {}) {
     }, TOPBAR_REVEAL_IDLE_MS);
   }
 
-  function reveal() {
+  // Only the pointer reveal offers the caret. A focus reveal already has one, and the menu shortcuts peek
+  // to get an anchor rect on screen and then focus their own popover, so an offer there is a race.
+  function reveal(offer = false) {
     dwellTimer = clearTimer(dwellTimer);
     hideTimer = clearTimer(hideTimer);
     if (!peeking) {
       peeking = true;
       apply();
+      if (offer) offerCaret();
     }
     // Sampled once per reveal instead of per pointer move: the bar is a fixed 51px and reading its
     // rect on the hottest event in the page would force layout on every move. `offsetHeight` rather than
@@ -260,7 +313,7 @@ export function createTopbarAutoHideController(dependencies = {}) {
     if (peeking || dwellTimer) return;
     dwellTimer = setTimeout(() => {
       dwellTimer = 0;
-      if (autoHideActive()) reveal();
+      if (autoHideActive()) reveal(true);
     }, TOPBAR_REVEAL_DWELL_MS);
   }
 
@@ -306,10 +359,15 @@ export function createTopbarAutoHideController(dependencies = {}) {
   function listen(next) {
     if (next === listening) return;
     listening = next;
+    // A bar that no longer hides keeps any caret it happens to hold: the offer only means something while
+    // a collapse can still take it back.
+    if (!next) caretOffered = false;
     const bind = next ? "addEventListener" : "removeEventListener";
     window[bind]("pointermove", onPointerMove, true);
     window[bind]("focusin", onFocusIn, true);
     window[bind]("focusout", onFocusOut, true);
+    window[bind]("keydown", earnCaret, true);
+    window[bind]("pointerdown", earnCaret, true);
     document[bind](CHAT_FRAME_POINTER_EVENT, onChatFramePointer);
   }
 
@@ -337,7 +395,7 @@ export function createTopbarAutoHideController(dependencies = {}) {
     apply();
     if (peeking) {
       softHolds = 0;
-      revealedBarBottom = topbarNode()?.getBoundingClientRect().bottom || 0;
+      revealedBarBottom = Number(topbarNode()?.offsetHeight) || 0;
       armIdleCollapse();
     }
     return persistVisibility(next);

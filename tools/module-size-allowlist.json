@@ -96,5 +96,12 @@
     "maxBytes": 49374,
     "targetBytes": 45000,
     "reason": "Conversation fingerprints keep Notion chat ?t= on href so idle existing scans match stored conversation identity, and still hash classified user and assistant turn text after stripping copy, toolbar, and button chrome."
+  },
+  "ui/dom.js": {
+    "maxLines": 1202,
+    "target": 1200,
+    "maxBytes": 46169,
+    "targetBytes": 44000,
+    "reason": "ui/dom.js is where caret ownership lives, so the App domains that may not import each other read it from here: the overlay/composer caret owners and the page-caret lease, the site-isolated phantom-hold reacquire (`focusFieldOverFrames`, now shared by `pinOverlaySearchCaret` and the topbar auto-hide reveal that offers the caret to the docked composer), and the auto-hidden/collapsed top-bar predicates that the prompt-focus lock, the frame-load restore, the caret pin and the composer dock all consume. Two lines over the default is the exported reacquire; the alternative was compressing unrelated neighbours to pay for it."
   }
 }

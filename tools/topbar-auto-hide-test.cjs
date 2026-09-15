@@ -92,8 +92,36 @@ assert.match(functionSource(topbar, "runShortcutAction"), /autoHide\.toggle\(\)/
 assert.match(functionSource(topbar, "runShortcutAction"), /toast\(t\("toast\.topbarAutoHideEnabled"\), "info"\)/);
 assert.match(topbar, /topbarVisibility === "auto" \? "always" : "auto"/);
 assert.match(topbar, /autoHide\.sync\(\)[\s\S]{0,120}toast\(t\("toast\.appearanceAutoSaveFailed"\), "error"\)/);
-// A collapsed bar has no on-screen anchor rect, so a menu shortcut peeks first.
+// A collapsed bar has no on-screen anchor rect, so a menu shortcut peeks first. That peek must not offer
+// the caret: it goes on to focus its own popover, and a focus reveal already has a caret, so the offer
+// belongs to the pointer reveal alone.
 assert.match(functionSource(topbar, "runShortcutAction"), /autoHide\.reveal\(\)[\s\S]*querySelector/);
+assert.match(functionSource(autoHide, "scheduleReveal"), /reveal\(true\)/);
+assert.match(functionSource(autoHide, "reveal"), /if \(offer\) offerCaret\(\)/);
+for (const name of ["onFocusIn", "toggle"]) {
+  assert.doesNotMatch(functionSource(autoHide, name), /offerCaret|reveal\(true\)/, `${name} must not offer the caret`);
+}
+// A collapse can never resolve a real caret hold by blurring it, so the offer is the one caret this module
+// takes back, and only after the collapsed class is on the shell: the composer's blur settle then sees a
+// field inside a collapsed bar and releases the page-caret lease instead of re-claiming it.
+assert.match(
+  functionSource(autoHide, "apply"),
+  /classList\.toggle\(COLLAPSED_CLASS[\s\S]*withdrawCaretOffer\(\)/,
+  "the offer must be withdrawn after the class flip, not before it"
+);
+assert.match(functionSource(autoHide, "focusHoldsBar"), /if \(caretOffered\) return false/);
+// Measured in Chromium 149 on 2026-09-15: `field.focus()` alone left the caret in the chat frame on some
+// peeks and took it on others, which is the documented phantom hold — only `window.focus()` moves the
+// focused frame back. That recipe stays in ui/dom.js with the rest of caret ownership; the offer calls it.
+assert.match(uiDom, /export function focusFieldOverFrames/);
+assert.match(functionSource(uiDom, "focusFieldOverFrames"), /window\.focus\?\.\(\)[\s\S]*iframe\.chat-frame/);
+assert.match(functionSource(uiDom, "pinOverlaySearchCaret"), /focusFieldOverFrames\(field, active\)/);
+assert.match(functionSource(autoHide, "offerCaret"), /caretOffered = focusFieldOverFrames\(field, active\)/);
+assert.doesNotMatch(autoHide, /window\.focus/, "the offer must not keep a private copy of that reacquire");
+// A collapse with nothing to collapse must not cancel a reveal the pointer already asked for, so the
+// `peeking` guard comes before `cancelPending`. Every caller checks `peeking` too, so this pins an
+// ordering rather than covering a reachable path.
+assert.match(functionSource(autoHide, "collapse"), /if \(!peeking\) return;\s*\n\s*cancelPending\(\)/);
 assert.match(runtime, /action === "toggleTopbar"/);
 
 // Focusing a docked prompt in a hidden bar reveals that bar, so every focus guard declines it through
@@ -102,7 +130,7 @@ assert.match(runtime, /action === "toggleTopbar"/);
 // class name travels with it instead of being spelled out at four call sites.
 assert.match(uiDom, /export const AUTO_HIDE_TOPBAR_CLASS = "topbar-auto-hide"/);
 assert.match(uiDom, /export const isInsideAutoHiddenTopbar = /);
-assert.match(autoHide, /import \{ AUTO_HIDE_TOPBAR_CLASS, COLLAPSED_TOPBAR_CLASS \} from "\.\.\/\.\.\/ui\/dom\.js"/);
+assert.match(autoHide, /import \{ AUTO_HIDE_TOPBAR_CLASS, COLLAPSED_TOPBAR_CLASS,[^}]*\} from "\.\.\/\.\.\/ui\/dom\.js"/);
 assert.match(autoHide, /const MODE_CLASS = AUTO_HIDE_TOPBAR_CLASS/);
 for (const [name, source] of [["prompt focus", promptFocus], ["workspace frame", frameController]]) {
   assert.match(source, /isInsideAutoHiddenTopbar/, `${name} must use the shared auto-hidden-bar predicate`);
@@ -242,6 +270,10 @@ class FakeElement {
     if (globalThis.document?.activeElement === this) globalThis.document.activeElement = null;
   }
 
+  focus() {
+    if (globalThis.document) globalThis.document.activeElement = this;
+  }
+
   matchesOne(selector) {
     if (selector.startsWith(".")) return this.classList.contains(selector.slice(1));
     const attribute = selector.match(/^\[([^=\]]+)="([^"]*)"\]$/);
@@ -302,6 +334,10 @@ function createEventTarget() {
   shell.appendChild(bar);
   const control = new FakeElement("top-icon-action", "button");
   bar.appendChild(control);
+  // The docked composer, so the reveal has a caret to offer. Center placement reparents this node out of
+  // the bar, which is the case that gets no offer at all.
+  const promptInput = new FakeElement("prompt-input", "textarea");
+  bar.appendChild(promptInput);
 
   const fakeDocument = Object.assign(createEventTarget(), {
     activeElement: null,
@@ -394,6 +430,8 @@ function createEventTarget() {
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "dwelling at the top edge peeks the bar");
   assert.equal(controller.isCollapsed(), false);
   assert.deepEqual(aligned, [true, false], "and a peek re-aligns it back under the revealed bar");
+  // A peek is only worth taking if it is typeable, so the reveal hands the caret to the docked composer.
+  assert.equal(fakeDocument.activeElement, promptInput, "a pointer reveal offers the caret to the docked field");
 
   // The layout has already committed by now, so the shell is put back where the user last saw it and one
   // compositor transition carries it home. Anything else would have to animate the grid row itself, which
@@ -422,6 +460,9 @@ function createEventTarget() {
   assert.equal(shell.classList.contains("topbar-collapsed"), false, "the collapse waits out the grace window");
   advance(200);
   assert.equal(shell.classList.contains("topbar-collapsed"), true);
+  // It was an offer, not a claim. An unused caret goes back with the bar, because focus in the bar is
+  // otherwise a hard hold and one brush of the top edge would keep the strip for the rest of the session.
+  assert.equal(fakeDocument.activeElement, null, "an unused offered caret is withdrawn by the collapse");
   assert.equal(shell.classList.contains("topbar-motion-exit"), true, "leaving slides on the shorter exit curve");
   assert.deepEqual(
     shell.transformWrites.slice(-2),
@@ -461,6 +502,35 @@ function createEventTarget() {
   assert.equal(shell.classList.contains("topbar-collapsed"), false);
   fakeDocument.dispatch("chatclub:chat-frame-pointer", {});
   assert.equal(shell.classList.contains("topbar-collapsed"), true, "a click inside a chat hands the strip back");
+
+  // The first keystroke inside the bar turns the offer into an ordinary caret hold, so the peek stops
+  // timing out the moment the user starts using what it offered.
+  fakeWindow.dispatch("pointermove", { clientY: 0 });
+  advance(400);
+  assert.equal(fakeDocument.activeElement, promptInput);
+  fakeWindow.dispatch("keydown", { target: promptInput });
+  advance(2100);
+  assert.equal(shell.classList.contains("topbar-collapsed"), false, "a used caret holds the bar like any other");
+  assert.equal(fakeDocument.activeElement, promptInput, "and is never blurred to resolve that hold");
+  fakeDocument.activeElement = null;
+  fakeWindow.dispatch("focusout", { target: promptInput, relatedTarget: null });
+  advance(300);
+  assert.equal(shell.classList.contains("topbar-collapsed"), true, "the caret leaves on the user's terms instead");
+
+  // Whoever is already typing on this page keeps the caret. A peek may take one that is nowhere, or one a
+  // site-isolated chat frame holds, because that is the case this offer exists for; never another field.
+  const pageField = new FakeElement("input", "input");
+  shell.appendChild(pageField);
+  fakeDocument.activeElement = pageField;
+  fakeWindow.dispatch("pointermove", { clientY: 0 });
+  advance(400);
+  assert.equal(shell.classList.contains("topbar-collapsed"), false, "the bar still peeks over another field");
+  assert.equal(fakeDocument.activeElement, pageField, "but never takes that field's caret");
+  advance(2100);
+  assert.equal(shell.classList.contains("topbar-collapsed"), true, "and a caret outside the bar never holds it");
+  pageField.remove();
+  fakeDocument.activeElement = null;
+  advance(300);
 
   // Focus is the keyboard path in and a hard hold while it stays: Tab must never leave a caret
   // inside a bar that is off screen.

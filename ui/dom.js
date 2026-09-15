@@ -533,6 +533,20 @@ export function ensureChatFramePointerReports() {
   ensureOverlaySearchCaretListeners();
 }
 
+// Focus this field through the phantom hold above. Exported because the topbar auto-hide reveal also
+// takes the caret from a chat frame, and a second copy of this recipe there is exactly that drift.
+export function focusFieldOverFrames(field, active = document.activeElement) {
+  if (!field) return false;
+  overlayCaretReacquiring = true;
+  try { window.focus?.(); } catch {} finally { overlayCaretReacquiring = false; }
+  try {
+    for (const frame of document.querySelectorAll("iframe.chat-frame")) try { frame.blur?.(); } catch {}
+  } catch {}
+  if (overlayCaretIsFrame(active)) try { active.blur?.(); } catch {}
+  try { field.focus({ preventScroll: true }); } catch { try { field.focus(); } catch {} }
+  return document.activeElement === field;
+}
+
 export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW_MAX) {
   // window.focus() re-dispatches `focus` on the field before Chromium finishes moving the focused
   // frame back; a field focus handler that re-claims must not recurse into another window.focus().
@@ -580,19 +594,7 @@ export function pinOverlaySearchCaret(followRemaining = OVERLAY_CARET_PIN_FOLLOW
     return false;
   }
   if (active !== field && !overlaySearchCaretStolen(active, field, panel, owner)) return false;
-  overlayCaretReacquiring = true;
-  try { window.focus?.(); } catch {} finally { overlayCaretReacquiring = false; }
-  try {
-    for (const frame of document.querySelectorAll("iframe.chat-frame")) {
-      try { frame.blur?.(); } catch {}
-    }
-  } catch {}
-  if (overlayCaretIsFrame(active)) {
-    try { active.blur?.(); } catch {}
-  }
-  try { field.focus({ preventScroll: true }); } catch {
-    try { field.focus(); } catch {}
-  }
+  focusFieldOverFrames(field, active);
   restoreOverlaySearchCaretSelection(field, owner);
   if (overlayCaretPinHolds(field)) return true;
   const nextFollow = composerLoadPinOpen()
