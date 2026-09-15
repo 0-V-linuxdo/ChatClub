@@ -17,7 +17,9 @@ const css = read("styles/chatclub.css");
 const agents = read("AGENTS.md");
 const i18n = read("shared/i18n.js");
 const topbarView = read("app/topbar/view.js");
+const appearance = read("app/settings/appearance.js");
 const topbar = read("app/topbar/controller.js");
+const runtime = read("app/runtime.js");
 const appearanceTopbar = read("app/settings/appearance-topbar.js");
 const promptLibrary = read("app/prompt-library/controller.js");
 const frame = read("app/workspace/frame-controller.js");
@@ -41,7 +43,6 @@ assert.match(composer, /composer-center-slot/);
 assert.match(composer, /composer-center-mark/);
 assert.match(composer, /class: "composer-center-mark top-icon-action tooltip-trigger"/);
 assert.match(composer, /"data-tooltip-id": "composer.open"/);
-assert.match(composer, /"aria-expanded": "false"/);
 assert.match(composer, /createSvgIcon\("keyboard"\)/);
 assert.doesNotMatch(composer, /composer-center-mark-label/);
 assert.doesNotMatch(composer, /createSvgIcon\("edit"\)/);
@@ -55,26 +56,64 @@ assert.match(icons, /M12 22v-8\.3a4 4 0 0 0-1\.172-2\.872L3 3/);
 assert.doesNotMatch(composer, /composer-center-launcher/);
 assert.doesNotMatch(composer, /COMPOSER_CENTER_LAUNCHER_ID/);
 assert.match(composer, /prompt-pin-button/);
-assert.match(composer, /let centerPinned = false/);
-assert.match(composer, /function showCenterHost\(/);
-assert.match(composer, /function hideCenterHost\(/);
-assert.match(composer, /function openComposerTooltip\(/);
+// The toggle shows the direction the shell travels. An arrow leaving a box read as
+// "open in a new tab", which is the one thing this in-page move must not suggest.
+assert.match(functionSource(composer, "syncPlacementToggle"), /createSvgIcon\(floating \? "chevronUp" : "chevronDown"\)/);
+assert.match(composer, /createSvgIcon\(livePlacement\(\) === "center" \? "chevronUp" : "chevronDown"\)/);
+assert.doesNotMatch(composer, /createSvgIcon\((?:floating|livePlacement\(\) === "center")[^)]*"(?:external|maximize|minimize|pin)"/);
+assert.match(appearance, /"composer\.pin": "chevronDown"/);
+// The composer has no hidden state: a dismissed float docks into the slot the bar already
+// reserves, and the persisted preference only decides where it rests.
+assert.match(composer, /let floatDismissed = false/);
+assert.match(composer, /let placementTransitionActive = false/);
+assert.match(composer, /function livePlacement\(/);
+assert.match(composer, /function floatComposer\(/);
+assert.match(composer, /function dockComposer\(/);
+assert.match(composer, /function relocateComposer\(/);
+assert.match(composer, /function toggleComposerPlacement\(/);
+assert.match(composer, /function syncPlacementToggle\(/);
 assert.match(composer, /function syncCenterMark\(/);
-assert.match(functionSource(composer, "openComposerTooltip"), /formatShortcut\(/);
-assert.match(functionSource(composer, "openComposerTooltip"), /focusInput/);
-assert.match(functionSource(composer, "syncCenterMark"), /aria-expanded/);
+assert.doesNotMatch(composer, /function showCenterHost\(/);
+assert.doesNotMatch(composer, /function hideCenterHost\(/);
+assert.doesNotMatch(composer, /centerPinned/);
 assert.doesNotMatch(composer, /function syncCenterLauncher\(/);
 assert.match(composer, /CHAT_FRAME_POINTER_EVENT/);
 assert.match(composer, /host\.hidden = true/);
-assert.match(functionSource(composer, "focusInput"), /showCenterHost\(/);
-assert.match(functionSource(composer, "enterSearchMode"), /showCenterHost\(/);
-assert.match(functionSource(composer, "showCenterHost"), /syncCenterMark/);
-assert.match(functionSource(composer, "hideCenterHost"), /syncCenterMark/);
-assert.doesNotMatch(functionSource(composer, "showCenterHost"), /syncCenterLauncher/);
-assert.doesNotMatch(functionSource(composer, "hideCenterHost"), /syncCenterLauncher/);
-assert.match(functionSource(composer, "applyPlacement"), /if \(centerPinned\) centerHost\.hidden = false/);
+assert.match(functionSource(composer, "livePlacement"), /floatDismissed/);
+assert.match(functionSource(composer, "focusInput"), /floatComposer\(/);
+assert.match(functionSource(composer, "enterSearchMode"), /floatComposer\(/);
+assert.match(functionSource(composer, "floatComposer"), /floatDismissed = false/);
+assert.match(functionSource(composer, "dockComposer"), /floatDismissed = true/);
+// Dismissal is transient: it must never write composerPlacement.
+assert.doesNotMatch(functionSource(composer, "dockComposer"), /persistPlacement/);
+assert.doesNotMatch(functionSource(composer, "handleCenterDismissPointer"), /persistPlacement/);
+assert.match(functionSource(composer, "handleCenterDismissPointer"), /dockComposer\(\)/);
+assert.match(functionSource(composer, "toggleComposerPlacement"), /persistPlacement\(next\)/);
+assert.match(functionSource(composer, "toggleComposerPlacement"), /floatDismissed = false/);
+assert.match(functionSource(composer, "persistPlacement"), /persistComposerPlacement/);
+assert.match(composer, /persistComposerPlacement: "function\?"/);
+// Reparenting a focused textarea blurs it in Chromium, so the move suppresses the blur
+// settles, then reclaims the caret, the search panel and the measured height.
+assert.match(functionSource(composer, "relocateComposer"), /placementTransitionActive = true/);
+assert.match(functionSource(composer, "relocateComposer"), /rememberSelection\(previous\)/);
+assert.match(functionSource(composer, "relocateComposer"), /claimPromptCaret\(field\)/);
+assert.match(functionSource(composer, "relocateComposer"), /restoreSelectionSoon\(field\)/);
+assert.match(functionSource(composer, "relocateComposer"), /searchPanel\.attach\(shell\)/);
+assert.match(functionSource(composer, "relocateComposer"), /resizeInput\(field, true\)/);
+assert.doesNotMatch(functionSource(composer, "relocateComposer"), /render\(|topbar\./);
+assert.match(functionSource(composer, "handleInputBlur"), /if \(placementTransitionActive\) return/);
+assert.match(functionSource(composer, "handlePromptShellFocusOut"), /if \(placementTransitionActive\) return/);
+// Composer search owns Escape first; only a floating composer outside search docks on Escape.
+assert.match(functionSource(composer, "handleInputKeydown"), /!searchPanel\.isActive\(\)\s*&&\s*livePlacement\(\) === "center"/);
+assert.match(functionSource(composer, "handleInputKeydown"), /dockComposer\(\)/);
+assert.match(functionSource(composer, "applyPlacement"), /centerHost\.hidden = false/);
+assert.doesNotMatch(functionSource(composer, "applyPlacement"), /if \(centerPinned\)/);
+assert.match(functionSource(composer, "applyPlacement"), /livePlacement\(\) === "center"/);
 assert.match(functionSource(composer, "applyPlacement"), /syncCenterMark/);
+assert.match(functionSource(composer, "applyPlacement"), /syncPlacementToggle/);
 assert.doesNotMatch(functionSource(composer, "applyPlacement"), /syncCenterLauncher/);
+// The composer state port cannot write options, so the toggle goes through the runtime port.
+assert.match(runtime, /persistComposerPlacement: \(placement\) => saveOptionsPatch\(\{ composerPlacement: placement \}\)/);
 assert.match(composer, /state\.topbarEditMode/);
 assert.match(dom, /export function overlaySearchCaretComposer/);
 assert.match(dom, /composer: options\.composer === true/);
@@ -159,34 +198,42 @@ assert.match(i18n, /"topbar\.input\.placement": "Placement"/);
 assert.match(i18n, /"topbar\.input\.placement": "位置"/);
 assert.match(i18n, /"topbar\.input\.placementCenter": "Center"/);
 assert.match(i18n, /"topbar\.input\.placementCenter": "居中"/);
-assert.match(i18n, /"composer\.pin": "Pin composer"/);
-assert.match(i18n, /"composer\.pin": "固定弹层"/);
-assert.match(i18n, /"composer\.unpin": "Unpin composer"/);
-assert.match(i18n, /"composer\.unpin": "取消固定"/);
-assert.match(i18n, /"composer\.open": "Open composer"/);
-assert.match(i18n, /"composer\.open": "打开输入框"/);
+assert.match(i18n, /"composer\.placement": "Composer placement"/);
+assert.match(i18n, /"composer\.placement": "输入框位置"/);
+assert.match(i18n, /"composer\.float": "Float composer to the center"/);
+assert.match(i18n, /"composer\.float": "浮出到中央"/);
+assert.match(i18n, /"composer\.dock": "Dock composer to the top bar"/);
+assert.match(i18n, /"composer\.dock": "停靠到顶栏"/);
+assert.doesNotMatch(i18n, /"composer\.unpin"/);
 assert.match(i18n, /"shortcut\.focusInput\.label": "Open composer"/);
 assert.match(i18n, /"shortcut\.focusInput\.label": "打开输入框"/);
-assert.match(agents, /host starts hidden unless pinned/);
-assert.match(agents, /`\.prompt-pin-button`/);
+assert.match(agents, /The composer is never hidden/);
+assert.doesNotMatch(agents, /host starts hidden unless pinned/);
+assert.match(agents, /`\.prompt-pin-button` is the in-place dock\/float toggle/);
 assert.match(agents, /`\.composer-center-mark`/);
 assert.match(agents, /icon-only `top-icon-action`/);
-assert.match(agents, /tooltip carries `focusInput`/);
+assert.match(agents, /dock transiently and must leave the preference alone/);
+assert.match(agents, /`relocateComposer`/);
+assert.match(agents, /do not add a floating page launcher, a third placement value, or a second dock control in the bar/);
 assert.doesNotMatch(agents, /composer-center-launcher/);
 assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?grid-column:\s*7/);
-assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?display:\s*none/);
-assert.match(css, /\.composer-center-host \.prompt-pin-button\s*\{[\s\S]*?display:\s*inline-grid/);
 {
-  // The pin carries the shared .compact-icon utility, whose display: inline-grid
-  // sits later in the cascade than .prompt-pin-button { display: none } and
-  // therefore re-showed the pin inside the topbar pill. A two-class hide must
-  // outrank that utility, and the center-host show must still come after it.
-  const hidden = css.search(/\.prompt-pin-button\.compact-icon\s*\{[^}]*display:\s*none/);
-  const shown = css.search(/\.composer-center-host \.prompt-pin-button\s*\{[^}]*display:\s*inline-grid/);
-  assert.ok(hidden >= 0, "the topbar-slot pin must stay hidden even with the .compact-icon utility applied");
-  assert.ok(shown > hidden, "the center-host pin rule must follow the compact-icon hide so the popup still shows the pin");
+  // The toggle is the only in-place placement switch, so it must survive in the topbar
+  // pill too. It previously carried a two-class hide that outranked .compact-icon.
+  assert.doesNotMatch(css, /\.prompt-pin-button\.compact-icon\s*\{[^}]*display:\s*none/);
+  assert.doesNotMatch(css, /\.composer-center-host \.prompt-pin-button\s*\{[^}]*display:\s*inline-grid/);
+  const base = css.match(/\.prompt-pin-button \{[^}]*\}/);
+  assert.ok(base, "the placement toggle needs its own base rule");
+  assert.match(base[0], /display:\s*inline-grid/);
+  assert.match(base[0], /color:\s*var\(--text\)/);
+  assert.match(base[0], /background:\s*transparent/);
+  assert.match(css, /\.topbar-edit-slot-composer \.prompt-pin-button \{[^}]*display:\s*none/);
 }
-assert.match(css, /\.composer-center-host \.prompt-pin-button\.is-pinned[\s\S]*?background:\s*var\(--primary\)/);
+// The toggle is a quiet accessory like plus and clear; a filled primary here would make a
+// placement control the loudest ink in the pill instead of Send.
+assert.doesNotMatch(css, /\.prompt-pin-button[^{]*\{[^}]*background:\s*var\(--primary\)/);
+assert.doesNotMatch(css, /\.prompt-pin-button[^{]*\[aria-pressed="true"\]/);
+assert.doesNotMatch(composer, /"aria-pressed": livePlacement/);
 assert.match(css, /\.composer-center-mark\s*\{[\s\S]*?width:\s*var\(--ui-chrome-height\)/);
 assert.match(css, /\.composer-center-mark\s*\{[^}]*border-radius:\s*var\(--ui-radius\)/);
 assert.doesNotMatch(css, /\.composer-center-mark\s*\{[^}]*border-radius:\s*var\(--ui-radius-pill\)/);
@@ -364,10 +411,14 @@ assert.doesNotMatch(functionSource(composer, "applyPlacement"), /cloneNode|inner
   });
   vm.runInContext(`
     const COMPOSER_CENTER_HOST_ID = "composer-center-host";
-    let centerPinned = false;
-    function syncPinButton() {}
+    let placementIntent = "";
+    let floatDismissed = false;
+    globalThis.dismissFloat = (value) => { floatDismissed = value; };
+    function syncPlacementToggle() {}
     function syncCenterMark() {}
+    ${functionSource(composer, "storedComposerPlacement")}
     ${functionSource(composer, "composerPlacementValue")}
+    ${functionSource(composer, "livePlacement")}
     ${functionSource(composer, "ensureComposerCenterHost")}
     ${functionSource(composer, "applyPlacement")}
     applyPlacement();
@@ -375,12 +426,26 @@ assert.doesNotMatch(functionSource(composer, "applyPlacement"), /cloneNode|inner
   `, context);
   assert.equal(shell.parentNode.id, "composer-center-host", "center placement must reparent the live prompt shell");
   assert.equal(composerNode.classList.contains("composer-center-slot"), true);
-  assert.equal(context.host.hidden, true, "center host starts hidden when unpinned");
+  assert.equal(context.host.hidden, false, "a center composer is visible, never a hidden host");
   assert.equal(input.parentNode, shell, "reparenting must not remount the textarea");
+  // A dismissed float docks into the reserved slot and keeps the persisted preference.
+  context.dismissFloat(true);
+  vm.runInContext("applyPlacement()", context);
+  assert.equal(shell.parentNode, composerNode, "a dismissed float must dock into the required slot");
+  assert.equal(composerNode.classList.contains("composer-center-slot"), false);
+  assert.equal(context.state.options.composerPlacement, "center", "dismissal must not rewrite the preference");
+  context.dismissFloat(false);
+  vm.runInContext("applyPlacement()", context);
+  assert.equal(shell.parentNode.id, "composer-center-host", "the next summon must float the same shell again");
   context.state.options.composerPlacement = "topbar";
   vm.runInContext("applyPlacement()", context);
   assert.equal(shell.parentNode, composerNode, "topbar placement must return the same shell to the required slot");
   assert.equal(composerNode.classList.contains("composer-center-slot"), false);
+  context.state.options.composerPlacement = "center";
+  context.state.topbarEditMode = true;
+  vm.runInContext("applyPlacement()", context);
+  assert.equal(shell.parentNode, composerNode, "topbar edit mode keeps the shell docked");
+  context.state.topbarEditMode = false;
 
   console.log("composer overlay placement tests passed");
 })().catch((error) => {

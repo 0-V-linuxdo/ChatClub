@@ -83,6 +83,7 @@ export function createComposerSearchPanel(options = {}) {
   let opening = false;
   let shell = null;
   let listNode = null;
+  let groupNode = null;
   let hintNode = null;
   let emptyNode = null;
   let switchNode = null;
@@ -226,6 +227,13 @@ export function createComposerSearchPanel(options = {}) {
       }));
       listNode.hidden = !items.length;
       listNode.setAttribute?.("aria-label", String(searchCopy()?.results || t("composer.search.results")));
+    }
+    if (groupNode) {
+      const label = searching
+        ? t("composer.search.count", { count: items.length, plural: items.length === 1 ? "" : "s" })
+        : t("composer.search.recent");
+      if (groupNode.textContent !== label) groupNode.textContent = label;
+      groupNode.hidden = !items.length;
     }
     if (emptyNode) {
       emptyNode.hidden = !showEmpty;
@@ -462,6 +470,9 @@ export function createComposerSearchPanel(options = {}) {
         role: "listbox",
         "aria-label": String(searchCopy()?.results || t("composer.search.results"))
       });
+      // A caption above the scroll container, not a row inside it, so the
+      // list's whole-row height budget stays exact.
+      groupNode = el("div", { class: "prompt-search-group", hidden: true });
       emptyNode = el("div", { class: "prompt-search-empty ui-empty-state", hidden: true }, String(searchCopy()?.empty || t("composer.search.empty")));
       hintNode = el("div", { class: "prompt-search-footer" },
         el("span", { class: "prompt-search-hint" }, t("composer.search.hint")),
@@ -475,12 +486,13 @@ export function createComposerSearchPanel(options = {}) {
       const results = el("div", {
         class: "prompt-search-results overlay-surface",
         hidden: !active
-      }, listNode, emptyNode, hintNode);
+      }, groupNode, listNode, emptyNode, hintNode);
       const rowNode = shell.querySelector(".prompt-input-row");
       if (typeof rowNode?.after === "function") rowNode.after(results);
       else shell.append(results);
     } else {
       listNode = shell.querySelector(".prompt-search-list");
+      groupNode = shell.querySelector(".prompt-search-group");
       emptyNode = shell.querySelector(".prompt-search-empty");
       hintNode = shell.querySelector(".prompt-search-footer");
     }

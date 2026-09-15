@@ -183,6 +183,7 @@ const composerController = createComposerController({
       ensureSummaryController().then((summary) => summary?.scheduleIdleFullTextCapture?.(text)).catch(() => {});
     }
   },
+  persistComposerPlacement: (placement) => saveOptionsPatch({ composerPlacement: placement }),
   workspaceSearch: {
     listRecords: listComposerSearchRecords,
     openRecord: openComposerSearchRecord,
@@ -229,6 +230,7 @@ const topbarController = createTopbarController({
     openSummary: openSummaryPanel,
     toggleWorkspaceTabsSidebar,
     isWorkspaceTabsSidebarOpen,
+    alignWorkspaceTabsSidebar: () => workspaceTabsSidebarController.alignSidebar(),
     openWorkspaceTabsSearch
   }
 });
@@ -1316,7 +1318,7 @@ async function handleShortcutAction(action, matchObj = null, sourceWindow = null
   if (!action) return;
   const group = activeGroupForShortcut(sourceWindow);
   const chat = group ? workspaceController.activeChatForGroup(group) : null;
-  const digit = shortcutDigit(matchObj); if (action === "focusInput") focusPromptInput(); else if (action === "enterSearchMode") openWorkspaceTabsSearch(); else if (action === "openNewWorkspaceTab") await openNewWorkspaceTab(); else if (action === "toggleWorkspaceTabsSidebar") toggleWorkspaceTabsSidebar(); else if (action === "openSettings" || action === "openAppPicker" || action === "openSettingsMenu") topbarBinding.port.runShortcutAction(action);
+  const digit = shortcutDigit(matchObj); if (action === "focusInput") focusPromptInput(); else if (action === "enterSearchMode") openWorkspaceTabsSearch(); else if (action === "openNewWorkspaceTab") await openNewWorkspaceTab(); else if (action === "toggleWorkspaceTabsSidebar") toggleWorkspaceTabsSidebar(); else if (action === "openSettings" || action === "openAppPicker" || action === "openSettingsMenu" || action === "toggleTopbar") topbarBinding.port.runShortcutAction(action);
   else if (action === "newChat") {
     const started = await workspaceController.startNewChatForShortcut(sourceWindow);
     const error = settledOperationFailure({ status: "fulfilled", value: started }, "New chat did not start");

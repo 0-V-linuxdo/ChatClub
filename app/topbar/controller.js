@@ -3,6 +3,7 @@ import { normalizeTopbarLayout, topbarSettingsSectionForItem } from "../../share
 import { t } from "../../shared/i18n.js";
 import { bindLinearMenuKeyboard, claimTopmostPopoverEscape, scheduleFrameOwnedBlurDismissal, toast } from "../../ui/dom.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
+import { createTopbarAutoHideController } from "./auto-hide.js";
 import { createTopbarEditor } from "./editor.js";
 import { createTopbarPlaceholderController } from "./placeholder.js";
 import { createTopbarView } from "./view.js";
@@ -76,6 +77,22 @@ export function createTopbarController(dependencies = {}) {
     settingsSections,
     syncTopbar: sync,
     openSettingsMenu
+  });
+  const autoHide = createTopbarAutoHideController({
+    state,
+    alignSidebar: () => actions.alignWorkspaceTabsSidebar?.(),
+    persistVisibility: async (topbarVisibility) => {
+      try {
+        state.options = await saveOptions({ ...state.options, topbarVisibility });
+      } catch (error) {
+        // The toggle already applied the geometry, so a failed write has to put the bar back where
+        // storage still says it belongs instead of leaving the two disagreeing until a reload.
+        console.warn("[ChatClub] Top bar visibility could not be persisted", error);
+        state.options = { ...state.options, topbarVisibility: topbarVisibility === "auto" ? "always" : "auto" };
+        autoHide.sync();
+        toast(t("toast.appearanceAutoSaveFailed"), "error");
+      }
+    }
   });
   const view = createTopbarView({
     state,
@@ -235,10 +252,21 @@ export function createTopbarController(dependencies = {}) {
   }
 
   function runShortcutAction(action) {
+    if (action === "toggleTopbar") {
+      // ⌥⇧B sits beside the ⌘B sidebar toggle, so an accidental hide has to say how to get the bar
+      // back. Restoring it is the visible effect of the same key and needs no toast.
+      const enabling = autoHide.visibility() !== "auto";
+      void autoHide.toggle();
+      if (enabling) toast(t("toast.topbarAutoHideEnabled"), "info");
+      return;
+    }
     if (action === "openSettings") {
       actions.openSettings();
       return;
     }
+    // The anchor rect has to be read after the peek, or a collapsed bar would place the popover
+    // above the viewport.
+    autoHide.reveal();
     const tooltipId = action === "openAppPicker" ? "topbar.addGroup" : "topbar.settingsJumpMenu";
     const anchor = document.querySelector(`[data-tooltip-id="${tooltipId}"]`) || document.querySelector(".topbar");
     if (!anchor) return;
@@ -258,6 +286,10 @@ export function createTopbarController(dependencies = {}) {
     closeSettingsMenu();
     workspace.closePopoversAnchoredWithin(node);
     targetShell.classList.toggle("topbar-editing-mode", Boolean(state.topbarEditMode));
+    // Before the view, so `.app-shell` already says the bar auto-hides by the time this render puts a
+    // `.prompt-input` in it. The initial prompt-focus guard reads that class off the shell, and its 50 ms
+    // restore loop would otherwise park the caret in a bar the user asked to hide.
+    autoHide.sync();
     const nextNode = view.render({ placeholder: placeholderController.placeholder() });
     if (node?.isConnected) node.replaceWith(nextNode);
     else targetShell.prepend(nextNode);

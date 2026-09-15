@@ -22,7 +22,7 @@ const tokens = {
   "--link": "var(--primary)",
   "--info": "var(--primary)",
   "--drop-indicator": "var(--primary)",
-  "--focus-ring": "color-mix(in srgb, var(--primary) 54%, transparent)",
+  "--focus-ring": "var(--primary)",
   "--topbar-height": "51px",
   "--space-1": "4px",
   "--space-2": "8px",
@@ -76,7 +76,7 @@ assert.match(rootBlock, /--warning:\s*#a16207;/);
 assert.match(rootBlock, /--warning-fill:\s*#ca8a04;/);
 assert.match(rootBlock, /--danger-soft:\s*#ff8f83;/);
 assert.match(rootBlock, /--font-family:\s*ui-sans-serif, system-ui,/);
-assert.match(rootBlock, /--summary-panel-border:\s*var\(--overlay-border-color\);/);
+assert.match(rootBlock, /--summary-panel-border:\s*var\(--line-strong\);/);
 assert.match(rootBlock, /--overlay-z-panel:\s*70;/);
 assert.match(rootBlock, /--overlay-z-tooltip:\s*2147483000;/);
 
@@ -188,6 +188,18 @@ assert.match(agents, /do not invent `--control-selected-strong`/);
 assert.match(agents, /Composer `\.prompt-mode-chip\[aria-pressed="true"\]` is filled `--primary`/);
 assert.match(agents, /unpressed composer accessories \(mode chip, plus, clear\) rest `--text`/);
 assert.match(agents, /other segmented checked stays `--control-selected`/);
+assert.match(agents, /`--panel-2` is not a hover fill/);
+assert.match(agents, /- Selected list rows: a fill cannot carry selection/);
+assert.match(agents, /border-color: var\(--primary\)` \(4\.78:1 light \/ 5\.63:1 dark/);
+assert.match(agents, /- Site-mark stacks: `\.chat-favicon-stack-item`/);
+assert.match(agents, /--favicon-stack-surface/);
+assert.match(agents, /--tabs-sidebar-item-surface/);
+assert.match(agents, /- Scroll containers: `scrollbar-width: thin`/);
+assert.match(agents, /Do not put a `padding-right: 2px` half-gutter back/);
+assert.match(agents, /Horizontal lanes/);
+assert.match(agents, /the App picker row is `--font-size-md`/);
+assert.match(agents, /known micro-badge step/);
+assert.match(agents, /calc\(var\(--ui-radius\) \* 2\)` \(16\)/);
 assert.match(agents, /not declared-only/);
 assert.match(agents, /heading `17px`/);
 assert.match(agents, /--ui-radius-xs/);
@@ -206,6 +218,96 @@ assert.match(css, /\.workspace-tabs-sidebar-folder:hover,[\s\S]*?background:\s*v
 assert.match(css, /\.compact-icon:hover \{[^}]*background:\s*var\(--control-hover\);/s);
 assert.match(css, /\.popover-menu \.button:hover \{[^}]*background:\s*var\(--control-hover\);/s);
 assert.match(css, /\.pocket-group-button:hover,[\s\S]*?background:\s*var\(--control-hover\);/);
+assert.match(css, /\.layout-preset-item:hover,[\s\S]*?background:\s*var\(--control-hover\);/);
+assert.doesNotMatch(
+  css,
+  /:hover[^{]*\{[^}]*background:\s*var\(--panel-2\);/s,
+  "--panel-2 is 1.01:1 against --panel in light theme, so it cannot stand in for --control-hover"
+);
+
+// A selected row is a WCAG 1.4.11 state indicator. --control-selected is 1.02:1
+// against --control-hover in dark theme, so the fill cannot carry the state on
+// its own: every selected list row edges itself with --primary (4.78:1 light /
+// 5.63:1 dark against that fill) instead of diluting it into --line.
+for (const selected of [
+  "\\.workspace-tabs-sidebar-item\\.is-current",
+  "\\.settings-tab\\.active",
+  "\\.settings-inner-tab\\.active",
+  "\\.workspace-tabs-search-item\\.active",
+  "\\.prompt-history-sidebar-item\\.active",
+  "\\.pocket-group-button\\.active",
+  "\\.layout-preset-item\\.active",
+  "\\.prompt-search-option\\.is-active"
+]) {
+  assert.match(
+    css,
+    new RegExp(`${selected} \\{[^}]*border-color:\\s*var\\(--primary\\);`, "s"),
+    `${selected} needs its own 3:1 state edge`
+  );
+  assert.match(
+    css,
+    new RegExp(`${selected} \\{[^}]*var\\(--control-selected\\)`, "s"),
+    `${selected} keeps the shared selected fill`
+  );
+}
+
+// The shared stack overlaps its marks, so the ring and the plate behind a
+// `contain` fit must be the colour of the row, not a fixed --bg that is 1.07:1
+// against --panel and stays cold once the row paints a state fill.
+assert.match(
+  css,
+  /\.chat-favicon-stack-item \{[^}]*background:\s*var\(--favicon-stack-surface, var\(--panel\)\);[^}]*box-shadow:\s*0 0 0 1px var\(--favicon-stack-surface, var\(--panel\)\);/s
+);
+assert.match(css, /\.chat-favicon-stack-more \{[^}]*box-shadow:\s*0 0 0 1px var\(--favicon-stack-surface, var\(--panel\)\);/s);
+assert.doesNotMatch(css, /box-shadow:\s*0 0 0 1px var\(--bg\)/, "a stack ring painted in --bg haloes every mark on a state fill");
+for (const row of [
+  "\\.prompt-search-option",
+  "\\.workspace-tabs-sidebar-item",
+  "\\.workspace-tabs-search-item",
+  "\\.prompt-history-sidebar-item",
+  "\\.pocket-group-button"
+]) {
+  assert.match(
+    css,
+    new RegExp(`${row} \\{[^}]*--favicon-stack-surface:`, "s"),
+    `${row} must hand its surface to the shared favicon stack`
+  );
+}
+assert.match(
+  css,
+  /\.workspace-tabs-sidebar-item-actions \{[^}]*linear-gradient\(to right, transparent, var\(--tabs-sidebar-item-surface\) 14px\)/s,
+  "the hover-only action cluster must fade into the row fill it is painted over"
+);
+
+// scrollbar-width: thin is still a classic scrollbar: it takes its width out of
+// the content box only while overflowing, so every vertical list reserves it.
+for (const scroller of [
+  "\\.prompt-search-list",
+  "\\.workspace-tabs-search-list",
+  "\\.workspace-tabs-search-main",
+  "\\.prompt-history-sidebar-list",
+  "\\.prompt-history-conversation-clusters",
+  "\\.pocket-sidebar-list",
+  "\\.pocket-active-content",
+  "\\.pocket-message-body",
+  "\\.optimize-compare-textarea"
+]) {
+  assert.match(
+    css,
+    new RegExp(`${scroller} \\{[^}]*scrollbar-gutter:\\s*stable;`, "s"),
+    `${scroller} needs a stable gutter so rows do not resize at the scroll threshold`
+  );
+}
+assert.match(
+  css,
+  /\.summary-panel-preview,\s*\n\.summary-panel-result,\s*\n\.summary-preview-text,\s*\n\.summary-panel-input \{\s*\n\s*scrollbar-gutter:\s*stable;/,
+  "the vertical Summary panes reserve the gutter; pre and the table wrap scroll horizontally and must not"
+);
+assert.doesNotMatch(
+  css,
+  /\.(workspace-tabs-search-list|prompt-history-sidebar-list|pocket-sidebar-list) \{[^}]*padding-right:\s*2px;/s,
+  "the reserved gutter replaces the 2px that was standing in for the scrollbar"
+);
 assert.match(
   css,
   /\.prompt-send-button:hover \{[^}]*var\(--on-primary\)[^}]*var\(--on-primary\)[^}]*var\(--on-primary\)/s
@@ -280,6 +382,152 @@ assert.match(officialRules, /border-radius:\s*var\(--ui-radius-pill\)/);
 assert.doesNotMatch(css, /^\s*(?:min-|max-)?(?:width|height):\s*28px/m, "28px accessories must consume --ui-accessory-height");
 assert.match(css, /\.workspace-tabs-sidebar-count \{[^}]*padding:\s*0 var\(--space-2\);/s);
 assert.match(officialRules, /\.official-rules-status \{[^}]*min-height:\s*var\(--ui-accessory-height\);/s);
+
+assert.match(
+  css,
+  /^\s*--focus-ring:\s*var\(--primary\);/m,
+  "a focus indicator owes 3:1, so --focus-ring cannot be a transparent wash of --primary"
+);
+assert.doesNotMatch(
+  css,
+  /--focus-ring:\s*color-mix\(/,
+  "the --primary 54% mix composited to 2.24:1 against --panel in light theme"
+);
+assert.equal(
+  (css.match(/--focus-ring:\s*var\(--primary\);/g) || []).length,
+  3,
+  "light, [data-theme=dark] and the prefers-color-scheme block all declare the token"
+);
+assert.doesNotMatch(
+  css,
+  /outline:\s*2px solid color-mix\(in srgb, var\(--primary\) 50%, transparent\)/,
+  "no call site keeps a private focus-ring mix"
+);
+for (const [selector, label] of [
+  ["\\.composer-center-mark:focus-visible", "composer center mark"],
+  ["\\.prompt-send-button:focus-visible", "send"],
+  ["\\.prompt-search-option:focus-visible", "composer search row"],
+  ["\\.toast-action:focus-visible", "toast action"]
+]) {
+  assert.match(
+    css,
+    new RegExp(`${selector} \\{[^}]*outline:\\s*2px solid var\\(--focus-ring\\);[^}]*outline-offset:\\s*2px;`, "s"),
+    `${label} keeps the ring plus the 2px offset that makes the container its neighbour`
+  );
+}
+assert.match(
+  css,
+  /\.prompt-shell:not\(\.prompt-shell-search\) \.prompt-input-row:focus-within \{[^}]*border-color:\s*var\(--primary\);/s,
+  "the focused composer edge is a state indicator, not resting chrome"
+);
+assert.match(css, /^\s*--muted:\s*#63716c;/m, "light --muted must clear 4.5:1 on --control-hover and --control-selected");
+assert.doesNotMatch(css, /--muted:\s*#66746f/, "#66746f only reached 4.34:1 on --control-hover");
+assert.match(
+  css,
+  /\.prompt-search-list \{[\s\S]*?scrollbar-color:\s*var\(--muted\) transparent;/,
+  "the only painted scrollbar thumb owes 3:1 like any other control"
+);
+assert.match(css, /\.prompt-search-list::-webkit-scrollbar-thumb \{[^}]*background:\s*var\(--muted\);/s);
+assert.match(css, /\.prompt-search-list::-webkit-scrollbar-thumb:hover \{[^}]*background:\s*var\(--text\);/s);
+assert.doesNotMatch(css, /color-mix\(in srgb, var\(--muted\) 55%, transparent\)/, "the 55% wash measured 2.15:1 on --panel");
+for (const [token, value] of [
+  ["--composer-z-shell", "30"],
+  ["--composer-z-input", "31"],
+  ["--composer-z-preview", "45"],
+  ["--composer-z-input-raised", "60"],
+  ["--composer-z-accessory", "70"]
+]) {
+  assert.match(css, new RegExp(`${token}:\\s*${value};`), `${token} names a composer rung that used to be a bare literal`);
+}
+assert.match(css, /\.prompt-shell \{[^}]*z-index:\s*var\(--composer-z-shell\);/s);
+assert.match(css, /\.prompt-input \{[^}]*z-index:\s*var\(--composer-z-input\);/s);
+assert.match(css, /\.prompt-input-expanded \{[^}]*z-index:\s*var\(--composer-z-input-raised\);/s);
+assert.match(css, /\.prompt-send-button \{[^}]*z-index:\s*var\(--composer-z-accessory\);/s);
+assert.doesNotMatch(
+  css,
+  /^\s*z-index:\s*(?:30|31|45|60|70);/m,
+  "composer rungs must not reuse --workspace-z-topbar-edit (30) or --overlay-z-panel (70) as literals"
+);
+for (const token of ["--image-scrim", "--image-scrim-opaque", "--image-scrim-ink", "--image-scrim-edge", "--image-scrim-edge-strong"]) {
+  assert.match(css, new RegExp(`${token}:`), `${token} names the chrome that paints on user image content`);
+}
+assert.match(
+  css,
+  /\.prompt-image-remove\.compact-icon \{[^}]*color:\s*var\(--image-scrim-ink\);[^}]*background:\s*var\(--image-scrim\);/s,
+  "the image-remove skin consumes the scrim tokens, not --on-primary over a literal plate"
+);
+assert.doesNotMatch(css, /\.prompt-image-remove-visible/, "the always-on !important twin of that skin must stay deleted");
+assert.doesNotMatch(css, /background:\s*rgba\(12, 18, 19, 0\.82\)/, "the scrim literal lives in the token, not at the call site");
+const darkRootStart = css.indexOf(':root[data-theme="dark"]');
+const darkRootBlock = css.slice(darkRootStart, css.indexOf("\n}", darkRootStart));
+assert.ok(!darkRootBlock.includes("--image-scrim"), "the scrim is theme-independent: its neighbour is the picture, not a theme surface");
+const reducedMotionBlocks = css.match(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\n\}/g) || [];
+const displacementBlock = reducedMotionBlocks.find((block) => block.includes(".tab-close.compact-icon:active"));
+assert.ok(displacementBlock, "interaction displacement must have a reduced-motion peer");
+for (const selector of [
+  ".topbar-palette-item:active",
+  ".topbar-edit-action:active:not(:disabled)",
+  ".prompt-send-button:active",
+  ".prompt-actions-button:active",
+  ".prompt-clear-button:active",
+  ".prompt-image-remove:hover",
+  ".tab-close.compact-icon:active",
+  ".chat-card.tab-group-buttons-hidden .chat-actions",
+  ".pocket-group-button:has(.chat-favicon-stack) .pocket-group-meta",
+  ".prompt-history-sidebar-item:has(.chat-favicon-stack) .prompt-history-sidebar-meta"
+]) {
+  assert.ok(displacementBlock.includes(selector), `${selector} displaces on interaction and must neutralise transform`);
+}
+assert.ok(
+  css.lastIndexOf(displacementBlock) > css.lastIndexOf(".tab-close.compact-icon:active {"),
+  "the block sits after the rules it neutralises so it wins on order without !important"
+);
+function atRuleBlocks(source, head) {
+  const blocks = [];
+  let from = source.indexOf(head);
+  while (from !== -1) {
+    let depth = 0;
+    for (let i = source.indexOf("{", from); i < source.length; i += 1) {
+      if (source[i] === "{") depth += 1;
+      else if (source[i] === "}") {
+        depth -= 1;
+        if (!depth) {
+          blocks.push(source.slice(from, i + 1));
+          break;
+        }
+      }
+    }
+    from = source.indexOf(head, from + head.length);
+  }
+  return blocks;
+}
+const forcedColorsBlocks = atRuleBlocks(css, "@media (forced-colors: active) {");
+const forcedStateBlock = forcedColorsBlocks.find((block) => /HighlightText/.test(block));
+assert.ok(forcedStateBlock, "forced colours drops tinted fills, so states must restate themselves");
+for (const selector of [
+  ".workspace-tabs-sidebar-item.is-current",
+  ".workspace-tabs-search-item.is-active",
+  ".prompt-history-sidebar-item.is-active",
+  ".pocket-group-button.is-active",
+  ".prompt-search-option.is-active",
+  ".layout-preset-item.active",
+  ".settings-tab.active",
+  ".settings-inner-tab.active"
+]) {
+  assert.ok(forcedStateBlock.includes(selector), `${selector} needs a forced-colors selected state`);
+}
+assert.match(forcedStateBlock, /background:\s*Highlight;[^}]*color:\s*HighlightText;/s);
+assert.match(forcedStateBlock, /\.prompt-search-list \{[^}]*scrollbar-color:\s*ButtonText Canvas;/s);
+assert.match(css, /@media \(forced-colors: active\) \{[\s\S]*?\.workspace-tabs-search-mark \{[^}]*background:\s*Mark;/);
+assert.doesNotMatch(css, /\.prompt-search-option-apps/, "the composer search app line is dead since rows paint site marks");
+assert.doesNotMatch(css, /\.prompt-history-conversation-favicons/, "History conversation cards never render a favicon stack");
+
+assert.match(agents, /`--focus-ring` is the full `--primary`, not a transparent wash/);
+assert.match(agents, /--composer-z-shell/);
+assert.match(agents, /light `--muted` is `#63716c`/);
+assert.match(agents, /--image-scrim-ink/);
+assert.match(agents, /Interaction displacement honours `prefers-reduced-motion`/);
+assert.match(agents, /Forced colours drops author backgrounds/);
 
 const { pathToFileURL } = require("node:url");
 const html = read("chatClub.html");

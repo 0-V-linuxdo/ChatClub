@@ -11,7 +11,8 @@ import {
   normalizeComposerPlacement,
   normalizeTopbarPromptInputFontSize,
   normalizeTopbarPromptPlaceholderConfig,
-  normalizeTopbarPromptPlaceholderText
+  normalizeTopbarPromptPlaceholderText,
+  normalizeTopbarVisibility
 } from "../../shared/storage-schema.js";
 import { button, el, field, input, select, toast } from "../../ui/dom.js";
 import { validateControllerContract } from "../controller-contract.js";
@@ -376,6 +377,38 @@ export function createAppearanceTopbarController(dependencies = {}) {
     );
   }
 
+  function topbarVisibilityBlock(redraw) {
+    const visibility = normalizeTopbarVisibility(state.options.topbarVisibility);
+    const composerDocked = normalizeComposerPlacement(state.options.composerPlacement) === "topbar";
+    const visibilitySelect = select(visibility, [
+      { value: "always", label: t("topbar.visibility.always") },
+      { value: "auto", label: t("topbar.visibility.auto") }
+    ], {
+      class: "select topbar-visibility-select",
+      "aria-label": t("topbar.visibility.mode"),
+      "aria-describedby": "appearance-topbar-visibility-help",
+      onchange: () => {
+        const next = normalizeTopbarVisibility(visibilitySelect.value);
+        queueAppearanceAutoSave({ topbarVisibility: next }, { redraw });
+        if (next === "auto") toast(t("toast.topbarAutoHideEnabled"), "info");
+      }
+    });
+    return settingsBlock(t("topbar.visibility.title"), t("topbar.visibility.desc"),
+      el("div", { class: "appearance-field-list topbar-visibility-settings" },
+        el("div", { class: "appearance-overlay-row" },
+          el("span", { class: "appearance-overlay-copy" },
+            el("strong", {}, t("topbar.visibility.mode")),
+            createAppearanceOverlayInfoButton(svgIcon, t("topbar.visibility.help"), "appearance-topbar-visibility-help", "settings.appearance.topbarVisibility")
+          ),
+          visibilitySelect
+        ),
+        visibility === "auto" && composerDocked
+          ? el("p", { class: "settings-muted-help" }, t("topbar.visibility.composerHint"))
+          : null
+      )
+    );
+  }
+
   function pane(redraw) {
     const activeTab = ["input", "layout"].includes(state.settingsAppearanceTopbarTab)
       ? state.settingsAppearanceTopbarTab
@@ -395,14 +428,17 @@ export function createAppearanceTopbarController(dependencies = {}) {
         redraw();
       }),
       activeTab === "layout"
-        ? settingsBlock(t("topbar.customize.title"), t("topbar.customize.desc"),
-          settingsPaneToolbar(t("topbar.customize.help"),
-            settingsPrimaryAction(t("topbar.customize.enter"), "customizeTopbar", enterTopbarEditModeFromSettings)
-          ),
-          el("div", { class: "topbar-customizer topbar-customizer-launcher" },
-            el("p", { class: "topbar-layout-hint" }, t("topbar.customize.dragHint"))
+        ? [
+          topbarVisibilityBlock(redraw),
+          settingsBlock(t("topbar.customize.title"), t("topbar.customize.desc"),
+            settingsPaneToolbar(t("topbar.customize.help"),
+              settingsPrimaryAction(t("topbar.customize.enter"), "customizeTopbar", enterTopbarEditModeFromSettings)
+            ),
+            el("div", { class: "topbar-customizer topbar-customizer-launcher" },
+              el("p", { class: "topbar-layout-hint" }, t("topbar.customize.dragHint"))
+            )
           )
-        )
+        ]
         : activeTab === "input"
           ? topbarPromptInputBlock()
           : topbarPromptPlaceholderBlock(redraw)

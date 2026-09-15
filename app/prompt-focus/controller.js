@@ -1,3 +1,5 @@
+import { isInsideAutoHiddenTopbar } from "../../ui/dom.js";
+
 const INITIAL_PROMPT_FOCUS_RESTORE_MS = 50;
 // A click inside a site-isolated chat-frame never reaches this document as a pointerdown; the child
 // shield reports it (`ui/dom.js` re-dispatches it as this event) 1–40 ms after focus already moved.
@@ -110,6 +112,10 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
     if (!pending) return;
     const prompt = promptNode();
     if (!prompt?.isConnected || (!force && document.activeElement === prompt)) return;
+    // A docked prompt in an auto-hidden bar is not a place to park the initial caret: focusing it reveals
+    // the bar the user asked to give back to the chats. ⌥K, Tab and a click still reveal and focus it, and
+    // a floating (center) composer is outside the bar, so it keeps the normal guard.
+    if (isInsideAutoHiddenTopbar(prompt)) return;
     if (!force && frameFocusAwaitingReport()) return;
     if (!force && isOverlayTarget(document.activeElement)) return;
     focusPromptInput(focusInput);
@@ -145,6 +151,7 @@ function createPromptFocusController({ isOptionsPage = false, focusInput } = {})
       if (!pending || document.querySelector(".modal")) return;
       const prompt = promptNode();
       const activeElement = document.activeElement;
+      if (isInsideAutoHiddenTopbar(prompt)) return;
       if (prompt?.isConnected && (activeElement === event.target || activeElement === document.body || activeElement === document.documentElement)) {
         focusPromptInput(focusInput);
       }

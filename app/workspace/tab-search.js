@@ -1,4 +1,4 @@
-import { groupByDate, timestamp } from "../../shared/date-groups.js";
+import { dateGroupId, groupByDate, timestamp } from "../../shared/date-groups.js";
 import { STORAGE_KEYS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
@@ -213,6 +213,9 @@ export function formatWorkspaceSearchTime(value) {
     ? workspaceSearchRecordTime(value)
     : timestamp(value);
   if (ms == null) return "";
+  const group = dateGroupId(ms);
+  if (group === "today") return t("workspace.tabs.today");
+  if (group === "yesterday") return t("workspace.tabs.yesterday");
   try {
     return new Date(ms).toLocaleString(undefined, SEARCH_TIME_FORMAT);
   } catch {

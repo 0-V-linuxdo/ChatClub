@@ -506,6 +506,18 @@ function overlayCaretPinHolds(field) {
   return overlayCaretDocumentHasFocus() && overlayCaretFieldHasFrameFocus(field);
 }
 
+// A top bar the user asked to auto-hide is not a place to park a caret: focusing a node inside it reveals
+// the bar rather than typing into thin air, which reads as the bar reopening by itself. The class is
+// stamped by `app/topbar/auto-hide.js`, but the predicate lives here beside the rest of caret ownership
+// because the three focus guards that need it (the initial prompt-focus lock, its frame-load restore, and
+// `armPromptFocusRestore` in the workspace frame controller) sit in three App domains that may not import
+// each other, and none of them may keep a private copy of the selector.
+export const AUTO_HIDE_TOPBAR_CLASS = "topbar-auto-hide";
+
+export function isInsideAutoHiddenTopbar(node) {
+  return Boolean(node?.closest?.(`.app-shell.${AUTO_HIDE_TOPBAR_CLASS} .topbar`));
+}
+
 export function overlaySearchCaretMode() {
   return overlaySearchCaret?.mode || "";
 }

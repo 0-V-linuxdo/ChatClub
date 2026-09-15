@@ -424,11 +424,15 @@ export function createWorkspaceTabsSidebarController({
     handle?.setAttribute?.("aria-valuenow", String(sidebarWidth));
   }
 
-  function alignSidebar(shell, sidebar) {
+  // The sidebar follows the workspace grid's real top, which is how it stays out of the top bar without
+  // knowing anything about it: 51px normally, taller in topbar edit mode, 0 while the bar auto-hides. A
+  // measured 0 is therefore a real answer, not a missing one - the old `top > 0` test rejected it and
+  // fell back to the 69px literal, which left a 51px dead strip above a collapsed bar.
+  function alignSidebar(shell = document.querySelector(".app-shell"), sidebar = shell?.querySelector?.(".workspace-tabs-sidebar")) {
     const grid = shell?.querySelector?.(".main-grid");
     if (!sidebar?.style || !grid) return;
     const top = Number(grid.offsetTop);
-    sidebar.style.top = `${Number.isFinite(top) && top > 0 ? top : 69}px`;
+    sidebar.style.top = `${Number.isFinite(top) && top >= 0 ? top : 69}px`;
     applySidebarWidth(shell, sidebar);
   }
 
@@ -1510,6 +1514,7 @@ export function createWorkspaceTabsSidebarController({
   }
 
   return Object.freeze({
+    alignSidebar,
     isOpen,
     currentItems,
     setItems,

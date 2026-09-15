@@ -9,7 +9,7 @@ import {
 import { t } from "../../shared/i18n.js";
 import { findTopicDeleteSiteConfig, topicDeleteTimeoutMs } from "../../shared/topic-delete-sites.js";
 import { conversationHrefFromLocation } from "../../shared/workspace-tab-memory.js";
-import { button, editorModal, el, field, input, openConfirmationAction, armComposerLoadPin, overlaySearchCaretComposer, overlaySearchCaretMode, pinOverlaySearchCaret, setOverlayCaretLeaseHandler } from "../../ui/dom.js";
+import { button, editorModal, el, field, input, isInsideAutoHiddenTopbar, openConfirmationAction, armComposerLoadPin, overlaySearchCaretComposer, overlaySearchCaretMode, pinOverlaySearchCaret, setOverlayCaretLeaseHandler } from "../../ui/dom.js";
 import { clearFrameNewChatPending, frameLoadingKindForTarget, markFrameNewChatPending } from "./frame-loading.js";
 import { createPageCaretLease } from "./page-caret-lease.js";
 import { removeChatFromGroup, removeGroupFromWorkspace } from "./model.js";
@@ -495,7 +495,10 @@ export function createWorkspaceFrameController(dependencies = {}) {
 
   function armPromptFocusRestore(iframe, generation) {
     const prompt = document.querySelector(".prompt-input");
-    if (!prompt?.isConnected || document.querySelector(".modal") || (document.activeElement !== prompt && !document.documentElement.dataset.p)) {
+    // A prompt docked in an auto-hidden bar is declined like a prompt behind a modal. Measured in
+    // Chromium 149 on 2026-09-15: the initial `data-p` lock arms every first-load frame, so the first
+    // chat frame to finish loading focused that prompt ~1.6 s in and reopened the bar by itself.
+    if (!prompt?.isConnected || isInsideAutoHiddenTopbar(prompt) || document.querySelector(".modal") || (document.activeElement !== prompt && !document.documentElement.dataset.p)) {
       delete iframe.dataset.promptFocusRestoreGeneration;
       return false;
     }

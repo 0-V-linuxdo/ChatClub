@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-15｜12:57:00」";
+export const APP_VERSION = "「2026-09-15｜19:30:00」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -202,8 +202,8 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "composer.mode.compose", labelKey: "composer.mode.compose" }),
       Object.freeze({ id: "composer.mode.search", labelKey: "composer.mode.search" }),
       Object.freeze({ id: "topbar.promptLibrary", labelKey: "topbar.promptLibrary" }),
-      Object.freeze({ id: "composer.pin", labelKey: "composer.pin" }),
-      Object.freeze({ id: "composer.open", labelKey: "composer.open" }),
+      Object.freeze({ id: "composer.pin", labelKey: "composer.placement" }),
+      Object.freeze({ id: "composer.open", labelKey: "composer.dock" }),
       Object.freeze({ id: "topbar.addPhotos", labelKey: "topbar.addPhotos" }),
       Object.freeze({ id: "topbar.clearPrompt", labelKey: "topbar.clearPrompt" }),
       Object.freeze({ id: "topbar.removeImage", labelKey: "topbar.removeImage" }),
@@ -356,7 +356,8 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "settings.appearance.loadingOverlay", labelKey: "appearance.loadingOverlay" }),
       Object.freeze({ id: "settings.appearance.modelSelectionOverlay", labelKey: "appearance.modelSelectionOverlay" }),
       Object.freeze({ id: "settings.appearance.topbarInputFontSize", labelKey: "topbar.input.fontSize" }),
-      Object.freeze({ id: "settings.appearance.topbarInputPlacement", labelKey: "topbar.input.placement" })
+      Object.freeze({ id: "settings.appearance.topbarInputPlacement", labelKey: "topbar.input.placement" }),
+      Object.freeze({ id: "settings.appearance.topbarVisibility", labelKey: "topbar.visibility.title" })
     ])
   })
 ]);
@@ -396,6 +397,9 @@ export const TOPBAR_PROMPT_INPUT_FONT_SIZE_MAX_PX = 20;
 const TOPBAR_PROMPT_INPUT_FONT_SIZE_DEFAULT_PX = 16;
 export const TOPBAR_PROMPT_INPUT_FONT_SIZE_LEGACY_DEFAULT_PX = 15;
 export const TOPBAR_PROMPT_INPUT_FONT_SIZE_MIGRATION_VERSION = 1;
+// Only the mode list is shared: every reveal timing is page-only chrome behavior and lives in
+// app/topbar/auto-hide.js so the content bundles do not carry it.
+export const TOPBAR_VISIBILITY_MODES = Object.freeze(["always", "auto"]);
 export const DEFAULT_FRAME_TOAST_POSITION = Object.freeze({ x: 100, y: 100 });
 export const TOAST_STAY_MODES = Object.freeze(["short", "default", "long"]);
 export const DEFAULT_TOAST_STAY = "default";
@@ -428,6 +432,7 @@ export const DEFAULT_OPTIONS = {
   topbarPromptInputFontSize: TOPBAR_PROMPT_INPUT_FONT_SIZE_DEFAULT_PX,
   topbarPromptInputFontSizeMigrationVersion: TOPBAR_PROMPT_INPUT_FONT_SIZE_MIGRATION_VERSION,
   composerPlacement: "topbar",
+  topbarVisibility: "always",
   topbarPromptPlaceholderConfig: {
     items: [],
     mode: "refresh",

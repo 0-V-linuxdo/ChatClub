@@ -557,7 +557,7 @@ export function createAppearanceSettingsSection(ctx) {
       "composer.mode.compose": "edit",
       "composer.mode.search": "search",
       "topbar.promptLibrary": "library",
-      "composer.pin": "pin",
+      "composer.pin": "chevronDown",
       "composer.open": "keyboard",
       "topbar.addPhotos": "paperclip",
       "topbar.clearPrompt": "x",
@@ -669,7 +669,8 @@ export function createAppearanceSettingsSection(ctx) {
       "settings.appearance.loadingOverlay": "info",
       "settings.appearance.modelSelectionOverlay": "info",
       "settings.appearance.topbarInputFontSize": "info",
-      "settings.appearance.topbarInputPlacement": "info"
+      "settings.appearance.topbarInputPlacement": "info",
+      "settings.appearance.topbarVisibility": "info"
     })[targetId] || "settings";
     const tooltipLabelKey = (target) => (
       target.id === "topbar.pocket" ? pocketChromeLabelKey(state.options) : target.labelKey

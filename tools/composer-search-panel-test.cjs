@@ -43,7 +43,9 @@ assert.match(css, /--prompt-shell-radius:\s*calc\(var\(--ui-radius\) \+ var\(--s
 assert.match(css, /--prompt-search-radius:\s*var\(--prompt-shell-radius\)/);
 assert.match(css, /\.prompt-input-row\s*\{[\s\S]*?display:\s*grid/);
 assert.match(composer, /prompt-pin-button/);
-assert.match(css, /\.prompt-pin-button\s*\{[\s\S]*?display:\s*none/);
+// Search keeps the dock/float toggle reachable so a floating search panel can be docked
+// without leaving search; only plus and send are hidden there.
+assert.doesNotMatch(css, /\.prompt-shell-search \.prompt-pin-button/);
 assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[\s\S]*?background:\s*var\(--panel\)/);
 assert.match(css, /\.prompt-shell:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[\s\S]*?border-radius:\s*var\(--prompt-shell-radius\)/);
 assert.doesNotMatch(css, /\.prompt-shell:not\(\.prompt-shell-search\) \.prompt-input-row\s*\{[^}]*border-radius:\s*var\(--ui-radius-pill\)/, "compose row is a rounded rectangle, not a pill");
@@ -92,7 +94,47 @@ assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hid
 assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\)::before\s*\{[\s\S]*?box-shadow:\s*var\(--overlay-shadow\)/);
 assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-input-row\s*\{[\s\S]*?background:\s*transparent/);
 assert.doesNotMatch(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-input-row\s*\{[^}]*border-bottom-color/);
-assert.match(css, /\.prompt-search-results \{[\s\S]*?padding:\s*0 var\(--space-3\) var\(--space-3\)/);
+assert.match(css, /\.prompt-search-results \{[\s\S]*?padding:\s*0 var\(--space-1\) var\(--space-2\)/);
+assert.doesNotMatch(
+  css,
+  /\.prompt-search-results \{[^}]*max-height:[^;]*--prompt-search-row/,
+  "the row budget belongs to .prompt-search-list; a row count on the panel also has to pay for the group label and footer and leaves a blank stub row"
+);
+assert.match(
+  css,
+  /\.prompt-search-list\s*\{[\s\S]*?max-height:\s*calc\(var\(--prompt-search-row\) \* 6 \+ var\(--space-1\) \* 5\)/,
+  "the result list shows six whole rows"
+);
+assert.match(css, /--prompt-search-row:\s*calc\(var\(--ui-control-height\) \+ var\(--space-2\)\)/);
+assert.doesNotMatch(css, /--prompt-search-row:\s*calc\(var\(--ui-control-height\) \+ var\(--space-4\)\)/, "52px rows are outside the 40-48 desktop band");
+assert.match(css, /\.prompt-search-option \{[\s\S]*?height:\s*var\(--prompt-search-row\)/, "one fixed row height for plain and snippet rows");
+assert.match(css, /\.prompt-search-option \{[\s\S]*?--prompt-search-surface:\s*var\(--panel\)/);
+assert.match(css, /\.prompt-search-option:hover\s*\{[\s\S]*?--prompt-search-surface:\s*var\(--control-hover\)[\s\S]*?border-color:\s*var\(--line\)/);
+assert.match(
+  css,
+  /\.prompt-search-option\.is-active\s*\{[\s\S]*?--prompt-search-surface:\s*var\(--control-selected\)[\s\S]*?border-color:\s*var\(--primary\)/,
+  "keyboard selection needs a 3:1 edge; --control-selected is 1.02:1 against --control-hover"
+);
+assert.doesNotMatch(
+  css,
+  /\.prompt-search-option:hover,\s*\n\.prompt-search-option\.is-active/,
+  "hover and keyboard selection must not share one declaration"
+);
+assert.doesNotMatch(
+  css,
+  /\.prompt-search-option[^{]*\{[^}]*background:\s*color-mix\(in srgb, var\(--primary\) 12%, var\(--panel\)\)/,
+  "12% primary is the byte-identical value --hover resolves to in dark theme"
+);
+assert.match(css, /\.prompt-search-option-title\s*\{[\s\S]*?font-size:\s*var\(--font-size\);/);
+assert.doesNotMatch(css, /\.prompt-search-option-title\s*\{[^}]*font-size:\s*var\(--font-size-md\)/, "--font-size-md is reserved for page titles");
+assert.match(css, /\.prompt-search-group\s*\{[\s\S]*?font-size:\s*var\(--font-size-xs\)/);
+assert.match(css, /\.prompt-search-group\[hidden\]\s*\{[\s\S]*?display:\s*none/);
+assert.match(css, /\.prompt-search-footer\s*\{[\s\S]*?margin:\s*var\(--space-2\) calc\(var\(--space-1\) \* -1\) calc\(var\(--space-2\) \* -1\)/);
+assert.match(css, /\.prompt-search-footer\s*\{[\s\S]*?padding:\s*0 var\(--space-3\)/);
+assert.match(css, /\.prompt-search-viewer-button\s*\{[\s\S]*?color:\s*var\(--text\)/);
+assert.doesNotMatch(css, /\.prompt-search-viewer-button\s*\{[^}]*color:\s*var\(--primary\)/, "the viewer link is secondary and only reaches for --primary on hover");
+assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\)::before\s*\{[\s\S]*?border:\s*1px solid var\(--line-strong\)/, "a backdrop-less card needs a readable edge in dark theme");
+assert.match(css, /\.prompt-shell-search \.prompt-input-row\s*\{[\s\S]*?border:\s*1px solid var\(--line-strong\)/);
 assert.match(css, /\.prompt-search-option-time\s*\{[\s\S]*?margin-left:\s*auto/);
 assert.match(css, /\.prompt-search-option-copy\s*\{[\s\S]*?flex-direction:\s*column/);
 assert.match(css, /\.prompt-search-option-snippet\s*\{[\s\S]*?color:\s*var\(--muted\)/);
@@ -103,7 +145,23 @@ assert.doesNotMatch(css, /\.prompt-search-results \{[\s\S]*?border-bottom-left-r
 assert.match(css, /\.prompt-search-option \{[\s\S]*?display:\s*flex/);
 assert.match(css, /\.prompt-search-option \{[\s\S]*?justify-content:\s*flex-start/);
 assert.match(css, /\.prompt-search-option \{[\s\S]*?min-height:\s*var\(--prompt-search-row\)/);
-assert.match(css, /\.prompt-search-option-favicons[\s\S]{0,500}border-radius:\s*50%/);
+assert.match(
+  css,
+  /\.prompt-search-option \{[\s\S]*?--favicon-stack-surface:\s*var\(--prompt-search-surface\);/,
+  "the row hands its own surface to the shared favicon stack"
+);
+assert.doesNotMatch(
+  css,
+  /\.prompt-search-option-favicons \.chat-favicon-stack-item[\s\S]{0,120}box-shadow/,
+  "the stack ring is owned by the shared rule through --favicon-stack-surface, not a local override"
+);
+assert.doesNotMatch(
+  css,
+  /\.prompt-search-option-favicons[^{]*\{[^}]*border-radius:\s*50%/,
+  "site marks stay on the shared --ui-radius-xs stack instead of being cropped into circles"
+);
+assert.doesNotMatch(css, /\.prompt-search-option-favicons[^{]*\{[^}]*object-fit:\s*cover/);
+assert.doesNotMatch(css, /\.prompt-search-option-favicons[^{]*\{[^}]*box-shadow:\s*0 0 0 1px var\(--bg\)/, "--bg is darker than the row and haloes every mark");
 assert.match(css, /\.prompt-input:not\(\.prompt-input-expanded\):focus::placeholder/);
 assert.match(
   css,
@@ -125,7 +183,11 @@ assert.match(css, /\.prompt-search-list\s*\{[\s\S]*?scrollbar-width:\s*thin/);
 assert.match(css, /\.prompt-search-list::-webkit-scrollbar\s*\{[\s\S]*?width:\s*6px[\s\S]*?border:\s*0/);
 assert.match(css, /\.prompt-search-list::-webkit-scrollbar-track[\s\S]*?background:\s*transparent[\s\S]*?border:\s*0/);
 assert.match(css, /\.prompt-search-list::-webkit-scrollbar-thumb\s*\{[\s\S]*?border:\s*0/);
-assert.doesNotMatch(css, /\.prompt-search-list[\s\S]{0,280}scrollbar-gutter/);
+assert.match(
+  css,
+  /\.prompt-search-list\s*\{[\s\S]*?scrollbar-gutter:\s*stable/,
+  "a styled ::-webkit-scrollbar is a classic scrollbar, so the gutter must be stable or row width jumps with the result count"
+);
 assert.match(css, /\.ui-empty-state\[hidden\][\s\S]{0,160}display:\s*none\s*!important/);
 assert.match(css, /\.prompt-search-empty\[hidden\][\s\S]{0,80}display:\s*none\s*!important/);
 assert.match(css, /\.prompt-input \{[\s\S]*?position:\s*relative;/);
@@ -206,6 +268,22 @@ assert.match(agents, /expanded compose keeps that same row chrome/);
 assert.match(agents, /one joined card/);
 assert.match(agents, /no divider seam/);
 assert.match(agents, /renderFavicons/);
+assert.match(agents, /`scrollbar-gutter: stable`/);
+assert.match(agents, /`\.prompt-search-list` alone owns the whole-row budget/);
+assert.match(agents, /`\.prompt-search-group` is a caption above the scroll container/);
+assert.match(agents, /One 12px rail carries the mode switch/);
+assert.match(agents, /`\.prompt-search-option-title` is `--font-size`, not `--font-size-md`/);
+assert.match(agents, /a fill cannot carry that state/);
+assert.match(agents, /Do not restore the 22px `border-radius: 50%`/);
+assert.match(agents, /its card edge is `1px solid var\(--line-strong\)`/);
+assert.match(agents, /`workspace\.tabs\.today` \/ `workspace\.tabs\.yesterday` through `dateGroupId`/);
+assert.match(panelSource, /prompt-search-group/);
+assert.match(panelSource, /composer\.search\.recent/);
+assert.match(panelSource, /composer\.search\.count/);
+assert.match(i18n, /"composer\.search\.recent": "Recent"/);
+assert.match(i18n, /"composer\.search\.count": "\{count\} result\{plural\}"/);
+assert.match(i18n, /"composer\.search\.recent": "最近"/);
+assert.match(i18n, /"composer\.search\.count": "\{count\} 个结果"/);
 assert.match(agents, /prompt-search-option-time/);
 assert.match(agents, /prompt-search-option-snippet/);
 assert.match(agents, /matchKind: "body"/);
@@ -523,6 +601,11 @@ globalThis.document = {
     const options = shell.querySelectorAll(".prompt-search-option");
     assert.equal(options.length, 2, "empty query lists recency rows");
     assert.equal(emptyNode.hidden, true, "empty query must not show an empty state after recency loads");
+    const groupNode = shell.querySelector(".prompt-search-group");
+    assert.equal(Boolean(groupNode), true, "the results panel carries a caption above the list");
+    assert.equal(groupNode.parentElement, shell.querySelector(".prompt-search-results"), "the caption sits outside the scroll container");
+    assert.equal(groupNode.hidden, false);
+    assert.equal(groupNode.textContent, "Recent", "an empty query labels the recency rows");
     assert.equal(options[0].children[0]?.classList.contains("prompt-search-option-favicons"), true, "site favicons sit to the left of the title");
     assert.ok(options[0].querySelector(".prompt-search-option-copy"), "title and snippet share one copy column");
     assert.ok(options[0].querySelector(".prompt-search-option-title"), "search rows keep a title after the favicon stack");
@@ -537,6 +620,7 @@ globalThis.document = {
     assert.equal(panel.query(), "Closed");
     const filtered = shell.querySelectorAll(".prompt-search-option");
     assert.equal(filtered.length, 1, "query filters title hits");
+    assert.equal(groupNode.textContent, "1 result", "a query labels the caption with the result count");
     assert.match(nodeText(filtered[0]), /Closed desk/);
     assert.equal(filtered[0].querySelector(".prompt-search-option-snippet"), null, "title hits stay one line");
     const titleHit = filtered[0].querySelector(".prompt-search-option-title");
@@ -582,6 +666,7 @@ globalThis.document = {
     await new Promise((resolve) => { setImmediate(resolve); });
     assert.equal(shell.querySelectorAll(".prompt-search-option").length, 0, "a miss query must not keep recency rows");
     assert.equal(emptyNode.hidden, false, "a miss query shows the matching-chats empty state");
+    assert.equal(groupNode.hidden, true, "the caption must not sit above an empty state");
     assert.match(String(emptyNode.textContent || ""), /No matching chats/);
     assert.doesNotMatch(String(emptyNode.textContent || ""), /No ChatClub tabs/);
     const escape = {

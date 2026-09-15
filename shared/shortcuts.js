@@ -9,6 +9,7 @@ export const ALL_SHORTCUT_ACTIONS = [
   "enterSearchMode",
   "openNewWorkspaceTab",
   "toggleWorkspaceTabsSidebar",
+  "toggleTopbar",
   "openSettings",
   "openAppPicker",
   "openSettingsMenu",

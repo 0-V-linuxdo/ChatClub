@@ -48,7 +48,8 @@ import {
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MAX_SEC,
   TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC,
   TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT,
-  TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN
+  TOPBAR_PROMPT_PLACEHOLDER_MAX_LEN,
+  TOPBAR_VISIBILITY_MODES
 } from "./constants.js";
 import {
   normalizeAppPickerAppOrders,
@@ -238,6 +239,10 @@ export function normalizeTopbarPromptPlaceholderText(value = "") {
 
 export function normalizeComposerPlacement(value, fallback = DEFAULT_OPTIONS.composerPlacement) {
   return value === "center" || value === "topbar" ? value : fallback;
+}
+
+export function normalizeTopbarVisibility(value, fallback = DEFAULT_OPTIONS.topbarVisibility) {
+  return TOPBAR_VISIBILITY_MODES.includes(value) ? value : fallback;
 }
 
 export function normalizeTopbarPromptInputFontSize(
@@ -1121,6 +1126,7 @@ export function normalizeOptions(raw = {}) {
       TOPBAR_PROMPT_INPUT_FONT_SIZE_MIGRATION_VERSION
     ),
     composerPlacement: normalizeComposerPlacement(raw.composerPlacement),
+    topbarVisibility: normalizeTopbarVisibility(raw.topbarVisibility),
     topbarPromptPlaceholderConfig: normalizeTopbarPromptPlaceholderConfig(raw.topbarPromptPlaceholderConfig),
     tabGroupButtonPlacement: normalizeTabGroupButtonPlacement(raw.tabGroupButtonPlacement, tabGroupButtonsMode),
     tabGroupButtonOrder: normalizeTabGroupButtonOrder(raw.tabGroupButtonOrder),

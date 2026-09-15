@@ -8,6 +8,9 @@ const vm = require("node:vm");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const { functionSource } = require("./function-source.cjs");
+// The real predicate, not a copy of its selector: the guard and this harness must agree on what counts
+// as a bar the user asked to hide.
+const { isInsideAutoHiddenTopbar } = require("../ui/dom.js");
 const PARAM = "__chatclub_frame_load_nonce";
 
 (async () => {
@@ -682,8 +685,8 @@ const PARAM = "__chatclub_frame_load_nonce";
     const restored = runRestore({ modal: false });
     assert.ok(restored.prompt.focusCalls > 0, "iframe load must still restore the prompt when no modal is open");
 
-    const runArm = ({ modal = false, datasetP = false } = {}) => {
-      const prompt = { isConnected: true };
+    const runArm = ({ modal = false, datasetP = false, autoHiddenBar = false } = {}) => {
+      const prompt = { isConnected: true, closest: (selector) => (autoHiddenBar ? { selector } : null) };
       const iframeEl = { isConnected: true, dataset: {} };
       const document = {
         documentElement: { dataset: datasetP ? { p: "1" } : {} },
@@ -697,6 +700,7 @@ const PARAM = "__chatclub_frame_load_nonce";
       const context = vm.createContext({
         document,
         iframe: iframeEl,
+        isInsideAutoHiddenTopbar,
         armed: false
       });
       vm.runInContext(`${armPromptFocusRestore}\narmed = armPromptFocusRestore(iframe, 7);`, context);
@@ -705,6 +709,11 @@ const PARAM = "__chatclub_frame_load_nonce";
     const blocked = runArm({ modal: true, datasetP: true });
     assert.equal(blocked.armed, false, "prompt restore must not arm while a typed modal is open");
     assert.equal(blocked.iframe.dataset.promptFocusRestoreGeneration, undefined);
+    // The initial `data-p` lock arms every first-load frame, so without this the first finished load
+    // focused a docked prompt and reopened a bar the user had asked to hide.
+    const hiddenBar = runArm({ modal: false, datasetP: true, autoHiddenBar: true });
+    assert.equal(hiddenBar.armed, false, "prompt restore must not arm a prompt docked in an auto-hidden top bar");
+    assert.equal(hiddenBar.iframe.dataset.promptFocusRestoreGeneration, undefined);
     const armed = runArm({ modal: false, datasetP: true });
     assert.equal(armed.armed, true, "prompt restore may still arm when no modal is open");
     assert.equal(armed.iframe.dataset.promptFocusRestoreGeneration, "7");

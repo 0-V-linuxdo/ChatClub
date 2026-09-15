@@ -1,5 +1,5 @@
 import { t } from "../../shared/i18n.js";
-import { formatShortcut, matchesSendShortcut } from "../../shared/shortcuts.js";
+import { matchesSendShortcut } from "../../shared/shortcuts.js";
 import {
   createId,
   normalizePromptImagePasteStrategy,
@@ -110,6 +110,7 @@ export function createComposerController(dependencies = {}) {
     optimizePrompt,
     recordFunctionalAnomaly,
     onPromptAdmitted,
+    persistComposerPlacement,
     workspaceSearch,
     frameSendPrepareTimeoutMs = FRAME_SEND_PREPARE_TIMEOUT_MS,
     savePromptSendHistory = defaultSavePromptSendHistory,
@@ -128,6 +129,7 @@ export function createComposerController(dependencies = {}) {
     optimizePrompt: "function",
     recordFunctionalAnomaly: "function",
     onPromptAdmitted: "function?",
+    persistComposerPlacement: "function?",
     workspaceSearch: "object?",
     frameSendPrepareTimeoutMs: "number?",
     savePromptSendHistory: "function?",
@@ -155,7 +157,14 @@ export function createComposerController(dependencies = {}) {
   let observedDraftText = String(state.promptText || "");
   let observedDraftImages = canonicalDraftImages().map((image) => ({ ...image }));
   let promptHistoryWriteTail = Promise.resolve();
-  let centerPinned = false;
+  // The placement the user last asked for through the in-composer toggle. The runtime port
+  // updates state.options synchronously, so this only survives while a write is pending or
+  // when no persistence port is wired at all.
+  let placementIntent = "";
+  // Session-only: the floating composer was dismissed, so it rests in the topbar until the
+  // next explicit summon. The persisted placement preference is deliberately untouched.
+  let floatDismissed = false;
+  let placementTransitionActive = false;
   const frameSendQueue = createFrameSendQueue({
     execute: executeQueuedFrameSend,
     isUncertainError: frameSendDeliveryIsUncertain,
@@ -290,7 +299,7 @@ export function createComposerController(dependencies = {}) {
         loading: "lazy"
       }),
       el("button", {
-        class: "prompt-image-remove prompt-image-remove-visible compact-icon tooltip-trigger",
+        class: "prompt-image-remove compact-icon tooltip-trigger",
         type: "button",
         "aria-label": t("topbar.removeImage"),
         "data-tooltip": t("topbar.removeImage"),
@@ -1104,12 +1113,13 @@ export function createComposerController(dependencies = {}) {
   function handleInputBlur(event) {
     const inputNode = event.currentTarget;
     if (event.target?.isConnected === false) {
-      collapseInput(inputNode);
+      if (!placementTransitionActive) collapseInput(inputNode);
       return;
     }
     const shell = inputNode?.closest?.(".prompt-shell");
     if (focusRemainsInPromptShell(shell, event.relatedTarget)) return;
     const settle = () => {
+      if (placementTransitionActive) return;
       if (pinOverlaySearchCaret() || promptComposing || document.querySelector(".prompt-actions-popover")) return;
       collapseInput(inputNode);
     };
@@ -1122,6 +1132,7 @@ export function createComposerController(dependencies = {}) {
     if (focusRemainsInPromptShell(shell, event.relatedTarget)) return;
     const inputNode = shell?.querySelector?.(".prompt-input");
     const settle = () => {
+      if (placementTransitionActive) return;
       if (pinOverlaySearchCaret() || promptComposing || document.querySelector(".prompt-actions-popover")) return;
       if (inputNode?.classList?.contains("prompt-input-expanded")) collapseInput(inputNode);
     };
@@ -1219,15 +1230,17 @@ export function createComposerController(dependencies = {}) {
   }
 
   function handleInputKeydown(event) {
+    // Search owns Escape first (clear query, then leave search); only a floating composer
+    // that is not in search mode docks on Escape.
     if (
       event.key === "Escape"
-      && !centerPinned
-      && composerPlacementValue() === "center"
+      && !searchPanel.isActive()
+      && livePlacement() === "center"
       && !document.getElementById(COMPOSER_CENTER_HOST_ID)?.hidden
     ) {
       event.preventDefault();
       event.stopPropagation();
-      hideCenterHost();
+      dockComposer();
       return;
     }
     if (searchPanel.handleTab(event)) return;
@@ -1302,12 +1315,12 @@ export function createComposerController(dependencies = {}) {
   }
 
   function focusInput(expand=true){
-    if (composerPlacementValue() === "center") showCenterHost();
+    floatComposer();
     syncInputNode({focus:true,expand})
   }
 
   function enterSearchMode() {
-    if (composerPlacementValue() === "center") showCenterHost();
+    floatComposer();
     const field = document.querySelector(".prompt-input") || syncInputNode({ focus: true, expand: false });
     const shell = field?.closest?.(".prompt-shell") || document.querySelector(".prompt-shell");
     if (shell) searchPanel.attach(shell);
@@ -1317,71 +1330,135 @@ export function createComposerController(dependencies = {}) {
     claimPromptCaret(field);
     field.focus?.({ preventScroll: true });
     collapseInput(field);
-    if (composerPlacementValue() === "center") resizeInput(field, true);
+    if (livePlacement() === "center") resizeInput(field, true);
   }
 
+  function storedComposerPlacement() {
+    return state.options?.composerPlacement === "center" ? "center" : "topbar";
+  }
+
+  // The persisted rest placement. Topbar edit mode always keeps the shell in the bar.
   function composerPlacementValue() {
-    return state.options?.composerPlacement === "center" && !state.topbarEditMode ? "center" : "topbar";
+    if (state.topbarEditMode) return "topbar";
+    const stored = storedComposerPlacement();
+    if (placementIntent && placementIntent !== stored) return placementIntent;
+    placementIntent = "";
+    return stored;
   }
 
-  function pinLabel() {
-    return centerPinned ? t("composer.unpin") : t("composer.pin");
+  // Where the shell actually lives right now. A dismissed float rests in the topbar without
+  // ever becoming a hidden composer: the bar already reserves --composer-width for this slot.
+  function livePlacement() {
+    return composerPlacementValue() === "center" && !floatDismissed ? "center" : "topbar";
   }
 
-  function openComposerTooltip() {
-    const label = t("composer.open");
-    const shortcut = formatShortcut(
-      "focusInput",
-      activeShortcutProfile()?.shortcuts?.focusInput,
-      "",
-      keyboardPlatform
-    );
-    if (!shortcut || shortcut === "Disabled" || shortcut === "Unassigned") return label;
-    return `${label} (${shortcut})`;
+  function placementToggleLabel() {
+    return livePlacement() === "center" ? t("composer.dock") : t("composer.float");
   }
 
   function syncCenterMark(button = document.querySelector(".composer-center-mark")) {
     if (!button) return;
-    const host = document.getElementById?.(COMPOSER_CENTER_HOST_ID) || null;
-    const open = composerPlacementValue() === "center" && Boolean(host) && !host.hidden;
-    const tooltip = openComposerTooltip();
-    button.setAttribute("aria-label", tooltip);
-    button.setAttribute("data-tooltip", tooltip);
-    button.setAttribute("aria-expanded", open ? "true" : "false");
-    button.classList.toggle("is-open", open);
+    button.setAttribute("aria-label", t("composer.dock"));
+    button.setAttribute("data-tooltip", t("composer.dock"));
   }
 
-  function syncPinButton(button = document.querySelector(".prompt-pin-button")) {
+  function syncPlacementToggle(button = document.querySelector(".prompt-pin-button")) {
     if (!button) return;
-    const label = pinLabel();
-    button.setAttribute("aria-pressed", centerPinned ? "true" : "false");
+    const floating = livePlacement() === "center";
+    const label = placementToggleLabel();
     button.setAttribute("aria-label", label);
     button.setAttribute("data-tooltip", label);
-    button.classList.toggle("is-pinned", centerPinned);
+    button.classList.toggle("is-floating", floating);
+    const icon = createSvgIcon(floating ? "chevronUp" : "chevronDown");
+    icon.setAttribute?.("aria-hidden", "true");
+    button.replaceChildren?.(icon);
   }
 
-  function showCenterHost() {
+  function persistPlacement(next) {
+    if (storedComposerPlacement() === next) {
+      placementIntent = "";
+      return;
+    }
+    placementIntent = next;
+    if (typeof persistComposerPlacement !== "function") return;
+    const failed = (error) => {
+      placementIntent = "";
+      void recordFunctionalAnomaly({ feature: "composer", operation: "persistComposerPlacement", error });
+      applyPlacement();
+    };
+    try {
+      persistComposerPlacement(next)?.catch?.(failed);
+    } catch (error) {
+      failed(error);
+    }
+  }
+
+  // The shell node is moved, never rebuilt, so the draft, images, send queue and search
+  // results survive. Chromium blurs a focused element that changes parent, so the caret is
+  // reclaimed here and the blur settles are suppressed for the duration of the move.
+  function relocateComposer({ focus = false, keepSearch = true } = {}) {
+    closeActionsMenu();
+    const previous = document.querySelector(".prompt-input");
+    const expanded = Boolean(previous?.classList?.contains("prompt-input-expanded"));
+    const heldCaret = Boolean(previous)
+      && (document.activeElement === previous || overlaySearchCaretComposer());
+    if (previous) rememberSelection(previous);
+    if (!keepSearch && searchPanel.isActive()) searchPanel.exit({ restoreField: true });
+    placementTransitionActive = true;
+    try {
+      applyPlacement();
+    } finally {
+      const release = () => { placementTransitionActive = false; };
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(release);
+      else setTimeout(release, 0);
+    }
+    const field = document.querySelector(".prompt-input");
+    if (!field) return;
+    const shell = field.closest?.(".prompt-shell");
+    if (shell) searchPanel.attach(shell);
+    searchPanel.syncField(field);
+    syncCollapsedPreview(field);
+    const takeCaret = focus || heldCaret;
+    if (takeCaret) {
+      claimPromptCaret(field);
+      field.focus?.({ preventScroll: true });
+      restoreSelectionSoon(field);
+    }
+    if (searchPanel.isActive()) {
+      collapseInput(field);
+      if (field.closest?.("#composer-center-host")) resizeInput(field, true);
+      return;
+    }
+    if (expanded && takeCaret) expandInput(field);
+    else collapseInput(field);
+  }
+
+  function floatComposer({ focus = false } = {}) {
     if (composerPlacementValue() !== "center") return;
-    ensureComposerCenterHost().hidden = false;
-    syncCenterMark();
+    if (!floatDismissed) {
+      ensureComposerCenterHost().hidden = false;
+      return;
+    }
+    floatDismissed = false;
+    relocateComposer({ focus });
   }
 
-  function hideCenterHost() {
-    if (centerPinned) return;
-    if (searchPanel.isActive()) searchPanel.exit({ restoreField: true });
-    const inputNode = document.querySelector(".prompt-input");
-    if (inputNode) collapseInput(inputNode);
-    const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
-    if (host) host.hidden = true;
-    syncCenterMark();
+  // Dismissal is transient by contract: the persisted preference is kept so the next summon
+  // returns the composer to the middle of the screen.
+  function dockComposer({ keepSearch = false, focus = false } = {}) {
+    if (livePlacement() !== "center") return;
+    floatDismissed = true;
+    relocateComposer({ keepSearch, focus });
   }
 
-  function toggleCenterPinned(event) {
+  function toggleComposerPlacement(event) {
     event?.preventDefault?.();
     event?.stopPropagation?.();
-    centerPinned = !centerPinned;
-    if (centerPinned) showCenterHost();
-    syncPinButton();
+    if (state.topbarEditMode) return;
+    const next = livePlacement() === "center" ? "topbar" : "center";
+    floatDismissed = false;
+    persistPlacement(next);
+    relocateComposer({ focus: true });
   }
 
   function eventIsInsideCenterChrome(event) {
@@ -1400,10 +1477,10 @@ export function createComposerController(dependencies = {}) {
   }
 
   function handleCenterDismissPointer(event) {
-    if (centerPinned || composerPlacementValue() !== "center") return;
+    if (livePlacement() !== "center") return;
     const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
     if (!host || host.hidden) return;
-    if (event.type === CHAT_FRAME_POINTER_EVENT || !eventIsInsideCenterChrome(event)) hideCenterHost();
+    if (event.type === CHAT_FRAME_POINTER_EVENT || !eventIsInsideCenterChrome(event)) dockComposer();
   }
 
   function ensureComposerCenterHost() {
@@ -1426,14 +1503,14 @@ export function createComposerController(dependencies = {}) {
     const host = document.getElementById(COMPOSER_CENTER_HOST_ID);
     const liveShell = host?.querySelector?.(".prompt-shell") || composerNode.querySelector(".prompt-shell");
     if (!liveShell) return;
-    if (composerPlacementValue() === "center") {
+    if (livePlacement() === "center") {
       const centerHost = ensureComposerCenterHost();
       const duplicate = composerNode.querySelector(".prompt-shell");
       if (liveShell.parentNode !== centerHost) centerHost.appendChild(liveShell);
       if (duplicate && duplicate !== liveShell) duplicate.remove();
       composerNode.classList.add("composer-center-slot");
-      if (centerPinned) centerHost.hidden = false;
-      syncPinButton();
+      centerHost.hidden = false;
+      syncPlacementToggle();
       syncCenterMark();
       return;
     }
@@ -1447,6 +1524,7 @@ export function createComposerController(dependencies = {}) {
       host.hidden = true;
       if (!host.querySelector(".prompt-shell")) host.remove();
     }
+    syncPlacementToggle();
     syncCenterMark();
   }
 
@@ -1484,17 +1562,17 @@ export function createComposerController(dependencies = {}) {
     });
     const collapsed = promptCollapsedPreview(state.promptText, currentPlaceholder);
     const composerNode = el("div", { class: "composer topbar-item topbar-item-composer" },
+      // This slot is where the floating shell came from, so the mark docks it back.
       el("button", {
         class: "composer-center-mark top-icon-action tooltip-trigger",
         type: "button",
-        "aria-label": openComposerTooltip(),
-        "aria-expanded": "false",
-        "data-tooltip": openComposerTooltip(),
+        "aria-label": t("composer.dock"),
+        "data-tooltip": t("composer.dock"),
         "data-tooltip-id": "composer.open",
         onclick: (event) => {
           event.preventDefault();
           event.stopPropagation();
-          focusInput(true);
+          dockComposer({ focus: true });
         },
         onpointerdown: (event) => event.stopPropagation()
       }, createSvgIcon("keyboard")),
@@ -1612,20 +1690,19 @@ export function createComposerController(dependencies = {}) {
             ? t("topbar.promptQueuedTargets", { count: Number(state.promptQueuedTargetCount) })
             : ""),
           el("button", {
-            class: "prompt-pin-button compact-icon tooltip-trigger",
+            class: `prompt-pin-button compact-icon tooltip-trigger ${livePlacement() === "center" ? "is-floating" : ""}`.trim(),
             type: "button",
             tabindex: "-1",
-            "aria-pressed": centerPinned ? "true" : "false",
-            "aria-label": pinLabel(),
-            "data-tooltip": pinLabel(),
+            "aria-label": placementToggleLabel(),
+            "data-tooltip": placementToggleLabel(),
             "data-tooltip-id": "composer.pin",
-            onclick: toggleCenterPinned,
+            onclick: toggleComposerPlacement,
             onpointerdown: (event) => {
               event.preventDefault();
               event.stopPropagation();
             },
             onkeydown: (event) => event.stopPropagation()
-          }, createSvgIcon("pin"))
+          }, createSvgIcon(livePlacement() === "center" ? "chevronUp" : "chevronDown"))
         ),
         el("div", {
           class: "prompt-model-gate-live",
@@ -1635,7 +1712,7 @@ export function createComposerController(dependencies = {}) {
       )
     );
     searchPanel.attach(composerNode.querySelector(".prompt-shell"));
-    syncPinButton(composerNode.querySelector(".prompt-pin-button"));
+    syncPlacementToggle(composerNode.querySelector(".prompt-pin-button"));
     syncCenterMark(composerNode.querySelector(".composer-center-mark"));
     return composerNode;
   }

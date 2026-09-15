@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { functionSource } = require("./function-source.cjs");
+const { isInsideAutoHiddenTopbar } = require("../ui/dom.js");
 
 const root = path.resolve(__dirname, "..");
 const runtime = fs.readFileSync(path.join(root, "app/runtime.js"), "utf8");
@@ -44,8 +45,11 @@ assert.match(chatclubCss, /\.prompt-input:not\(\.prompt-input-expanded\):focus\s
 assert.match(chatclubCss, /\.prompt-collapsed-preview\s*\{[\s\S]*?pointer-events:\s*none;/);
 assert.match(focusControllerSource, /\["focus", "focusin"\]/);
 
+// The controller's imports are hoisted into the vm context below, so the module body can run as a plain
+// script. `isInsideAutoHiddenTopbar` comes from the real ui/dom.js: a copy of its selector here would let
+// the guard and its test drift apart in exactly the way the shared predicate exists to prevent.
 const executableSource = focusControllerSource
-  .replace('import { FRAME_USER_INTENT_POST_MESSAGE_SOURCE } from "../../shared/protocol.js";\n\n', '')
+  .replace(/^import .*\r?\n/gm, "")
   .replace("export function createPromptFocusController", "function createPromptFocusController")
   .replace("export function installPromptFocusController", "function installPromptFocusController")
   .concat("\nglobalThis.createPromptFocusController = createPromptFocusController;\n");
@@ -87,6 +91,7 @@ function makeContext({ options = false } = {}) {
     Date: { now: () => clock.now },
     document,
     globalThis: undefined,
+    isInsideAutoHiddenTopbar,
     Node: MockNode,
     setTimeout(callback) { timers.push(callback); return timers.length; },
     window,

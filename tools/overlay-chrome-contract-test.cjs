@@ -54,7 +54,20 @@ assert.match(rootBlock, /--overlay-border:/);
 assert.match(rootBlock, /--overlay-shadow:\s*var\(--shadow\);/);
 assert.match(rootBlock, /--overlay-gutter:\s*40px;/);
 assert.match(rootBlock, /--overlay-backdrop:/);
-assert.match(rootBlock, /--summary-panel-border:\s*var\(--overlay-border-color\);/);
+// Summary, Share, and popover menus all rest on the page with no backdrop, so
+// their edge is the only separation: --overlay-border-color reaches 1.51:1
+// (light) / 2.19:1 (dark) against --bg while --line-strong reaches 3.39:1.
+// Backdropped typed modals keep the shared overlay border.
+assert.match(rootBlock, /--summary-panel-border:\s*var\(--line-strong\);/);
+assert.match(css, /\.popover-menu \{[^}]*border:\s*1px solid var\(--line-strong\);/s);
+assert.match(css, /\.share-panel \{[^}]*border:\s*1px solid var\(--line-strong\);/s);
+assert.match(css, /\.popover-backdrop \{[^}]*background:\s*transparent;/s);
+assert.match(css, /\.modal \{[\s\S]{0,400}?border:\s*var\(--overlay-border\)|\.overlay-surface \{[^}]*border:\s*var\(--overlay-border\)/s);
+assert.match(agents, /`--line-strong`/);
+assert.match(agents, /Every other backdrop-less surface follows that same rule/);
+assert.match(agents, /its `\.popover-backdrop` is transparent and dims nothing/);
+assert.match(agents, /--summary-panel-border: var\(--line-strong\)/);
+assert.match(agents, /do not change `--overlay-border-color` itself to reach them/);
 
 assert.match(agents, /## Overlay Chrome Contract/);
 assert.match(agents, /## Overlay Dismissal Policy/);
@@ -127,7 +140,21 @@ assert.match(css, /\.settings-modal \.modal-header \{[^}]*min-height:\s*var\(--o
 assert.match(css, /\.modal-footer \{/);
 assert.match(css, /\.modal > \.modal-footer \{/);
 assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.toast,/);
-assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.prompt-image-remove,/);
+assert.match(
+  css,
+  /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.prompt-image-remove \{[^}]*backdrop-filter:\s*none;/,
+  "the composer image-remove frost must still disable under reduced transparency"
+);
+assert.match(
+  css,
+  /@media \(prefers-reduced-transparency: reduce\) \{\s*:root \{[^}]*--image-scrim:\s*var\(--image-scrim-opaque\);/,
+  "that control goes opaque dark instead of falling back to the --panel plate the toasts use"
+);
+assert.doesNotMatch(
+  css,
+  /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.prompt-image-remove,\s*\n\s*\.frame-toast-position-sample \{[^}]*background:\s*var\(--panel\);/,
+  "a --panel plate under --image-scrim-ink would be white ink on a white plate"
+);
 assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{[\s\S]*?\.frame-toast-position-sample/);
 assert.match(css, /\.overlay-panel-resize-handle,/);
 assert.match(css, /\.overlay-panel-resize-handle-left,[\s\S]*?width:\s*12px;/);
