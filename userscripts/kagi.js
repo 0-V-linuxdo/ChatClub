@@ -82,7 +82,10 @@ for (const button of buttons) {
   actions.push({ button, owner });
 }
 const out = [];
-const selectedActions = (api.config && api.config.idleFullText === true) ? actions.slice(-2) : actions.slice(0, 24);
+const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+// Idle Record Full Text: the last 2 messages, or the changed tail it names (capped).
+const idleCopyCount = idleTurns ? Math.min(24, Math.max(2, idleTurns)) : 2;
+const selectedActions = (api.config && api.config.idleFullText === true) ? actions.slice(-idleCopyCount) : actions.slice(0, 24);
 for (const [index, action] of selectedActions.entries()) {
   const { button, owner } = action;
   const role = messageRole(owner, index);

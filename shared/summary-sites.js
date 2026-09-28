@@ -2,21 +2,21 @@
 // and are fetched on demand by loadBuiltInSummarySource().
 export const SUMMARY_SITE_CONFIGS = Object.freeze([
   {
-    id: "chatgpt", name: "ChatGPT", configVersion: 56,
+    id: "chatgpt", name: "ChatGPT", configVersion: 57,
     hosts: ["chatgpt.com", "*.chatgpt.com", "chat.openai.com", "*.chat.openai.com"],
     userscriptRunMode: "pageWorldFirst",
-    userscriptFile: "chatgpt.js", userscriptLength: 3484
+    userscriptFile: "chatgpt.js", userscriptLength: 4005
   },
   {
-    id: "claude", name: "Claude", configVersion: 39,
+    id: "claude", name: "Claude", configVersion: 40,
     hosts: ["claude.ai", "*.claude.ai"], pathPrefixes: ["/chat", "/new"],
-    userscriptFile: "claude.js", userscriptLength: 17802
+    userscriptFile: "claude.js", userscriptLength: 18384
   },
   {
-    id: "gemini", name: "Gemini", configVersion: 35,
+    id: "gemini", name: "Gemini", configVersion: 36,
     hosts: ["gemini.google.com", "*.gemini.google.com"],
     userscriptTimeoutMs: 20000, copyTimeoutMs: 1400,
-    userscriptFile: "gemini.js", userscriptLength: 9017
+    userscriptFile: "gemini.js", userscriptLength: 9571
   },
   {
     id: "deepseek", name: "DeepSeek", configVersion: 63,
@@ -26,27 +26,27 @@ export const SUMMARY_SITE_CONFIGS = Object.freeze([
     userscriptFile: "deepseek.js", userscriptLength: 23179
   },
   {
-    id: "grok", name: "Grok", configVersion: 67,
+    id: "grok", name: "Grok", configVersion: 68,
     hosts: ["grok.com", "*.grok.com", "grok.x.ai", "*.grok.x.ai"],
     userscriptRunMode: "pageWorldFirst", userscriptTimeoutMs: 36000,
     copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000,
-    userscriptFile: "grok.js", userscriptLength: 13568
+    userscriptFile: "grok.js", userscriptLength: 13880
   },
   {
-    id: "grok-dairoot", name: "Grok Mirror", configVersion: 73,
+    id: "grok-dairoot", name: "Grok Mirror", configVersion: 74,
     hosts: ["gk.dairoot.cn", "*.gk.dairoot.cn"],
-    userscriptFile: "grok-dairoot.js", userscriptLength: 13568, userscriptRunMode: "pageWorldFirst",
+    userscriptFile: "grok-dairoot.js", userscriptLength: 13880, userscriptRunMode: "pageWorldFirst",
     userscriptTimeoutMs: 36000, copyTimeoutMs: 3600, userscriptFallbackDelayMs: 1000
   },
   {
-    id: "kagi", name: "Kagi Assistant", configVersion: 67,
+    id: "kagi", name: "Kagi Assistant", configVersion: 68,
     hosts: ["assistant.kagi.com"], userscriptTimeoutMs: 32000, copyTimeoutMs: 3600,
-    userscriptFile: "kagi.js", userscriptLength: 4343
+    userscriptFile: "kagi.js", userscriptLength: 4656
   },
   {
-    id: "notion", name: "Notion", configVersion: 73,
+    id: "notion", name: "Notion", configVersion: 74,
     hosts: ["app.notion.com", "notion.so", "www.notion.so", "*.notion.so"], pathPrefixes: ["/chat", "/ai"],
-    userscriptFile: "notion.js", userscriptLength: 8827
+    userscriptFile: "notion.js", userscriptLength: 9139
   },
   {
     id: "lobehub", name: "LobeHub", configVersion: 49,

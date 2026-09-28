@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "a50077b932a7e242d82b97703368bb82cd7c5de052739a577d60f34524452c91";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "05644e7cbda6ae1139e329cad4a11d3efc913a5209796514c1eb6db340f05f37", "implementationSha256": "f19dac0b0653b8b9ac17356e95f3c50bead2bf7a8ae8f89677905d05eafbab1a", "implementationVersion": "2026.07.16.2+bundle.f19dac0b0653b8b9ac17356e95f3c50bead2bf7a8ae8f89677905d05eafbab1a" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "88efb5fc32643dccdb336b952ceb577eeeac595354610b1e104c653536c0e6b0", "implementationSha256": "b72bd87dd4af21cf1ed05fe459d87a4b0c854ee61069607ef25601c1db35d01a", "implementationVersion": "2026.07.16.2+bundle.b72bd87dd4af21cf1ed05fe459d87a4b0c854ee61069607ef25601c1db35d01a" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -495,6 +495,26 @@
       this.reason = String(reason || "cancelled");
     }
   };
+  function summaryCollectionIsIdle() {
+    return Boolean(activeRun?.idle);
+  }
+  function scrollableBox(node) {
+    try {
+      return node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1;
+    } catch {
+      return false;
+    }
+  }
+  function rememberSummaryScrollAncestors(el) {
+    const run = activeRun;
+    if (!run?.idle || !el) return;
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      if (run.scrollPositions.has(node) || !scrollableBox(node)) continue;
+      run.scrollPositions.set(node, [node.scrollTop, node.scrollLeft]);
+    }
+    const root = el.ownerDocument?.scrollingElement;
+    if (root && !run.scrollPositions.has(root)) run.scrollPositions.set(root, [root.scrollTop, root.scrollLeft]);
+  }
   function summaryCollectionAborted() {
     return Boolean(activeRun?.aborted);
   }
@@ -535,6 +555,7 @@
   function reveal(el) {
     if (!el || summaryCollectionAborted()) return;
     try {
+      rememberSummaryScrollAncestors(el);
       el.scrollIntoView({ block: "center", inline: "nearest" });
       for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
         el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
@@ -580,7 +601,7 @@
   function activateElement(button) {
     throwIfSummaryCollectionAborted();
     if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
-    button.focus?.();
+    if (!summaryCollectionIsIdle()) button.focus?.();
     reveal(button);
     const init = { bubbles: true, cancelable: true, view: window };
     try {

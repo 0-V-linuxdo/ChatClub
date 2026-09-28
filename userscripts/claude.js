@@ -190,8 +190,17 @@ const articleCopyOptions = {
   copyCaptureGraceMs: 340,
   matchMode: "anyUseful"
 };
+// Idle Record Full Text passes the number of trailing messages that changed;
+// Copy only those articles, starting on the user message that opened the exchange.
+const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+const idleTailArticles = articles => {
+  if (!idleTurns || idleTurns >= articles.length) return articles;
+  let start = articles.length - idleTurns;
+  while (start > 0 && roleFromArticle(articles[start]) !== "user") start -= 1;
+  return articles.slice(start);
+};
 const messageCopyFromArticles = async () => {
-  const articles = claudeArticles();
+  const articles = idleTailArticles(claudeArticles());
   if (!articles.length) return [];
   const turns = [];
   const seenText = new Set();

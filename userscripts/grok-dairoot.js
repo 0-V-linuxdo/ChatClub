@@ -262,7 +262,10 @@ const copyActionText = async (action, lastUser = "") => {
 const out = [];
 let lastUser = "";
 const copyActions = messageActions();
-const selectedActions = (api.config && api.config.idleFullText === true) ? copyActions.slice(-2) : copyActions.slice(-8);
+const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+// Idle Record Full Text: the last 2 messages, or the changed tail it names (capped).
+const idleCopyCount = idleTurns ? Math.min(8, Math.max(2, idleTurns)) : 2;
+const selectedActions = (api.config && api.config.idleFullText === true) ? copyActions.slice(-idleCopyCount) : copyActions.slice(-8);
 for (const action of selectedActions) {
   const text = await copyActionText(action, action.role === "assistant" ? lastUser : "");
   if (!text) continue;

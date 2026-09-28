@@ -68,14 +68,14 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "a50077b932a7e242d82b97703368bb82cd7c5de052739a577d60f34524452c91";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "fad85abf21ed6fd62aff2f28f985277035d3d5a6539fa0a69a0cabf129e20886", "implementationSha256": "4ff027b50496b05b7ccb3f7061ef3bd04d958473d7b70a8c9469f60531436a96", "implementationVersion": "2026.07.16.2+bundle.4ff027b50496b05b7ccb3f7061ef3bd04d958473d7b70a8c9469f60531436a96" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "754c8788179daa57a717c9c9ae30a636d8a9b3b6ea5aedcbc3cb169837f1df84", "implementationSha256": "aef35a387843ba557819397ef9a23154938c526b7f99776c78b17d72a429d016", "implementationVersion": "2026.07.16.2+bundle.aef35a387843ba557819397ef9a23154938c526b7f99776c78b17d72a429d016" });
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "ff2ac89dfde2b3f166263b3cabe8c0431cdab734fbecd1a415e4b206a3979999", "implementationSha256": "631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04", "implementationVersion": "2026.07.16.2+bundle.631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "e716676d70302b1d01c3301abf4144ee1166a7420af9308fa423c2deb10f9cb3", "implementationSha256": "ded9dae78ebb15018e076599f91c172470a1282f63698a639d3cb3757b895ee2", "implementationVersion": "2026.07.16.2+bundle.ded9dae78ebb15018e076599f91c172470a1282f63698a639d3cb3757b895ee2" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "284e61652298f1420dd5ff897a775fc66e5c409f40a917d444874239cea6d0ef", "implementationSha256": "9fa2d490267f39d2a941f34f0418be7d457e6ce0f486ba5c75558d05d3d15413", "implementationVersion": "2026.07.16.2+bundle.9fa2d490267f39d2a941f34f0418be7d457e6ce0f486ba5c75558d05d3d15413" });
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "4afa24fec15485b087e43fb581077b447845b93faf79f824da05029644b12221", "implementationSha256": "5b78ae772eb24e8ca491b6385c72a956553b6f6f779fd1a8cd52021c022d2009", "implementationVersion": "2026.07.16.2+bundle.5b78ae772eb24e8ca491b6385c72a956553b6f6f779fd1a8cd52021c022d2009" });
 
   // shared/background-request-core.js
   var BACKGROUND_REQUEST_SOURCE = "chatclub";
@@ -447,7 +447,8 @@
       aborted: false,
       reason: "",
       listeners: [],
-      waiters: []
+      waiters: [],
+      scrollPositions: /* @__PURE__ */ new Map()
     };
     run.abort = (reason = "cancelled") => {
       if (run.aborted) return;
@@ -506,6 +507,40 @@
       run.abort(reason);
     }
     return cancelled;
+  }
+  function summaryCollectionIsIdle() {
+    return Boolean(activeRun?.idle);
+  }
+  function scrollableBox(node) {
+    try {
+      return node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1;
+    } catch {
+      return false;
+    }
+  }
+  function rememberSummaryScrollAncestors(el) {
+    const run = activeRun;
+    if (!run?.idle || !el) return;
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      if (run.scrollPositions.has(node) || !scrollableBox(node)) continue;
+      run.scrollPositions.set(node, [node.scrollTop, node.scrollLeft]);
+    }
+    const root = el.ownerDocument?.scrollingElement;
+    if (root && !run.scrollPositions.has(root)) run.scrollPositions.set(root, [root.scrollTop, root.scrollLeft]);
+  }
+  function restoreSummaryScroll(run) {
+    const positions = run?.scrollPositions;
+    if (!positions?.size) return;
+    if (run.reason !== "user-input") {
+      for (const [node, [top, left]] of positions) {
+        try {
+          node.scrollTop = top;
+          node.scrollLeft = left;
+        } catch {
+        }
+      }
+    }
+    positions.clear();
   }
   function summaryCollectionAborted() {
     return Boolean(activeRun?.aborted);
@@ -600,6 +635,7 @@
   function reveal(el) {
     if (!el || summaryCollectionAborted()) return;
     try {
+      rememberSummaryScrollAncestors(el);
       el.scrollIntoView({ block: "center", inline: "nearest" });
       for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
         el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
@@ -1107,7 +1143,7 @@ ${raw.slice(-36e3)}`;
   function activateElement(button) {
     throwIfSummaryCollectionAborted();
     if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
-    button.focus?.();
+    if (!summaryCollectionIsIdle()) button.focus?.();
     reveal(button);
     const init = { bubbles: true, cancelable: true, view: window };
     try {
@@ -1575,10 +1611,6 @@ ${raw.slice(-36e3)}`;
       copyCaptureGraceMs: 300
     };
     for (const button of buttons.slice(0, 16)) {
-      try {
-        button.scrollIntoView?.({ block: "center", inline: "nearest" });
-      } catch {
-      }
       reveal(button);
       const copied = cleanCaptured(await copy(button, copyOptions));
       if (!copyLooksUseful(copied) || seenText.some((item) => nativeCopyDedup(item, copied))) continue;
@@ -2097,6 +2129,7 @@ ${raw.slice(-36e3)}`;
         if (run.aborted || isSummaryCollectionAborted(error)) return abortedSummaryResult(run);
         throw error;
       } finally {
+        restoreSummaryScroll(run);
         endSummaryCollectionRun(run);
       }
     }

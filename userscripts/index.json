@@ -1,10 +1,10 @@
 {
-  "summarySiteConfigVersion": 92,
+  "summarySiteConfigVersion": 93,
   "configs": [
     {
       "id": "chatgpt",
       "name": "ChatGPT",
-      "configVersion": 56,
+      "configVersion": 57,
       "hosts": [
         "chatgpt.com",
         "*.chatgpt.com",
@@ -13,12 +13,12 @@
       ],
       "userscriptRunMode": "pageWorldFirst",
       "userscriptFile": "chatgpt.js",
-      "userscriptLength": 3484
+      "userscriptLength": 4005
     },
     {
       "id": "claude",
       "name": "Claude",
-      "configVersion": 39,
+      "configVersion": 40,
       "hosts": [
         "claude.ai",
         "*.claude.ai"
@@ -28,12 +28,12 @@
         "/new"
       ],
       "userscriptFile": "claude.js",
-      "userscriptLength": 17802
+      "userscriptLength": 18384
     },
     {
       "id": "gemini",
       "name": "Gemini",
-      "configVersion": 35,
+      "configVersion": 36,
       "hosts": [
         "gemini.google.com",
         "*.gemini.google.com"
@@ -41,7 +41,7 @@
       "userscriptTimeoutMs": 20000,
       "copyTimeoutMs": 1400,
       "userscriptFile": "gemini.js",
-      "userscriptLength": 9017
+      "userscriptLength": 9571
     },
     {
       "id": "deepseek",
@@ -61,7 +61,7 @@
     {
       "id": "grok",
       "name": "Grok",
-      "configVersion": 67,
+      "configVersion": 68,
       "hosts": [
         "grok.com",
         "*.grok.com",
@@ -73,18 +73,18 @@
       "copyTimeoutMs": 3600,
       "userscriptFallbackDelayMs": 1000,
       "userscriptFile": "grok.js",
-      "userscriptLength": 13568
+      "userscriptLength": 13880
     },
     {
       "id": "grok-dairoot",
       "name": "Grok Mirror",
-      "configVersion": 73,
+      "configVersion": 74,
       "hosts": [
         "gk.dairoot.cn",
         "*.gk.dairoot.cn"
       ],
       "userscriptFile": "grok-dairoot.js",
-      "userscriptLength": 13568,
+      "userscriptLength": 13880,
       "userscriptRunMode": "pageWorldFirst",
       "userscriptTimeoutMs": 36000,
       "copyTimeoutMs": 3600,
@@ -93,19 +93,19 @@
     {
       "id": "kagi",
       "name": "Kagi Assistant",
-      "configVersion": 67,
+      "configVersion": 68,
       "hosts": [
         "assistant.kagi.com"
       ],
       "userscriptTimeoutMs": 32000,
       "copyTimeoutMs": 3600,
       "userscriptFile": "kagi.js",
-      "userscriptLength": 4343
+      "userscriptLength": 4656
     },
     {
       "id": "notion",
       "name": "Notion",
-      "configVersion": 73,
+      "configVersion": 74,
       "hosts": [
         "app.notion.com",
         "notion.so",
@@ -117,7 +117,7 @@
         "/ai"
       ],
       "userscriptFile": "notion.js",
-      "userscriptLength": 8827
+      "userscriptLength": 9139
     },
     {
       "id": "lobehub",

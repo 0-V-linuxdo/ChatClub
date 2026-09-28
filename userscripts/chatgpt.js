@@ -65,8 +65,17 @@ const turns = api.qsa('[data-message-author-role]', document, { all: true })
   .filter((turn, index, list) => !list.some((other, otherIndex) => otherIndex !== index && other.role === turn.role && other.node !== turn.node && other.node.contains && other.node.contains(turn.node)));
 const generating = typeof api.conversationIsGenerating === 'function' && api.conversationIsGenerating();
 const lastAssistantNode = [...turns].reverse().find(turn => turn.role === 'assistant')?.node;
+// Idle Record Full Text passes the number of trailing messages that changed;
+// Copy only those, starting on the user message that opened the exchange.
+const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+const idleTail = list => {
+  if (!idleTurns || idleTurns >= list.length) return list;
+  let start = list.length - idleTurns;
+  while (start > 0 && list[start].role !== 'user') start -= 1;
+  return list.slice(start);
+};
 const out = [];
-for (const turn of turns) {
+for (const turn of idleTail(turns)) {
   if (generating && turn.role === 'assistant' && turn.node === lastAssistantNode) continue;
   const scope = turnScope(turn.node);
   const text = await copyForTurn(scope, turn.role);

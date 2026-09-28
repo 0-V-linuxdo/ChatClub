@@ -4,7 +4,8 @@ import {
   beginSummaryCollectionRun,
   cancelSummaryCollectionRuns,
   endSummaryCollectionRun,
-  isSummaryCollectionAborted
+  isSummaryCollectionAborted,
+  restoreSummaryScroll
 } from "../shared/summary-collection-guard.js";
 
 function abortedSummaryResult(run) {
@@ -178,6 +179,7 @@ export function createSummaryCapability(deps = {}) {
       if (run.aborted || isSummaryCollectionAborted(error)) return abortedSummaryResult(run);
       throw error;
     } finally {
+      restoreSummaryScroll(run);
       endSummaryCollectionRun(run);
     }
   }

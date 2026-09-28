@@ -27,14 +27,15 @@ const byteBudgets = Object.freeze({
   "content/send.js": 85_000,
   // Bundles that embed the shared frame-command contract each carry the
   // cancelSummaryCollection command plus collectSummary runId; the shared
-  // turn discovery now keeps a sticky selector group for the ledger.
-  "content/summary-bridge.js": 107_641,
+  // turn discovery now keeps a sticky selector group for the ledger, and the
+  // collection guard restores what an idle Copy scrolled.
+  "content/summary-bridge.js": 108_822,
   // Shared Notion catalog plus exact custom picker-name apply stay inside the
   // preferred-model content boundary instead of a second selector dialect.
-  "content/preferred-model.js": 245_554,
+  "content/preferred-model.js": 246_401,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
-  "content/delete.js": 268_404,
+  "content/delete.js": 269_251,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   // Exact cost after the document_start shield reports trusted pointerdown to the
@@ -42,16 +43,19 @@ const byteBudgets = Object.freeze({
   // pointer report upward, and removes its focus/message listeners on dispose.
   "content/preload.js": 226_568,
   "content/summary-userscripts-main.js": 235_349,
-  "content/summary-userscripts.js": 161_122
+  // Idle Record Full Text Copies only the changed tail in the built-in bodies.
+  "content/summary-userscripts.js": 163_388
 });
 // Exact base-plus-capabilities closure after the conversation ledger joined
-// the base bundle and turn discovery gained its sticky selector group.
-const aggregateByteBudget = 835_664;
+// the base bundle, turn discovery gained its sticky selector group, and the
+// collection guard learned to restore an idle Copy's scroll.
+const aggregateByteBudget = 838_539;
 // Exact all-bundle closure after MAIN-world page-caret document_start
 // bootstrap plus the isolated command-contract growth for
 // cancelSummaryCollection and collectSummary runId, and the conversation
-// ledger that decides when Record Full Text may Copy.
-const allBundlesByteBudget = 1_627_770;
+// ledger that decides when Record Full Text may Copy, and the idle tail slice
+// in the built-in Summary bodies.
+const allBundlesByteBudget = 1_635_943;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

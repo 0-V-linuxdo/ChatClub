@@ -56,7 +56,8 @@ export function beginSummaryCollectionRun(options = {}) {
     aborted: false,
     reason: "",
     listeners: [],
-    waiters: []
+    waiters: [],
+    scrollPositions: new Map()
   };
   run.abort = (reason = "cancelled") => {
     if (run.aborted) return;
@@ -113,6 +114,48 @@ export function cancelSummaryCollectionRuns(runId = "", reason = "cancelled") {
     run.abort(reason);
   }
   return cancelled;
+}
+
+// Idle Record Full Text runs in the background of a page the user may be
+// reading: it must not move the caret, and whatever it scrolls to reveal a
+// Copy button is put back when it ends.
+export function summaryCollectionIsIdle() {
+  return Boolean(activeRun?.idle);
+}
+
+function scrollableBox(node) {
+  try {
+    return node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1;
+  } catch {
+    return false;
+  }
+}
+
+export function rememberSummaryScrollAncestors(el) {
+  const run = activeRun;
+  if (!run?.idle || !el) return;
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    if (run.scrollPositions.has(node) || !scrollableBox(node)) continue;
+    run.scrollPositions.set(node, [node.scrollTop, node.scrollLeft]);
+  }
+  const root = el.ownerDocument?.scrollingElement;
+  if (root && !run.scrollPositions.has(root)) run.scrollPositions.set(root, [root.scrollTop, root.scrollLeft]);
+}
+
+// A run the user interrupted by scrolling or clicking keeps the user's
+// position; any other end restores what the run moved.
+export function restoreSummaryScroll(run) {
+  const positions = run?.scrollPositions;
+  if (!positions?.size) return;
+  if (run.reason !== "user-input") {
+    for (const [node, [top, left]] of positions) {
+      try {
+        node.scrollTop = top;
+        node.scrollLeft = left;
+      } catch {}
+    }
+  }
+  positions.clear();
 }
 
 export function summaryCollectionAborted() {

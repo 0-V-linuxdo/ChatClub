@@ -4,7 +4,9 @@ import {
   closeRunnerOpenedMenus,
   isSummaryCollectionAborted,
   noteRunnerOpenedMenu,
+  rememberSummaryScrollAncestors,
   summaryCollectionAborted,
+  summaryCollectionIsIdle,
   throwIfSummaryCollectionAborted
 } from "./summary-collection-guard.js";
 
@@ -52,6 +54,7 @@ function reveal(el) {
   // swallows the abort and keeps iterating.
   if (!el || summaryCollectionAborted()) return;
   try {
+    rememberSummaryScrollAncestors(el);
     el.scrollIntoView({ block: "center", inline: "nearest" });
     for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
       el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
@@ -166,11 +169,9 @@ function conversationTurnGroup(selector, nodes) {
   return nodes;
 }
 
-// Turn roots in document order. Layout visibility only: a turn whose opacity
-// is animating (hover reveal, fade-in) is still a turn. `preferredGroup`
-// keeps a document on the selector group that first yielded a conversation,
-// so a group that briefly drops to one node cannot flap the turn list; the
-// returned `group` is that index, or -1 when groups were mixed.
+// Turn roots in document order; an opacity:0 turn (hover reveal, fade-in) is
+// still a turn. `preferredGroup` pins the selector group that first yielded a
+// conversation so a group dropping to one node cannot flap the list.
 function collectConversationTurns(preferredGroup = -1) {
   const preferred = CONVERSATION_TURN_SELECTORS[preferredGroup];
   if (preferred) {
@@ -329,7 +330,6 @@ function conversationIsGenerating() {
   return lastAssistantTurnIsStreaming(lastAssistantTurnNode());
 }
 
-// The ledger already holds the turn list; reuse it for the streaming check.
 function conversationTurnsAreGenerating(turns = []) {
   if (conversationComposerIsGenerating()) return true;
   if (conversationToolActivityIsActive()) return true;
@@ -656,7 +656,8 @@ function isCopyProbeText(value) {
 function activateElement(button) {
   throwIfSummaryCollectionAborted();
   if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
-  button.focus?.();
+  // Idle runs never focus: that takes the caret from the ChatClub composer.
+  if (!summaryCollectionIsIdle()) button.focus?.();
   reveal(button);
   const init = { bubbles: true, cancelable: true, view: window };
   try {
@@ -1141,7 +1142,6 @@ async function extractNativeCopyConversation(root = document.body) {
     copyCaptureGraceMs: 300
   };
   for (const button of buttons.slice(0, 16)) {
-    try { button.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
     reveal(button);
     const copied = cleanCaptured(await copy(button, copyOptions));
     if (!copyLooksUseful(copied) || seenText.some((item) => nativeCopyDedup(item, copied))) continue;

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "a50077b932a7e242d82b97703368bb82cd7c5de052739a577d60f34524452c91";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
-  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "ff2ac89dfde2b3f166263b3cabe8c0431cdab734fbecd1a415e4b206a3979999", "implementationSha256": "631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04", "implementationVersion": "2026.07.16.2+bundle.631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
+  var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "4afa24fec15485b087e43fb581077b447845b93faf79f824da05029644b12221", "implementationSha256": "5b78ae772eb24e8ca491b6385c72a956553b6f6f779fd1a8cd52021c022d2009", "implementationVersion": "2026.07.16.2+bundle.5b78ae772eb24e8ca491b6385c72a956553b6f6f779fd1a8cd52021c022d2009" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -163,8 +163,15 @@
       const turns = api.qsa("[data-message-author-role]", document, { all: true }).filter(api.visible).map((node) => ({ node, role: String(node.getAttribute("data-message-author-role") || "").toLowerCase() })).filter((turn) => turn.role === "user" || turn.role === "assistant").filter((turn, index, list) => !list.some((other, otherIndex) => otherIndex !== index && other.role === turn.role && other.node !== turn.node && other.node.contains && other.node.contains(turn.node)));
       const generating = typeof api.conversationIsGenerating === "function" && api.conversationIsGenerating();
       const lastAssistantNode = [...turns].reverse().find((turn) => turn.role === "assistant")?.node;
+      const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+      const idleTail = (list) => {
+        if (!idleTurns || idleTurns >= list.length) return list;
+        let start = list.length - idleTurns;
+        while (start > 0 && list[start].role !== "user") start -= 1;
+        return list.slice(start);
+      };
       const out = [];
-      for (const turn of turns) {
+      for (const turn of idleTail(turns)) {
         if (generating && turn.role === "assistant" && turn.node === lastAssistantNode) continue;
         const scope = turnScope(turn.node);
         const text = await copyForTurn(scope, turn.role);
@@ -345,8 +352,15 @@
         copyCaptureGraceMs: 340,
         matchMode: "anyUseful"
       };
+      const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+      const idleTailArticles = (articles) => {
+        if (!idleTurns || idleTurns >= articles.length) return articles;
+        let start = articles.length - idleTurns;
+        while (start > 0 && roleFromArticle(articles[start]) !== "user") start -= 1;
+        return articles.slice(start);
+      };
       const messageCopyFromArticles = async () => {
-        const articles = claudeArticles();
+        const articles = idleTailArticles(claudeArticles());
         if (!articles.length) return [];
         const turns = [];
         const seenText = /* @__PURE__ */ new Set();
@@ -751,10 +765,18 @@
         out2.push({ role, text });
         return true;
       };
-      for (const turn of turns) await revealTurn(turn, 40);
+      const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+      const idleTail = (list) => {
+        if (!idleTurns || idleTurns >= list.length) return list;
+        let start = list.length - idleTurns;
+        while (start > 0 && list[start].role !== "user") start -= 1;
+        return list.slice(start);
+      };
+      const copyTurns = idleTail(turns);
+      for (const turn of copyTurns) await revealTurn(turn, 40);
       await api.sleep(120);
       const out = [];
-      for (const turn of turns) {
+      for (const turn of copyTurns) {
         const buttons = await collectButtons(turn);
         push(out, turn.role, await copyFromButtons(buttons));
       }
@@ -1494,7 +1516,9 @@
       const out = [];
       let lastUser = "";
       const copyActions = messageActions();
-      const selectedActions = api.config && api.config.idleFullText === true ? copyActions.slice(-2) : copyActions.slice(-8);
+      const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+      const idleCopyCount = idleTurns ? Math.min(8, Math.max(2, idleTurns)) : 2;
+      const selectedActions = api.config && api.config.idleFullText === true ? copyActions.slice(-idleCopyCount) : copyActions.slice(-8);
       for (const action of selectedActions) {
         const text = await copyActionText(action, action.role === "assistant" ? lastUser : "");
         if (!text) continue;
@@ -1773,7 +1797,9 @@
       const out = [];
       let lastUser = "";
       const copyActions = messageActions();
-      const selectedActions = api.config && api.config.idleFullText === true ? copyActions.slice(-2) : copyActions.slice(-8);
+      const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+      const idleCopyCount = idleTurns ? Math.min(8, Math.max(2, idleTurns)) : 2;
+      const selectedActions = api.config && api.config.idleFullText === true ? copyActions.slice(-idleCopyCount) : copyActions.slice(-8);
       for (const action of selectedActions) {
         const text = await copyActionText(action, action.role === "assistant" ? lastUser : "");
         if (!text) continue;
@@ -1875,7 +1901,9 @@
         actions.push({ button, owner });
       }
       const out = [];
-      const selectedActions = api.config && api.config.idleFullText === true ? actions.slice(-2) : actions.slice(0, 24);
+      const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+      const idleCopyCount = idleTurns ? Math.min(24, Math.max(2, idleTurns)) : 2;
+      const selectedActions = api.config && api.config.idleFullText === true ? actions.slice(-idleCopyCount) : actions.slice(0, 24);
       for (const [index, action] of selectedActions.entries()) {
         const { button, owner } = action;
         const role = messageRole(owner, index);
@@ -2030,7 +2058,9 @@
       const turns = [];
       const seen = /* @__PURE__ */ new Set();
       const buttons = qsa("button,[role=button]", root).filter(isCopyTurnButton).sort(order);
-      const copyLimit = idleFullText ? 2 : 8;
+      const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+      const idleCopyCount = idleTurns ? Math.min(8, Math.max(2, idleTurns)) : 2;
+      const copyLimit = idleFullText ? idleCopyCount : 8;
       const selectedButtons = buttons.length > copyLimit ? buttons.slice(-copyLimit) : buttons;
       for (const button of selectedButtons) {
         const role = roleOfButton(button);
@@ -2938,7 +2968,7 @@
       return [];
     };
     scripts["qianwen.js"] = scripts["qianwen"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052" });
     return scripts;
   }
 

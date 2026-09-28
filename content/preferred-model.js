@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "a50077b932a7e242d82b97703368bb82cd7c5de052739a577d60f34524452c91";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "ed622a28d6b039035cf1f12aba75ec980ae13f3c1ba7cc7ba23cc293104ceefe", "implementationSha256": "0daa33e17ec47b338324fcbfc5888925e9be53b94e5d46ebdc14e53d1e0d2ee2", "implementationVersion": "2026.07.16.2+bundle.0daa33e17ec47b338324fcbfc5888925e9be53b94e5d46ebdc14e53d1e0d2ee2" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "0b730fdecd33bb79d114b876af9a83812f47ad3ec40916e4000e1f0c35f40355", "implementationSha256": "45acf8103cfb16f70f3e07e68643cf1329105902887fd9acb856a14c12cedab9", "implementationVersion": "2026.07.16.2+bundle.45acf8103cfb16f70f3e07e68643cf1329105902887fd9acb856a14c12cedab9" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -123,6 +123,26 @@
       this.reason = String(reason || "cancelled");
     }
   };
+  function summaryCollectionIsIdle() {
+    return Boolean(activeRun?.idle);
+  }
+  function scrollableBox(node) {
+    try {
+      return node.scrollHeight > node.clientHeight + 1 || node.scrollWidth > node.clientWidth + 1;
+    } catch {
+      return false;
+    }
+  }
+  function rememberSummaryScrollAncestors(el) {
+    const run = activeRun;
+    if (!run?.idle || !el) return;
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      if (run.scrollPositions.has(node) || !scrollableBox(node)) continue;
+      run.scrollPositions.set(node, [node.scrollTop, node.scrollLeft]);
+    }
+    const root = el.ownerDocument?.scrollingElement;
+    if (root && !run.scrollPositions.has(root)) run.scrollPositions.set(root, [root.scrollTop, root.scrollLeft]);
+  }
   function summaryCollectionAborted() {
     return Boolean(activeRun?.aborted);
   }
@@ -167,6 +187,7 @@
   function reveal(el) {
     if (!el || summaryCollectionAborted()) return;
     try {
+      rememberSummaryScrollAncestors(el);
       el.scrollIntoView({ block: "center", inline: "nearest" });
       for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
         el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
@@ -194,7 +215,7 @@
   function activateElement(button) {
     throwIfSummaryCollectionAborted();
     if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
-    button.focus?.();
+    if (!summaryCollectionIsIdle()) button.focus?.();
     reveal(button);
     const init = { bubbles: true, cancelable: true, view: window };
     try {

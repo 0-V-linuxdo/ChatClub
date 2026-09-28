@@ -145,7 +145,10 @@ const idleFullText = api.config && api.config.idleFullText === true;
 const turns = [];
 const seen = new Set();
 const buttons = qsa("button,[role=button]", root).filter(isCopyTurnButton).sort(order);
-const copyLimit = idleFullText ? 2 : 8;
+const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+// Idle Record Full Text: the last 2 messages, or the changed tail it names (capped).
+const idleCopyCount = idleTurns ? Math.min(8, Math.max(2, idleTurns)) : 2;
+const copyLimit = idleFullText ? idleCopyCount : 8;
 const selectedButtons = buttons.length > copyLimit ? buttons.slice(-copyLimit) : buttons;
 for (const button of selectedButtons) {
   const role = roleOfButton(button);

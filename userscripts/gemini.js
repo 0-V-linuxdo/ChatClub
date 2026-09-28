@@ -189,10 +189,20 @@ const push = (out, role, value) => {
   out.push({ role, text });
   return true;
 };
-for (const turn of turns) await revealTurn(turn, 40);
+// Idle Record Full Text passes the number of trailing messages that changed;
+// Copy only those, starting on the user message that opened the exchange.
+const idleTurns = api.config && api.config.idleFullText === true ? Math.max(0, Math.floor(Number(api.config.idleFullTextTurns) || 0)) : 0;
+const idleTail = list => {
+  if (!idleTurns || idleTurns >= list.length) return list;
+  let start = list.length - idleTurns;
+  while (start > 0 && list[start].role !== 'user') start -= 1;
+  return list.slice(start);
+};
+const copyTurns = idleTail(turns);
+for (const turn of copyTurns) await revealTurn(turn, 40);
 await api.sleep(120);
 const out = [];
-for (const turn of turns) {
+for (const turn of copyTurns) {
   const buttons = await collectButtons(turn);
   push(out, turn.role, await copyFromButtons(buttons));
 }
