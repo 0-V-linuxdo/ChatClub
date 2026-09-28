@@ -52,6 +52,7 @@ export function createTopicDeletionSettingsSection(ctx) {
     settingsBlock,
     settingsReorderHandle,
     settingsIconAction,
+    settingsInfoTitle,
     settingsList,
     settingsListDropPlacement,
     settingsPaneToolbar,
@@ -200,7 +201,11 @@ export function createTopicDeletionSettingsSection(ctx) {
     const hostsInput = textarea((draft.hosts || []).join("\n"), { placeholder: "example.com\n*.example.com" });
     const pathInput = textarea((draft.pathPrefixes || []).join("\n"), { placeholder: "/chat/" });
     const timeoutInput = input(String(draft.userscriptTimeoutMs || 15000), { type: "number", min: "5000", max: "45000", step: "1000" });
-    const userscriptInput = textarea(draft.userscript || "", { placeholder: "// ==UserScript==\n// @name Custom Delete Site\n// ==/UserScript==\n..." });
+    const userscriptInput = textarea(draft.userscript || "", {
+      placeholder: "// ==UserScript==\n// @name Custom Delete Site\n// ==/UserScript==\n...",
+      "aria-label": t("topicDeletion.site.userscript"),
+      "aria-describedby": "topic-delete-userscript-help"
+    });
     userscriptInput.readOnly = Boolean(builtIn && currentSourceMode !== "custom");
     appIdsInput.classList.add("settings-compact-textarea");
     hostsInput.classList.add("settings-compact-textarea");
@@ -216,18 +221,17 @@ export function createTopicDeletionSettingsSection(ctx) {
     });
     permissionRequest.dataset.userscriptPermissionRequest = "topic-deletion";
     const permissionNotice = el("div", {
-      class: "settings-info-callout settings-userscript-permission-notice",
+      class: "settings-userscript-permission-notice",
       role: "note",
       "aria-live": "polite",
       dataset: { userscriptPermissionNotice: "topic-deletion" }
     },
-      svgIcon("alert"),
-      el("div", {},
-        el("strong", {}, t("userscripts.permissionNoticeTitle")),
-        el("p", {}, t("userscripts.permissionNoticeBody")),
-        permissionStatus,
-        permissionRequest
-      )
+      settingsInfoTitle(t("userscripts.permissionNoticeTitle"), t("userscripts.permissionNoticeBody"), {
+        tooltipId: "settings.userscripts.permission",
+        tone: "warning"
+      }),
+      permissionStatus,
+      permissionRequest
     );
     async function refreshPermissionStatus() {
       let status = false;
@@ -307,16 +311,16 @@ export function createTopicDeletionSettingsSection(ctx) {
           )),
           field(t("topicDeletion.site.timeout"), timeoutInput)
         ),
-        el("div", { class: "settings-info-callout" },
-          svgIcon("trash"),
-          el("div", {},
-            el("strong", {}, t("topicDeletion.site.infoTitle")),
-            el("p", {}, t("topicDeletion.site.infoBody")),
-            sourceLabelNode
-          )
-        ),
         permissionNotice,
-        field(t("topicDeletion.site.userscript"), userscriptInput),
+        el("div", { class: "field" },
+          settingsInfoTitle(t("topicDeletion.site.userscript"), t("topicDeletion.site.infoBody"), {
+            tooltipId: "settings.topicDeletion.siteInfo",
+            id: "topic-delete-userscript-help",
+            placement: "right"
+          }),
+          userscriptInput,
+          sourceLabelNode ? el("div", { class: "settings-userscript-meta" }, sourceLabelNode) : null
+        ),
         el("div", { class: "modal-footer" },
           button(t("topicDeletion.site.copyUserscript"), () => copyUserscript(userscriptInput.value)),
           builtIn ? button(t("topicDeletion.site.editCopy"), () => {

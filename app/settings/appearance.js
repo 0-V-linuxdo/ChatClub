@@ -660,6 +660,7 @@ export function createAppearanceSettingsSection(ctx) {
       "settings.shortcuts.record": "keyboard",
       "settings.shortcuts.help": "info",
       "settings.apps.iframe.scopeHelp": "info",
+      "settings.apps.iframe.riskWarning": "info",
       "settings.apps.iframe.edit": "edit",
       "settings.apps.iframe.reset": "reload",
       "settings.apps.iframe.removeAttribute": "trash",
@@ -668,7 +669,13 @@ export function createAppearanceSettingsSection(ctx) {
       "settings.appearance.modelSelectionOverlay": "info",
       "settings.appearance.topbarInputFontSize": "info",
       "settings.appearance.topbarInputPlacement": "info",
-      "settings.appearance.topbarVisibility": "info"
+      "settings.appearance.topbarVisibility": "info",
+      "settings.summary.collectorInfo": "info",
+      "settings.messageNavigation.siteInfo": "info",
+      "settings.topicDeletion.siteInfo": "info",
+      "settings.userscripts.permission": "info",
+      "settings.io.exportSensitive": "info",
+      "settings.functionalAnomalies.privacy": "info"
     })[targetId] || "settings";
     const tooltipLabelKey = (target) => (
       target.id === "topbar.pocket" ? pocketChromeLabelKey(state.options) : target.labelKey

@@ -88,6 +88,30 @@ export function createSettingsKit({ svgIcon }) {
     return createSettingsIconAction({ label, icon: svgIcon(iconName), onClick, className: `tooltip-trigger ${extraClass}`.trim(), disabled, tooltipId });
   }
 
+  // Explanatory copy that would otherwise fill a callout box lives on this
+  // ghost (i) instead: the text is both the tooltip and the accessible name, and
+  // `id` lets a control point `aria-describedby` at it. The warning tone keeps a
+  // risk note distinguishable from plain help without bringing the box back.
+  function settingsInfoButton(help, { tooltipId, id = "", tone = "", placement = "center" } = {}) {
+    return el("button", {
+      id: id || null,
+      class: `settings-info-button tooltip-trigger ${tone === "warning" ? "settings-info-button-warning" : ""}`.trim(),
+      type: "button",
+      "aria-label": help,
+      "data-tooltip": help,
+      "data-tooltip-id": tooltipId,
+      "data-tooltip-placement": placement,
+      "data-tooltip-wrap": "true"
+    }, svgIcon("info"));
+  }
+
+  function settingsInfoTitle(title, help, options = {}) {
+    return el("span", { class: "settings-info-title" },
+      el("span", {}, title),
+      settingsInfoButton(help, options)
+    );
+  }
+
   function settingsPaneToolbar(copy, ...actions) {
     return el("div", { class: "ui-toolbar settings-pane-toolbar" },
       el("p", { class: "settings-pane-lead" }, copy),
@@ -171,6 +195,8 @@ export function createSettingsKit({ svgIcon }) {
     settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
+    settingsInfoButton,
+    settingsInfoTitle,
     settingsInnerTabs,
     settingsList,
     settingsListDropPlacement,

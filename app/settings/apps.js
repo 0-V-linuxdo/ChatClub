@@ -80,6 +80,7 @@ export function createAppsSettingsSection(ctx) {
     settingsReorderHandle,
     settingsEmptyRow,
     settingsIconAction,
+    settingsInfoTitle,
     settingsInnerTabs,
     settingsList,
     settingsListDropPlacement,
@@ -783,12 +784,15 @@ export function createAppsSettingsSection(ctx) {
     }
 
     const editor = el("div", { class: "settings-editor-form iframe-permission-editor", dataset: { appId: app.id, appSource: source } },
-      el("div", { class: "settings-info-callout iframe-permission-editor-scope" },
-        svgIcon("info"),
-        el("div", {},
-          el("strong", {}, t("apps.iframe.editorScopeTitle", { name: displayAppName(app) })),
-          el("p", {}, t("apps.iframe.editorScopeBody", { hosts: iframeAppHostsText(app) }))
-        )
+      el("div", { class: "iframe-permission-editor-notes" },
+        settingsInfoTitle(
+          t("apps.iframe.editorScopeTitle", { name: displayAppName(app) }),
+          `${t("apps.iframe.editorScopeBody", { hosts: iframeAppHostsText(app) })}\n${t("apps.iframe.permissionBoundary")}`,
+          { tooltipId: "settings.apps.iframe.scopeHelp", placement: "right" }
+        ),
+        settingsInfoTitle(t("apps.iframe.riskWarningTitle"), t("apps.iframe.riskWarningBody"), {
+          tooltipId: "settings.apps.iframe.riskWarning", tone: "warning", placement: "left"
+        })
       ),
       el("div", { class: "iframe-permission-policy-grid" },
         el("section", { class: "iframe-permission-policy-card", dataset: { iframePolicy: "allow" } },
@@ -834,10 +838,6 @@ export function createAppsSettingsSection(ctx) {
         advancedRows,
         advancedEmpty
       ),
-      el("div", { class: "iframe-permission-risk-warning" },
-        el("strong", {}, t("apps.iframe.riskWarningTitle")),
-        el("p", {}, t("apps.iframe.riskWarningBody"))
-      ),
       validationHost,
       warningHost,
       riskHost,
@@ -851,7 +851,6 @@ export function createAppsSettingsSection(ctx) {
         ),
         previewCode
       ),
-      el("p", { class: "iframe-permission-boundary-note" }, t("apps.iframe.permissionBoundary")),
       el("div", { class: "modal-footer" }, cancelButton, saveButton)
     );
     editor.addEventListener("input", updateEditor);

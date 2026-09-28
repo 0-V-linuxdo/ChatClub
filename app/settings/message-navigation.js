@@ -51,6 +51,7 @@ export function createMessageNavigationSettingsSection(ctx) {
     settingsBlock,
     settingsReorderHandle,
     settingsIconAction,
+    settingsInfoTitle,
     settingsInnerTabs,
     settingsList,
     settingsListDropPlacement,
@@ -250,7 +251,10 @@ export function createMessageNavigationSettingsSection(ctx) {
     const appIdsInput = textarea((draft.appIds || []).join("\n"), { placeholder: "ChatGPT\nKagi" });
     const hostsInput = textarea((draft.hosts || []).join("\n"), { placeholder: "example.com\n*.example.com" });
     const pathInput = textarea((draft.pathPrefixes || []).join("\n"), { placeholder: "/chat/" });
-    const adapterSelect = select(draft.adapter || "generic", adapterOptions());
+    const adapterSelect = select(draft.adapter || "generic", adapterOptions(), {
+      "aria-label": t("messageNavigator.site.adapter"),
+      "aria-describedby": "message-navigator-adapter-help"
+    });
     const selectorInput = textarea(draft.messageSelector || "", { placeholder: "article[data-message-author-role], .message" });
     const userSelectorInput = textarea(draft.userSelector || "", { placeholder: t("common.optional") });
     const assistantSelectorInput = textarea(draft.assistantSelector || "", { placeholder: t("common.optional") });
@@ -310,16 +314,15 @@ export function createMessageNavigationSettingsSection(ctx) {
           field(t("messageNavigator.site.pathPrefixes"), el("div", { class: "settings-field-stack" },
             pathInput, el("small", {}, t("messageNavigator.site.pathHelp"))
           )),
-          field(t("messageNavigator.site.adapter"), adapterSelect),
+          el("div", { class: "field" },
+            settingsInfoTitle(t("messageNavigator.site.adapter"), t("messageNavigator.site.infoBody"), {
+              tooltipId: "settings.messageNavigation.siteInfo",
+              id: "message-navigator-adapter-help",
+              placement: "right"
+            }),
+            adapterSelect
+          ),
           field(t("messageNavigator.site.summaryMaxChars"), summaryMaxInput)
-        ),
-        el("div", { class: "settings-info-callout" },
-          svgIcon("navigator"),
-          el("div", {},
-            el("strong", {}, t("messageNavigator.site.infoTitle")),
-            el("p", {}, t("messageNavigator.site.infoBody")),
-            builtIn ? el("small", {}, t("messageNavigator.site.builtInAutoUpdate")) : null
-          )
         ),
         field(t("messageNavigator.site.messageSelector"), selectorInput),
         el("div", { class: "settings-dialog-grid message-navigator-selector-grid" },

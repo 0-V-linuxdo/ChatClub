@@ -60,6 +60,7 @@ export function createSummarySettingsSection(ctx) {
     settingsBlock,
     settingsReorderHandle,
     settingsIconAction,
+    settingsInfoTitle,
     settingsInnerTabs,
     settingsList,
     settingsPaneToolbar,
@@ -393,7 +394,11 @@ export function createSummarySettingsSection(ctx) {
     ]);
     const timeoutInput = input(String(draft.userscriptTimeoutMs || 24000), { type: "number", min: "5000", max: "45000", step: "1000" });
     const copyTimeoutInput = input(draft.copyTimeoutMs ? String(draft.copyTimeoutMs) : "", { type: "number", min: "300", max: "10000", step: "100", placeholder: t("common.optional") });
-    const userscriptInput = textarea(draft.userscript || "", { placeholder: "return api.extractTurns(...)" });
+    const userscriptInput = textarea(draft.userscript || "", {
+      placeholder: "return api.extractTurns(...)",
+      "aria-label": t("summary.collector.userscript"),
+      "aria-describedby": "summary-collector-userscript-help"
+    });
     userscriptInput.readOnly = Boolean(builtIn && sourceMode !== "custom");
     userscriptInput.classList.add("settings-code-textarea");
     hostsInput.classList.add("settings-compact-textarea");
@@ -408,18 +413,17 @@ export function createSummarySettingsSection(ctx) {
     });
     permissionRequest.dataset.userscriptPermissionRequest = "summary";
     const permissionNotice = el("div", {
-      class: "settings-info-callout settings-userscript-permission-notice",
+      class: "settings-userscript-permission-notice",
       role: "note",
       "aria-live": "polite",
       dataset: { userscriptPermissionNotice: "summary" }
     },
-      svgIcon("alert"),
-      el("div", {},
-        el("strong", {}, t("userscripts.permissionNoticeTitle")),
-        el("p", {}, t("userscripts.permissionNoticeBody")),
-        permissionStatus,
-        permissionRequest
-      )
+      settingsInfoTitle(t("userscripts.permissionNoticeTitle"), t("userscripts.permissionNoticeBody"), {
+        tooltipId: "settings.userscripts.permission",
+        tone: "warning"
+      }),
+      permissionStatus,
+      permissionRequest
     );
     async function refreshPermissionStatus() {
       let status = false;
@@ -538,20 +542,22 @@ export function createSummarySettingsSection(ctx) {
           field(t("summary.collector.timeout"), timeoutInput),
           field(t("summary.collector.copyTimeout"), copyTimeoutInput)
         ),
-        el("div", { class: "settings-info-callout" },
-          svgIcon("summary"),
-          el("div", {},
-            el("strong", {}, t("summary.collector.infoTitle")),
-            el("p", {}, t("summary.collector.infoBody")),
+        permissionNotice,
+        el("div", { class: "field" },
+          settingsInfoTitle(t("summary.collector.userscript"), t("summary.collector.infoBody"), {
+            tooltipId: "settings.summary.collectorInfo",
+            id: "summary-collector-userscript-help",
+            placement: "right"
+          }),
+          userscriptInput,
+          el("div", { class: "settings-userscript-meta" },
             sourceLabelNode,
-            el("div", { class: "summary-collector-last-run-row" },
+            el("span", { class: "summary-collector-last-run-row" },
               el("strong", {}, t("summary.collector.lastRun")),
               lastRunNode
             )
           )
         ),
-        permissionNotice,
-        field(t("summary.collector.userscript"), userscriptInput),
         el("div", { class: "modal-footer" },
           builtIn ? button(t("summary.collector.editCopy"), () => {
             sourceMode = "custom";

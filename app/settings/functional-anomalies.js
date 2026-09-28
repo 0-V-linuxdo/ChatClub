@@ -73,6 +73,7 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
     settingsBlock,
     settingsEmptyRow,
     settingsIconAction,
+    settingsInfoTitle,
     settingsList,
     settingsPaneToolbar,
     settingsPrimaryAction
@@ -281,13 +282,11 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
       const listScroll = captureSettingsListScroll(host);
       host.replaceChildren(
         settingsBlock(
-          t("functionalAnomalies.title"),
+          settingsInfoTitle(t("functionalAnomalies.title"), t("functionalAnomalies.privacyNotice"), {
+            tooltipId: "settings.functionalAnomalies.privacy"
+          }),
           t("functionalAnomalies.desc"),
           settingsPaneToolbar(t("functionalAnomalies.manage"), ...toolbarActions),
-          el("div", { class: "functional-anomaly-privacy" },
-            svgIcon("alert"),
-            el("p", {}, t("functionalAnomalies.privacyNotice"))
-          ),
           settingsList([
             t("functionalAnomalies.time"),
             t("functionalAnomalies.feature"),

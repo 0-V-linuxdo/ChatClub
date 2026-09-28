@@ -10,6 +10,7 @@ import { migrateLegacyScriptConfig } from "../../shared/script-config-migration.
 import { editorModal, el, openConfirmationAction, toast } from "../../ui/dom.js";
 import { downloadText, readFileAsText } from "../../ui/file-io.js";
 import { persistConfigResetCleanupWarning } from "../state/reset-cleanup-warning.js";
+import { createSettingsKit } from "./kit.js";
 
 const IMPORT_EXPORT_ITEMS = Object.freeze([
   Object.freeze({ key: "options", labelKey: "io.item.options", descKey: "io.item.optionsDesc" }),
@@ -48,6 +49,7 @@ export function createImportExportSettings(ctx) {
   if (typeof importConfigPatch !== "function") throw new TypeError("Import/export settings requires importConfigPatch().");
   if (typeof resetConfig !== "function") throw new TypeError("Import/export settings requires resetConfig().");
   if (typeof reloadAfterConfigReset !== "function") throw new TypeError("Import/export settings requires reloadAfterConfigReset().");
+  const { settingsInfoTitle } = createSettingsKit({ svgIcon });
 
   function openFullResetDialog() {
     openConfirmationAction({
@@ -565,9 +567,10 @@ export function createImportExportSettings(ctx) {
       if (exportButton) exportButton.disabled = !hasSelection;
       if (exportNotice) exportNotice.hidden = hasSelection;
       if (exportWarning) {
-        const messages = exportWarningMessages(selectedExportKeys);
-        exportWarning.hidden = !messages.length;
-        exportWarning.replaceChildren(...messages.map((message) => el("span", {}, message)));
+        const help = exportWarningMessages(selectedExportKeys).join("\n");
+        exportWarning.hidden = !help;
+        exportWarning.setAttribute("aria-label", help);
+        exportWarning.setAttribute("data-tooltip", help);
       }
     };
 
@@ -585,7 +588,11 @@ export function createImportExportSettings(ctx) {
     });
 
     exportNotice = el("p", { class: "io-no-selection", hidden: true }, t("io.noExportSelection"));
-    exportWarning = el("div", { class: "io-sensitive-warning" });
+    const exportTitle = settingsInfoTitle(t("io.manageTitle"), "", {
+      tooltipId: "settings.io.exportSensitive",
+      tone: "warning"
+    });
+    exportWarning = exportTitle.querySelector(".settings-info-button");
 
     fileInput.addEventListener("change", async () => {
       const file = fileInput.files?.[0];
@@ -640,11 +647,10 @@ export function createImportExportSettings(ctx) {
         el("div", { class: "settings-manage-title" },
           svgIcon("fileCog"),
           el("div", {},
-            el("h4", {}, t("io.manageTitle")),
+            el("h4", {}, exportTitle),
             el("p", {}, t("io.manageDesc"))
           )
         ),
-        exportWarning,
         el("div", { class: "io-choice-list io-export-choice-list" }, exportRows),
         exportNotice,
         el("div", { class: "settings-config-actions" },

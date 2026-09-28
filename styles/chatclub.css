@@ -2452,9 +2452,11 @@ button { cursor: pointer; }
   white-space: nowrap;
 }
 
+/* pre-line wraps like normal but keeps an explicit \n, so a help tooltip can
+   carry several separate notes (Settings (i) triggers) as separate lines. */
 .global-tooltip.is-wrapping .global-tooltip-label {
   line-height: 1.35;
-  white-space: normal;
+  white-space: pre-line;
   overflow: visible;
   text-overflow: clip;
 }
@@ -5969,31 +5971,6 @@ body.settings-tab-context-menu-dragging iframe {
   justify-content: flex-end;
 }
 
-.functional-anomalies-settings-pane .functional-anomaly-privacy {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: var(--space-3) 14px;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--primary) 7%, var(--panel-2));
-  border: 1px solid color-mix(in srgb, var(--primary) 18%, var(--line));
-  border-radius: var(--settings-radius);
-}
-
-.functional-anomalies-settings-pane .functional-anomaly-privacy .svg-icon {
-  width: 19px;
-  height: 19px;
-  flex: 0 0 auto;
-  color: var(--primary);
-}
-
-.functional-anomalies-settings-pane .functional-anomaly-privacy p,
-.functional-anomaly-detail > .functional-anomaly-privacy {
-  margin: 0;
-  font-size: var(--font-size);
-  line-height: 1.5;
-}
-
 .functional-anomaly-row {
   min-height: 76px;
 }
@@ -6124,7 +6101,10 @@ body.settings-tab-context-menu-dragging iframe {
 }
 
 .functional-anomaly-detail > .functional-anomaly-privacy {
+  margin: 0;
   color: var(--muted);
+  font-size: var(--font-size);
+  line-height: 1.5;
 }
 
 .functional-anomaly-export-preview {
@@ -8539,8 +8519,15 @@ body.settings-tab-context-menu-dragging iframe {
   gap: 18px;
 }
 
-.iframe-permission-editor-scope {
-  max-width: none;
+.iframe-permission-editor-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight-semibold);
 }
 
 .iframe-permission-policy-grid {
@@ -8788,13 +8775,6 @@ body.settings-tab-context-menu-dragging iframe {
   max-height: 280px;
   overflow: auto;
   white-space: pre;
-}
-
-.iframe-permission-boundary-note {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-size-xs);
-  line-height: 1.45;
 }
 
 .iframe-permission-risk-list {
@@ -9124,6 +9104,7 @@ body.settings-tab-context-menu-dragging iframe {
   line-height: 1.25;
 }
 
+.settings-info-button,
 .model-preference-segmented-info,
 .appearance-overlay-info {
   display: inline-flex;
@@ -9142,6 +9123,8 @@ body.settings-tab-context-menu-dragging iframe {
   transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
+.settings-info-button:hover,
+.settings-info-button:focus-visible,
 .model-preference-segmented-info:hover,
 .model-preference-segmented-info:focus-visible,
 .appearance-overlay-info:hover,
@@ -9150,15 +9133,36 @@ body.settings-tab-context-menu-dragging iframe {
   background: color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
+.settings-info-button:focus-visible,
 .model-preference-segmented-info:focus-visible,
 .appearance-overlay-info:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
+.settings-info-button .svg-icon,
 .model-preference-segmented-info .svg-icon,
 .appearance-overlay-info .svg-icon {
   width: 14px;
   height: 14px;
+}
+
+/* A risk note folded into (i) keeps the warning ink the card used to carry. */
+.settings-info-button-warning {
+  color: color-mix(in srgb, var(--warning) 76%, var(--text));
+}
+
+/* A title that carries its explanatory copy on a ghost (i) instead of in a
+   callout box under it. */
+.settings-info-title {
+  display: inline-flex;
+  min-width: 0;
+  gap: var(--space-1);
+  align-items: center;
+  vertical-align: middle;
+}
+
+.settings-info-title > .settings-info-button {
+  margin-block: calc(var(--space-1) * -1);
 }
 
 
@@ -10638,44 +10642,43 @@ html:not([data-settings-click-reorder="always"]) .layout-preset-item {
   white-space: pre;
 }
 
+/* One line: title with its (i), live status, and the request action. */
+.settings-userscript-permission-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+}
+
 .settings-userscript-permission-notice[hidden] {
   display: none;
 }
 
-.settings-userscript-permission-notice .button {
-  margin-top: var(--space-2);
-}
-
-.settings-info-callout {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: var(--space-3);
-  align-items: start;
-  padding: 14px;
-  color: color-mix(in srgb, var(--text) 88%, var(--muted));
-  background: color-mix(in srgb, var(--primary) 13%, var(--panel-2));
-  border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--line));
-  border-radius: var(--ui-radius);
-}
-
-.settings-info-callout .svg-icon {
-  width: 24px;
-  height: 24px;
-  color: var(--primary);
-}
-
-.settings-info-callout strong {
-  display: block;
-  margin-bottom: 5px;
+.settings-userscript-permission-notice > .settings-info-title {
   color: var(--text);
-  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
 }
 
-.settings-info-callout p {
-  margin: 0;
+.settings-userscript-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  align-items: baseline;
   color: var(--muted);
-  font-size: var(--font-size);
-  line-height: 1.5;
+  font-size: var(--font-size-sm);
+}
+
+.settings-userscript-permission-notice small,
+.settings-userscript-meta small {
+  font-size: inherit;
+}
+
+.settings-userscript-meta strong {
+  margin-right: var(--space-1);
+  color: var(--text);
+  font-weight: var(--font-weight-medium);
 }
 
 .settings-character-field {

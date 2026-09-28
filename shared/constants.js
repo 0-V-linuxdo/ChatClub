@@ -11,7 +11,7 @@ import {
 import { NOTION_MODEL_PREFERENCE_TARGETS } from "./notion-models.js";
 
 export const APP_NAME = "ChatClub";
-export const APP_VERSION = "「2026-09-28｜16:56:30」";
+export const APP_VERSION = "「2026-09-28｜19:49:40」";
 export const REPOSITORY_URL = "https://github.com/0-V-linuxdo/ChatClub";
 export const TELEGRAM_CHANNEL_URL = "https://t.me/chatclub_extension";
 
@@ -347,6 +347,7 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "settings.shortcuts.record", labelKey: "shortcuts.record" }),
       Object.freeze({ id: "settings.shortcuts.help", labelKey: "settings.shortcuts.help" }),
       Object.freeze({ id: "settings.apps.iframe.scopeHelp", labelKey: "apps.iframe.scopeHelp" }),
+      Object.freeze({ id: "settings.apps.iframe.riskWarning", labelKey: "apps.iframe.riskWarningTitle" }),
       Object.freeze({ id: "settings.apps.iframe.edit", labelKey: "apps.iframe.edit" }),
       Object.freeze({ id: "settings.apps.iframe.reset", labelKey: "apps.iframe.restoreDefault" }),
       Object.freeze({ id: "settings.apps.iframe.removeAttribute", labelKey: "apps.iframe.removeAttribute" }),
@@ -355,7 +356,13 @@ export const TOOLTIP_TARGET_GROUPS = Object.freeze([
       Object.freeze({ id: "settings.appearance.modelSelectionOverlay", labelKey: "appearance.modelSelectionOverlay" }),
       Object.freeze({ id: "settings.appearance.topbarInputFontSize", labelKey: "topbar.input.fontSize" }),
       Object.freeze({ id: "settings.appearance.topbarInputPlacement", labelKey: "topbar.input.placement" }),
-      Object.freeze({ id: "settings.appearance.topbarVisibility", labelKey: "topbar.visibility.title" })
+      Object.freeze({ id: "settings.appearance.topbarVisibility", labelKey: "topbar.visibility.title" }),
+      Object.freeze({ id: "settings.summary.collectorInfo", labelKey: "summary.collector.infoTitle" }),
+      Object.freeze({ id: "settings.messageNavigation.siteInfo", labelKey: "messageNavigator.site.infoTitle" }),
+      Object.freeze({ id: "settings.topicDeletion.siteInfo", labelKey: "topicDeletion.site.infoTitle" }),
+      Object.freeze({ id: "settings.userscripts.permission", labelKey: "userscripts.permissionNoticeTitle" }),
+      Object.freeze({ id: "settings.io.exportSensitive", labelKey: "io.sensitiveWarningTitle" }),
+      Object.freeze({ id: "settings.functionalAnomalies.privacy", labelKey: "functionalAnomalies.privacyTitle" })
     ])
   })
 ]);
