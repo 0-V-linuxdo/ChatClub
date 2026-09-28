@@ -510,7 +510,8 @@ export function createShortcutSettings(ctx) {
       "data-tooltip": label,
       "data-tooltip-id": "settings.shortcuts.help",
       "data-tooltip-placement": placement,
-      "data-tooltip-wrap": "true"
+      "data-tooltip-wrap": "true",
+      "data-tooltip-rich": "text"
     }, svgIcon("info"));
   }
 

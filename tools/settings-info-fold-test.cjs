@@ -120,12 +120,32 @@ assert.doesNotMatch(css, /\.functional-anomalies-settings-pane \.functional-anom
 // One ghost trigger skin: .settings-info-button joins the existing (i) group.
 assert.match(css, /\.settings-info-button,\s*\n\.model-preference-segmented-info,\s*\n\.appearance-overlay-info \{[\s\S]*?border:\s*0;/);
 assert.match(css, /\.settings-info-button-warning \{\s*color: color-mix\(in srgb, var\(--warning\) 76%, var\(--text\)\);/);
-assert.match(css, /\.global-tooltip\.is-wrapping \.global-tooltip-label \{[^}]*white-space: pre-line;/);
+// The (i) help renders as the tooltip's rich card, not the one-line label skin:
+// body weight and leading, the backdrop-less surface edge, and a hoverable card.
+assert.match(css, /\.global-tooltip\.is-rich \.global-tooltip-label \{[^}]*background: var\(--panel\);[^}]*border: 1px solid var\(--line-strong\);[^}]*font-size: var\(--font-size\);[^}]*font-weight: var\(--font-weight-normal\);[^}]*line-height: 1\.5;/);
+assert.match(css, /\.global-tooltip\.is-rich\.is-visible \{\s*pointer-events: auto;\s*\}/);
+assert.match(css, /\.global-tooltip\.is-rich::before \{[^}]*inset: calc\(var\(--space-2\) \* -1\);/);
+assert.match(css, /\.global-tooltip\.is-warning \.global-tooltip-title \{\s*color: color-mix\(in srgb, var\(--warning\) 76%, var\(--text\)\);/);
+assert.match(css, /\.global-tooltip\.is-wrapping \.global-tooltip-label \{[^}]*white-space: normal;/, "plain wrapped tooltips keep their skin");
 
 const sourceOf = (name) => settingsSources.find(([file]) => file === name)[1];
 
 const anomaliesPane = functionSource(sourceOf("functional-anomalies.js"), "pane");
-assert.match(anomaliesPane, /settingsInfoTitle\(t\("functionalAnomalies\.title"\), t\("functionalAnomalies\.privacyNotice"\), \{\s*tooltipId: "settings\.functionalAnomalies\.privacy"/);
+assert.match(anomaliesPane, /settingsInfoTitle\(t\("functionalAnomalies\.title"\), t\("functionalAnomalies\.privacyNotice"\), \{\s*tooltipId: "settings\.functionalAnomalies\.privacy",\s*title: t\("functionalAnomalies\.privacyTitle"\)/);
+
+// Every Settings (i) help trigger shares the rich card, including the ones that
+// predate settingsInfoButton.
+for (const [name, marker] of [
+  ["appearance-model-selection-overlay.js", "appearance-overlay-info tooltip-trigger"],
+  ["models.js", "model-preference-segmented-info tooltip-trigger"],
+  ["shortcuts.js", "shortcut-help-trigger tooltip-trigger"],
+  ["apps.js", "iframe-permission-help-trigger tooltip-trigger"]
+]) {
+  const source = sourceOf(name);
+  const start = source.indexOf(marker);
+  assert.ok(start > 0, `${name} lost its (i) help trigger`);
+  assert.match(source.slice(start, start + 600), /"data-tooltip-rich": "text"/, `${name} (i) help must use the rich card`);
+}
 assert.doesNotMatch(anomaliesPane, /functional-anomaly-privacy/);
 
 const exportPane = functionSource(sourceOf("import-export.js"), "importExportPane");
@@ -171,19 +191,29 @@ assert.match(functionSource(sourceOf("apps.js"), "openIframeRiskConfirmation"), 
 
     const { createSettingsKit } = await import(moduleUrl("app/settings/kit.js"));
     const { settingsInfoButton, settingsInfoTitle } = createSettingsKit({ svgIcon });
-    const info = settingsInfoButton("Line one\nLine two", { tooltipId: "settings.io.exportSensitive", id: "probe-help", tone: "warning" });
+    const info = settingsInfoButton("Line one\nLine two", {
+      tooltipId: "settings.io.exportSensitive", id: "probe-help", tone: "warning", title: "Heading", list: true
+    });
     assert.equal(info.tagName, "BUTTON");
     assert.equal(info.getAttribute("type"), "button");
     assert.equal(info.getAttribute("id"), "probe-help");
-    assert.equal(info.getAttribute("aria-label"), "Line one\nLine two");
+    assert.equal(info.getAttribute("aria-label"), "Heading", "a titled card names its (i) by the title");
     assert.equal(info.getAttribute("data-tooltip"), "Line one\nLine two");
     assert.equal(info.getAttribute("data-tooltip-id"), "settings.io.exportSensitive");
-    assert.equal(info.getAttribute("data-tooltip-wrap"), "true");
+    assert.equal(info.getAttribute("data-tooltip-rich"), "list");
+    assert.equal(info.getAttribute("data-tooltip-title"), "Heading");
+    assert.equal(info.getAttribute("data-tooltip-tone"), "warning");
+    assert.equal(info.getAttribute("data-tooltip-wrap"), null, "the rich card, not the wrapped label skin, carries (i) help");
+    assert.equal(info.getAttribute("data-tooltip-placement"), null, "the rich card places itself beside the (i)");
     assert.ok(info.classList.contains("settings-info-button") && info.classList.contains("tooltip-trigger"));
     assert.ok(info.classList.contains("settings-info-button-warning"));
     assert.equal(info.children[0].dataset.icon, "info");
     const plain = settingsInfoButton("Help", { tooltipId: "settings.functionalAnomalies.privacy" });
     assert.equal(plain.getAttribute("id"), null, "an info trigger without an id must not stamp an empty id");
+    assert.equal(plain.getAttribute("aria-label"), "Help", "an untitled (i) is named by its help");
+    assert.equal(plain.getAttribute("data-tooltip-rich"), "text");
+    assert.equal(plain.getAttribute("data-tooltip-title"), null);
+    assert.equal(plain.getAttribute("data-tooltip-tone"), null);
     assert.equal(plain.classList.contains("settings-info-button-warning"), false);
     const title = settingsInfoTitle("Records", "Help", { tooltipId: "settings.functionalAnomalies.privacy" });
     assert.ok(title.classList.contains("settings-info-title"));
@@ -225,7 +255,9 @@ assert.match(functionSource(sourceOf("apps.js"), "openIframeRiskConfirmation"), 
       "Tabs exports include conversation URLs from remembered ChatClub pages.",
       "Prompt exports include saved prompts or recent prompt history."
     ]);
-    assert.equal(warning.getAttribute("aria-label"), warning.getAttribute("data-tooltip"));
+    assert.equal(warning.getAttribute("aria-label"), "Sensitive export contents");
+    assert.equal(warning.getAttribute("data-tooltip-title"), "Sensitive export contents");
+    assert.equal(warning.getAttribute("data-tooltip-rich"), "list");
 
     const checkboxes = findAll(pane, (node) => node.tagName === "INPUT" && node.getAttribute("type") === "checkbox");
     assert.equal(checkboxes.length, 7);

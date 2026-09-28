@@ -569,7 +569,6 @@ export function createImportExportSettings(ctx) {
       if (exportWarning) {
         const help = exportWarningMessages(selectedExportKeys).join("\n");
         exportWarning.hidden = !help;
-        exportWarning.setAttribute("aria-label", help);
         exportWarning.setAttribute("data-tooltip", help);
       }
     };
@@ -590,7 +589,9 @@ export function createImportExportSettings(ctx) {
     exportNotice = el("p", { class: "io-no-selection", hidden: true }, t("io.noExportSelection"));
     const exportTitle = settingsInfoTitle(t("io.manageTitle"), "", {
       tooltipId: "settings.io.exportSensitive",
-      tone: "warning"
+      tone: "warning",
+      title: t("io.sensitiveWarningTitle"),
+      list: true
     });
     exportWarning = exportTitle.querySelector(".settings-info-button");
 

@@ -546,8 +546,7 @@ export function createSummarySettingsSection(ctx) {
         el("div", { class: "field" },
           settingsInfoTitle(t("summary.collector.userscript"), t("summary.collector.infoBody"), {
             tooltipId: "settings.summary.collectorInfo",
-            id: "summary-collector-userscript-help",
-            placement: "right"
+            id: "summary-collector-userscript-help"
           }),
           userscriptInput,
           el("div", { class: "settings-userscript-meta" },

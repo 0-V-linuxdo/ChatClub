@@ -2452,11 +2452,9 @@ button { cursor: pointer; }
   white-space: nowrap;
 }
 
-/* pre-line wraps like normal but keeps an explicit \n, so a help tooltip can
-   carry several separate notes (Settings (i) triggers) as separate lines. */
 .global-tooltip.is-wrapping .global-tooltip-label {
   line-height: 1.35;
-  white-space: pre-line;
+  white-space: normal;
   overflow: visible;
   text-overflow: clip;
 }
@@ -2479,6 +2477,106 @@ button { cursor: pointer; }
   bottom: -5px;
   border-top: 6px solid var(--tooltip-bubble);
   border-bottom: 0;
+}
+
+/* Rich variant for (i) help (`data-tooltip-rich`): Material's rich tooltip /
+   Carbon's toggletip rather than the one-line label skin. A paragraph in the
+   label skin was 12px at weight 650 and 1.35 leading, list items and their
+   wrapped lines looked alike, and the dark bubble was 1.20:1 against a Settings
+   card, so the text it covered read as a rendering glitch. The card uses the
+   backdrop-less surface recipe (.popover-menu): --panel, --line-strong edge,
+   --overlay-shadow. */
+.global-tooltip.is-rich {
+  max-width: min(340px, calc(100vw - var(--overlay-gutter-tight)));
+}
+
+/* Only a visible card takes the pointer, never one fading out. */
+.global-tooltip.is-rich.is-visible {
+  pointer-events: auto;
+}
+
+/* Hover bridge over the RICH_GAP to the trigger, so the pointer can move onto
+   the card without it closing (WCAG 1.4.13 hoverable). */
+.global-tooltip.is-rich::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--space-2) * -1);
+}
+
+/* Positioned so it paints above the ::before bridge and its text stays
+   selectable. */
+.global-tooltip.is-rich .global-tooltip-label {
+  position: relative;
+  padding: var(--space-3);
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--overlay-shadow);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.5;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  user-select: text;
+}
+
+.global-tooltip-title {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-weight: var(--font-weight-semibold);
+}
+
+.global-tooltip.is-warning .global-tooltip-title {
+  color: color-mix(in srgb, var(--warning) 76%, var(--text));
+}
+
+.global-tooltip-paragraph {
+  margin: 0;
+}
+
+.global-tooltip-paragraph + .global-tooltip-paragraph {
+  margin-top: var(--space-2);
+}
+
+/* Bullets hang, so a wrapped line can never pass for the next item. */
+.global-tooltip-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.global-tooltip-list li::marker {
+  color: var(--muted);
+}
+
+/* The arrow is a bordered square turned 45deg, so the card outline runs on
+   around it; the two edges inside the card are transparent. */
+.global-tooltip.is-rich .global-tooltip-arrow {
+  z-index: 1;
+  top: 0;
+  bottom: auto;
+  width: 10px;
+  height: 10px;
+  background: var(--panel);
+  border: 1px solid;
+  border-color: var(--line-strong) transparent transparent var(--line-strong);
+  filter: none;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.global-tooltip.is-rich[data-side="top"] .global-tooltip-arrow {
+  top: auto;
+  bottom: 0;
+  border-color: transparent var(--line-strong) var(--line-strong) transparent;
+  transform: translate(-50%, 50%) rotate(45deg);
+}
+
+.global-tooltip.is-rich[data-side="right"] .global-tooltip-arrow {
+  top: var(--tooltip-arrow-top, 50%);
+  left: 0;
+  border-color: transparent transparent var(--line-strong) var(--line-strong);
 }
 
 .prompt-clear-button.tooltip-trigger {

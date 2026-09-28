@@ -89,19 +89,22 @@ export function createSettingsKit({ svgIcon }) {
   }
 
   // Explanatory copy that would otherwise fill a callout box lives on this
-  // ghost (i) instead: the text is both the tooltip and the accessible name, and
-  // `id` lets a control point `aria-describedby` at it. The warning tone keeps a
-  // risk note distinguishable from plain help without bringing the box back.
-  function settingsInfoButton(help, { tooltipId, id = "", tone = "", placement = "center" } = {}) {
+  // ghost (i) instead, shown as the global tooltip's rich card: \n separates
+  // paragraphs, or bullets with `list`. `title` heads the card and names the
+  // button; without one the help itself is the accessible name. `id` lets a
+  // control point `aria-describedby` at it. The warning tone keeps a risk note
+  // distinguishable from plain help without bringing the box back.
+  function settingsInfoButton(help, { tooltipId, id = "", tone = "", title = "", list = false } = {}) {
     return el("button", {
       id: id || null,
       class: `settings-info-button tooltip-trigger ${tone === "warning" ? "settings-info-button-warning" : ""}`.trim(),
       type: "button",
-      "aria-label": help,
+      "aria-label": title || help,
       "data-tooltip": help,
       "data-tooltip-id": tooltipId,
-      "data-tooltip-placement": placement,
-      "data-tooltip-wrap": "true"
+      "data-tooltip-rich": list ? "list" : "text",
+      "data-tooltip-title": title || null,
+      "data-tooltip-tone": tone || null
     }, svgIcon("info"));
   }
 

@@ -3,6 +3,13 @@ import { el, isDismissalEscape } from "./dom.js";
 const EDGE_GAP = 8;
 const POINTER_GAP = 10;
 const ARROW_MIN = 12;
+// A rich card sits this far from its trigger, and its ::before hover bridge
+// spans exactly that gap (--space-2), so the pointer can cross onto the card.
+const RICH_GAP = 8;
+// Card top edge to the centre of its first text line (--space-3 padding plus
+// half a 13px/1.5 line): the arrow points there, so line one sits level with
+// the trigger.
+const RICH_ARROW_OFFSET = 22;
 const GLOBAL_TOOLTIP_ID = "chatclub-global-tooltip";
 const TOOLTIP_ID_ALIASES = Object.freeze({
   "pocket.collapseSidebar": "pocket.sidebar",
@@ -20,6 +27,7 @@ let tooltipLabel = null;
 let activeTrigger = null;
 let hoveredTrigger = null;
 let focusedTrigger = null;
+let pinnedTrigger = null;
 let installed = false;
 let tooltipConnectivityObserver = null;
 let keyboardInteraction = false;
@@ -43,6 +51,52 @@ function ensureTooltipHost() {
 
 function tooltipText(trigger) {
   return String(trigger?.getAttribute("data-tooltip") || "").trim();
+}
+
+// `data-tooltip-rich` ("text" | "list") opts an info (i) trigger into the rich
+// card: optional `data-tooltip-title`, one paragraph or bullet per \n line,
+// hoverable, and pinned by a click. Plain label tooltips are unchanged.
+function richTooltipMode(trigger) {
+  const mode = trigger?.getAttribute?.("data-tooltip-rich");
+  return mode === "list" || mode === "text" ? mode : "";
+}
+
+// is-rich stays on the host through the fade-out, so a closing card keeps its
+// skin instead of flashing the one-line label; only a visible card is live.
+function isRichTooltipLive() {
+  return Boolean(tooltipHost?.classList.contains("is-rich") && tooltipHost.classList.contains("is-visible"));
+}
+
+function isInsideRichTooltip(target) {
+  return Boolean(target instanceof Node && isRichTooltipLive() && tooltipHost.contains(target));
+}
+
+function isRichTooltipHovered() {
+  if (!isRichTooltipLive()) return false;
+  try {
+    return tooltipHost.matches(":hover");
+  } catch {
+    return false;
+  }
+}
+
+function renderTooltipContent(host, trigger, text) {
+  const mode = richTooltipMode(trigger);
+  host.classList.toggle("is-rich", Boolean(mode));
+  host.classList.toggle("is-warning", Boolean(mode) && trigger.getAttribute("data-tooltip-tone") === "warning");
+  if (!mode) {
+    tooltipLabel.textContent = text;
+    return;
+  }
+  const title = String(trigger.getAttribute("data-tooltip-title") || "").trim();
+  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  const body = mode === "list"
+    ? [el("ul", { class: "global-tooltip-list" }, lines.map((line) => el("li", {}, line)))]
+    : lines.map((line) => el("p", { class: "global-tooltip-paragraph" }, line));
+  tooltipLabel.replaceChildren(
+    ...(title ? [el("strong", { class: "global-tooltip-title" }, title)] : []),
+    ...body
+  );
 }
 
 function isDisabledTrigger(trigger) {
@@ -111,6 +165,17 @@ function isKeyboardFocusedTooltipTrigger(trigger) {
 function cleanupTrackedTriggers() {
   if (!isHoveredTooltipTrigger(hoveredTrigger)) hoveredTrigger = null;
   if (!isKeyboardFocusedTooltipTrigger(focusedTrigger)) focusedTrigger = null;
+  if (!isUsableTooltipTrigger(pinnedTrigger)) pinnedTrigger = null;
+}
+
+// A card pinned by a click outlives hover and focus until an outside
+// pointerdown, a second click, Escape, or its trigger going away.
+function holdPinnedTooltip() {
+  if (!isUsableTooltipTrigger(pinnedTrigger)) {
+    pinnedTrigger = null;
+    return false;
+  }
+  return activeTrigger === pinnedTrigger || showTooltip(pinnedTrigger);
 }
 
 function tokenList(value) {
@@ -158,16 +223,35 @@ function positionTooltip(trigger) {
   const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
 
+  const rich = host.classList.contains("is-rich");
+  // A rich card goes beside its (i) when there is room, so the title it
+  // explains and the line under it stay readable instead of being sliced by
+  // the card edge and arrow; otherwise it drops below, start-aligned.
+  if (rich && triggerRect.right + RICH_GAP + tooltipRect.width + EDGE_GAP <= viewportWidth) {
+    const centerY = triggerRect.top + (triggerRect.height / 2);
+    const top = Math.min(
+      Math.max(EDGE_GAP, centerY - RICH_ARROW_OFFSET),
+      Math.max(EDGE_GAP, viewportHeight - tooltipRect.height - EDGE_GAP)
+    );
+    const arrowTop = Math.min(Math.max(ARROW_MIN, centerY - top), Math.max(ARROW_MIN, tooltipRect.height - ARROW_MIN));
+    host.dataset.side = "right";
+    host.style.left = `${Math.round(triggerRect.right + RICH_GAP)}px`;
+    host.style.top = `${Math.round(top)}px`;
+    host.style.setProperty("--tooltip-arrow-top", `${Math.round(arrowTop)}px`);
+    return;
+  }
+  const gap = rich ? RICH_GAP : POINTER_GAP;
+
   let left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
   if (placement === "left") left = triggerRect.right - tooltipRect.width;
-  if (placement === "right") left = triggerRect.left;
+  if (placement === "right" || rich) left = triggerRect.left;
   left = Math.min(Math.max(EDGE_GAP, left), Math.max(EDGE_GAP, viewportWidth - tooltipRect.width - EDGE_GAP));
 
   let side = "bottom";
-  let top = triggerRect.bottom + POINTER_GAP;
-  if (top + tooltipRect.height + EDGE_GAP > viewportHeight && triggerRect.top > tooltipRect.height + POINTER_GAP) {
+  let top = triggerRect.bottom + gap;
+  if (top + tooltipRect.height + EDGE_GAP > viewportHeight && triggerRect.top > tooltipRect.height + gap) {
     side = "top";
-    top = triggerRect.top - tooltipRect.height - POINTER_GAP;
+    top = triggerRect.top - tooltipRect.height - gap;
   }
   top = Math.min(Math.max(EDGE_GAP, top), Math.max(EDGE_GAP, viewportHeight - tooltipRect.height - EDGE_GAP));
 
@@ -191,7 +275,7 @@ function showTooltip(trigger) {
   }
   activeTrigger = trigger;
   const host = ensureTooltipHost();
-  tooltipLabel.textContent = text;
+  renderTooltipContent(host, trigger, text);
   host.classList.toggle("is-wrapping", trigger.getAttribute("data-tooltip-wrap") === "true");
   if (!host.classList.contains("is-visible")) host.classList.add("is-visible");
   if (host.getAttribute("aria-hidden") !== "false") host.setAttribute("aria-hidden", "false");
@@ -223,6 +307,7 @@ function hideTooltip(trigger = activeTrigger) {
 function resetTooltipInteractionState() {
   hoveredTrigger = null;
   focusedTrigger = null;
+  pinnedTrigger = null;
   hideTooltip();
 }
 
@@ -230,10 +315,11 @@ function reconcileTooltipState() {
   cleanupTrackedTriggers();
   if (
     isUsableTooltipTrigger(activeTrigger)
-    && (activeTrigger === hoveredTrigger || activeTrigger === focusedTrigger)
+    && (activeTrigger === hoveredTrigger || activeTrigger === focusedTrigger || activeTrigger === pinnedTrigger || isRichTooltipHovered())
   ) return true;
   if (focusedTrigger && showTooltip(focusedTrigger)) return true;
   if (hoveredTrigger && showTooltip(hoveredTrigger)) return true;
+  if (holdPinnedTooltip()) return true;
   hideTooltip();
   return false;
 }
@@ -276,20 +362,35 @@ export function installGlobalTooltips(options = {}) {
   document.addEventListener("chatclub:tooltips-updated", notifyTooltipPreferencesChanged, true);
 
   document.addEventListener("pointerover", (event) => {
+    if (isInsideRichTooltip(event.target)) return;
     const trigger = closestTrigger(event.target);
     if (!trigger) {
       hoveredTrigger = null;
       cleanupTrackedTriggers();
-      if (!focusedTrigger) hideTooltip();
+      if (!focusedTrigger && !holdPinnedTooltip()) hideTooltip();
       return;
     }
     hoveredTrigger = isUsableTooltipTrigger(trigger) ? trigger : null;
     showTooltip(trigger);
   }, true);
 
-  document.addEventListener("pointerdown", () => {
+  document.addEventListener("pointerdown", (event) => {
     keyboardInteraction = false;
+    // Pressing a rich (i) or its card must not wipe the card: the click that
+    // follows pins it (touch has no hover), and the card text stays selectable.
+    if (isInsideRichTooltip(event.target) || richTooltipMode(closestTrigger(event.target))) return;
     resetTooltipInteractionState();
+  }, true);
+
+  document.addEventListener("click", (event) => {
+    const trigger = closestTrigger(event.target);
+    if (!richTooltipMode(trigger) || !isUsableTooltipTrigger(trigger)) return;
+    if (pinnedTrigger === trigger) {
+      resetTooltipInteractionState();
+      return;
+    }
+    pinnedTrigger = trigger;
+    showTooltip(trigger);
   }, true);
 
   document.addEventListener("pointerout", (event) => {
@@ -301,6 +402,7 @@ export function installGlobalTooltips(options = {}) {
     if (focusedTrigger === trigger) return;
     if (focusedTrigger && showTooltip(focusedTrigger)) return;
     focusedTrigger = null;
+    if (isInsideRichTooltip(event.relatedTarget) || holdPinnedTooltip()) return;
     hideTooltip(trigger);
   }, true);
 
@@ -320,6 +422,7 @@ export function installGlobalTooltips(options = {}) {
     if (hoveredTrigger === trigger) return;
     if (hoveredTrigger && showTooltip(hoveredTrigger)) return;
     hoveredTrigger = null;
+    if (holdPinnedTooltip() || isRichTooltipHovered()) return;
     hideTooltip(trigger);
   }, true);
 
@@ -344,7 +447,7 @@ export function installGlobalTooltips(options = {}) {
       attributes: true,
       attributeFilter: [
         "class", "style", "hidden", "inert", "aria-hidden", "disabled", "aria-disabled",
-        "data-tooltip", "data-tooltip-id"
+        "data-tooltip", "data-tooltip-id", "data-tooltip-title"
       ]
     });
   }

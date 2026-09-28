@@ -847,8 +847,8 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.global-tooltip\.is-wrapping \.global-tooltip-label \{[^}]*?white-space: pre-line;/,
-  "wrapped global tooltips must show their full text and keep explicit line breaks"
+  /\.global-tooltip\.is-wrapping \.global-tooltip-label \{[\s\S]*?white-space: normal;/,
+  "wrapped global tooltips must show their full text"
 );
 assert.match(stylesheetSource, /\.shortcut-tabs-row[\s\S]*?max-width: 100%;/, "shortcut tab help must stay within the settings pane");
 

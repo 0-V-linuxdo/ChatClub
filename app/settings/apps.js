@@ -364,7 +364,8 @@ export function createAppsSettingsSection(ctx) {
       "data-tooltip": help,
       "data-tooltip-id": "settings.apps.iframe.scopeHelp",
       "data-tooltip-placement": "right",
-      "data-tooltip-wrap": "true"
+      "data-tooltip-wrap": "true",
+      "data-tooltip-rich": "text"
     }, svgIcon("info"));
   }
 
@@ -788,10 +789,10 @@ export function createAppsSettingsSection(ctx) {
         settingsInfoTitle(
           t("apps.iframe.editorScopeTitle", { name: displayAppName(app) }),
           `${t("apps.iframe.editorScopeBody", { hosts: iframeAppHostsText(app) })}\n${t("apps.iframe.permissionBoundary")}`,
-          { tooltipId: "settings.apps.iframe.scopeHelp", placement: "right" }
+          { tooltipId: "settings.apps.iframe.scopeHelp" }
         ),
         settingsInfoTitle(t("apps.iframe.riskWarningTitle"), t("apps.iframe.riskWarningBody"), {
-          tooltipId: "settings.apps.iframe.riskWarning", tone: "warning", placement: "left"
+          tooltipId: "settings.apps.iframe.riskWarning", tone: "warning"
         })
       ),
       el("div", { class: "iframe-permission-policy-grid" },

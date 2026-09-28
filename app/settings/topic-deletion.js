@@ -315,8 +315,7 @@ export function createTopicDeletionSettingsSection(ctx) {
         el("div", { class: "field" },
           settingsInfoTitle(t("topicDeletion.site.userscript"), t("topicDeletion.site.infoBody"), {
             tooltipId: "settings.topicDeletion.siteInfo",
-            id: "topic-delete-userscript-help",
-            placement: "right"
+            id: "topic-delete-userscript-help"
           }),
           userscriptInput,
           sourceLabelNode ? el("div", { class: "settings-userscript-meta" }, sourceLabelNode) : null

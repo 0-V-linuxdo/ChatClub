@@ -14,7 +14,8 @@ export function createAppearanceOverlayInfoButton(svgIcon, help, helpId, tooltip
     "data-tooltip": help,
     "data-tooltip-id": tooltipId,
     "data-tooltip-placement": "top",
-    "data-tooltip-wrap": "true"
+    "data-tooltip-wrap": "true",
+    "data-tooltip-rich": "text"
   }, svgIcon("info"));
 }
 

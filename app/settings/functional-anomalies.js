@@ -283,7 +283,8 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
       host.replaceChildren(
         settingsBlock(
           settingsInfoTitle(t("functionalAnomalies.title"), t("functionalAnomalies.privacyNotice"), {
-            tooltipId: "settings.functionalAnomalies.privacy"
+            tooltipId: "settings.functionalAnomalies.privacy",
+            title: t("functionalAnomalies.privacyTitle")
           }),
           t("functionalAnomalies.desc"),
           settingsPaneToolbar(t("functionalAnomalies.manage"), ...toolbarActions),

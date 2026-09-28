@@ -404,7 +404,8 @@ export function createModelsSettingsSection(ctx) {
           "data-tooltip": info,
           "data-tooltip-id": "settings.models.allSources",
           "data-tooltip-placement": "left",
-          "data-tooltip-wrap": "true"
+          "data-tooltip-wrap": "true",
+          "data-tooltip-rich": "text"
         }, svgIcon("info")) : null
       ),
       el("div", {

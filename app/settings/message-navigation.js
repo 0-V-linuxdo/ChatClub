@@ -317,8 +317,7 @@ export function createMessageNavigationSettingsSection(ctx) {
           el("div", { class: "field" },
             settingsInfoTitle(t("messageNavigator.site.adapter"), t("messageNavigator.site.infoBody"), {
               tooltipId: "settings.messageNavigation.siteInfo",
-              id: "message-navigator-adapter-help",
-              placement: "right"
+              id: "message-navigator-adapter-help"
             }),
             adapterSelect
           ),
