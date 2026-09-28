@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "f52a9ec8a6285e97bfbf1bf19145ee52ea482d0bc59305b38edf07961bde3016";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "358ef8888ad428f4c775e293bedc0ff5bfdac7a8365dd6a38ac7e73f47dfc07d", "implementationSha256": "08983f1541419981b707507de542f90b71a2c4d3a0d12e98c0e8d45d8be21432", "implementationVersion": "2026.07.16.2+bundle.08983f1541419981b707507de542f90b71a2c4d3a0d12e98c0e8d45d8be21432" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_MESSAGE_NAVIGATOR_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/message-navigator.js", "entryPath": "content-src/message-navigator.js", "sourceSha256": "722a232eb714c0aa6cd7021a53b9dcd71205e86c6c38a5a2f86689fddc0289c3", "implementationSha256": "0ed025aed30eb948da209bde5661d09f6c29e8a3b1362d58b8ae00a41a4c0726", "implementationVersion": "2026.07.16.2+bundle.0ed025aed30eb948da209bde5661d09f6c29e8a3b1362d58b8ae00a41a4c0726" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -190,6 +190,7 @@
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),
     getSummaryRuntimeState: command({ timeoutMs: 1800, features: Object.freeze(["summary"]) }),
     collectSummary: command({ timeoutMs: 36e3, mutating: true, features: Object.freeze(["summary"]) }),
+    cancelSummaryCollection: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["summary"]) }),
     sendText: command({ timeoutMs: 12e3, mutating: true, features: Object.freeze(["send"]) }),
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),

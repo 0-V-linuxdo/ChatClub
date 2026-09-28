@@ -117,6 +117,7 @@ export const FRAME_COMMAND_SPECS = Object.freeze({
   captureEnd: command({ timeoutMs: 5000, mutating: true, capability: "base" }),
   getSummaryRuntimeState: command({ timeoutMs: 1800, features: Object.freeze(["summary"]) }),
   collectSummary: command({ timeoutMs: 36000, mutating: true, features: Object.freeze(["summary"]) }),
+  cancelSummaryCollection: command({ timeoutMs: 2000, mutating: true, features: Object.freeze(["summary"]) }),
   sendText: command({ timeoutMs: 12000, mutating: true, features: Object.freeze(["send"]) }),
   newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
   prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),

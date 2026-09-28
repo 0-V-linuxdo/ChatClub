@@ -373,14 +373,6 @@ export function renderTabsSidebarItem({
   return row;
 }
 
-export function renderTabsSidebarDivider(labelKey) {
-  return el("div", {
-    class: "workspace-tabs-sidebar-divider",
-    role: "separator",
-    "aria-label": t(labelKey)
-  }, el("span", { class: "workspace-tabs-sidebar-divider-label" }, t(labelKey)));
-}
-
 export function renderTabsSidebarGroup(labelKey) {
   return el("div", {
     class: "workspace-tabs-sidebar-group",

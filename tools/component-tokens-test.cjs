@@ -422,13 +422,42 @@ assert.match(
 );
 assert.match(css, /^\s*--muted:\s*#63716c;/m, "light --muted must clear 4.5:1 on --control-hover and --control-selected");
 assert.doesNotMatch(css, /--muted:\s*#66746f/, "#66746f only reached 4.34:1 on --control-hover");
+// One shared scrollbar: thin and trackless. Components may hide their bar, but
+// not restyle it. The thumb keeps the neutral grey of the classic macOS bar,
+// matched by contrast: native dark #6b6b6b was 2.58:1 on its #2d2d2d track but
+// 3.15:1 on --panel without it and read brighter, so dark rests on #5e5e5e
+// (2.59:1). Light #c1c1c1 stays (1.80:1). A user-directed exception to 3:1.
 assert.match(
   css,
-  /\.prompt-search-list \{[\s\S]*?scrollbar-color:\s*var\(--muted\) transparent;/,
-  "the only painted scrollbar thumb owes 3:1 like any other control"
+  /^:root \{\s*\n\s*scrollbar-color:\s*var\(--scrollbar-thumb\) transparent;\s*\n\}/m,
+  "the shared scrollbar paints its thumb from the theme token and no track"
 );
-assert.match(css, /\.prompt-search-list::-webkit-scrollbar-thumb \{[^}]*background:\s*var\(--muted\);/s);
-assert.match(css, /\.prompt-search-list::-webkit-scrollbar-thumb:hover \{[^}]*background:\s*var\(--text\);/s);
+assert.match(rootBlock, /--scrollbar-thumb:\s*#c1c1c1;/);
+assert.match(rootBlock, /--scrollbar-thumb-hover:\s*#7d7d7d;/);
+const darkThemeBlock = css.slice(css.indexOf(":root[data-theme=\"dark\"] {"), css.indexOf("@media (prefers-color-scheme: dark)"));
+const systemDarkBlock = css.slice(css.indexOf("@media (prefers-color-scheme: dark)"), css.indexOf("* { box-sizing: border-box; }"));
+for (const block of [darkThemeBlock, systemDarkBlock]) {
+  assert.match(block, /--scrollbar-thumb:\s*#5e5e5e;/, "dark keeps the native thumb's 2.58:1 against the surface it now sits on");
+  assert.match(block, /--scrollbar-thumb-hover:\s*#848484;/);
+}
+assert.doesNotMatch(css, /--scrollbar-thumb:\s*var\(--(?:muted|line|line-strong|primary)\)/, "the thumb palette must not be recoloured to a theme token");
+assert.match(css, /^\* \{\s*\n\s*scrollbar-width:\s*thin;\s*\n\}/m, "every scroll container uses the thin bar");
+assert.equal((css.match(/scrollbar-width:\s*thin/g) || []).length, 1, "only the universal rule declares the thin bar");
+assert.equal(
+  (css.match(/scrollbar-color:/g) || []).length,
+  2,
+  "scrollbar-color lives on :root and its forced-colors restatement only"
+);
+assert.doesNotMatch(css, /scrollbar-width:\s*(?!thin|none)[a-z]/, "a component may hide its bar, not widen it");
+assert.match(css, /^::-webkit-scrollbar \{[^}]*width:\s*6px;[^}]*height:\s*6px;[^}]*background:\s*transparent;/ms);
+assert.match(css, /^::-webkit-scrollbar-track,\s*\n::-webkit-scrollbar-corner \{[^}]*background:\s*transparent;/m);
+assert.match(css, /^::-webkit-scrollbar-thumb \{[^}]*background:\s*var\(--scrollbar-thumb\);/ms);
+assert.match(css, /^::-webkit-scrollbar-thumb:hover \{[^}]*background:\s*var\(--scrollbar-thumb-hover\);/ms);
+assert.doesNotMatch(
+  css,
+  /[.\w-]::-webkit-scrollbar(?:-thumb|-track)?\s*\{[^}]*(?:width|height):\s*(?!0\b)\d/,
+  "a component-scoped ::-webkit-scrollbar may hide the shared bar but not resize it"
+);
 assert.doesNotMatch(css, /color-mix\(in srgb, var\(--muted\) 55%, transparent\)/, "the 55% wash measured 2.15:1 on --panel");
 for (const [token, value] of [
   ["--composer-z-shell", "30"],
@@ -517,7 +546,7 @@ for (const selector of [
   assert.ok(forcedStateBlock.includes(selector), `${selector} needs a forced-colors selected state`);
 }
 assert.match(forcedStateBlock, /background:\s*Highlight;[^}]*color:\s*HighlightText;/s);
-assert.match(forcedStateBlock, /\.prompt-search-list \{[^}]*scrollbar-color:\s*ButtonText Canvas;/s);
+assert.match(forcedStateBlock, /:root \{[^}]*scrollbar-color:\s*ButtonText Canvas;/s);
 assert.match(css, /@media \(forced-colors: active\) \{[\s\S]*?\.workspace-tabs-search-mark \{[^}]*background:\s*Mark;/);
 assert.doesNotMatch(css, /\.prompt-search-option-apps/, "the composer search app line is dead since rows paint site marks");
 assert.doesNotMatch(css, /\.prompt-history-conversation-favicons/, "History conversation cards never render a favicon stack");

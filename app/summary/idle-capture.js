@@ -11,7 +11,26 @@ import {
 
 export const IDLE_FULLTEXT_CAPTURE_DEFAULTS = Object.freeze({
   idleMs: 30_000,
+  // Once a frame has shown a generating signal and it has ended, the reply is
+  // done; wait only this long for the DOM to settle instead of the full idle
+  // window. Sites with no generating signal keep idleMs.
+  settleMs: 6_000,
+  // Minimum spacing between two probes of one frame. It is also the fallback
+  // cadence for a content bundle that answers a fingerprint request at once.
   pollMs: 2_500,
+  // One long-poll probe: the frame answers early when its conversation
+  // changes and at this deadline otherwise. Frame RPC clamps at 60s.
+  pollMaxMs: 25_000,
+  // A frame that reports generating with no content change for this long has
+  // a stuck generating signal, not a long reply.
+  generatingStallMs: 15 * 60 * 1000,
+  // Trusted input inside the frame within this window means the user is
+  // reading or typing there; Copy waits for them to stop.
+  userQuietMs: 8_000,
+  // After the user's own input aborted a Copy pass, wait at least this long
+  // before the next pass.
+  abortBackoffMs: 15_000,
+  maxAborts: 4,
   maxAttempts: 3,
   wallMs: 9 * 60 * 1000,
   generatingWallMs: 45 * 60 * 1000,
@@ -26,6 +45,23 @@ export function conversationFingerprintSignature(fingerprint) {
 
 function fingerprintIsGenerating(fingerprint) {
   return fingerprint?.generating === true;
+}
+
+function fingerprintUserBusy(fingerprint, quietMs) {
+  const idle = Number(fingerprint?.inputIdleMs);
+  return Number.isFinite(idle) && idle >= 0 && idle < quietMs;
+}
+
+function fingerprintSince(fingerprint) {
+  if (!fingerprint || typeof fingerprint !== "object") return null;
+  return {
+    turnCount: Number(fingerprint.turnCount) || 0,
+    userChars: Number(fingerprint.userChars) || 0,
+    assistantChars: Number(fingerprint.assistantChars) || 0,
+    tailHash: String(fingerprint.tailHash || ""),
+    generating: fingerprint.generating === true,
+    containsPrompt: fingerprint.containsPrompt === true
+  };
 }
 
 function positiveInteger(value, fallback) {
@@ -72,13 +108,22 @@ function snapshotFromMetrics(metrics, prompt = "", hasPair = false) {
 
 export function createIdleFullTextCaptureScheduler(options = {}) {
   const idleMs = positiveInteger(options.idleMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.idleMs);
+  const settleMs = Math.min(idleMs, positiveInteger(options.settleMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.settleMs));
   const pollMs = positiveInteger(options.pollMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.pollMs);
+  const pollMaxMs = Math.max(pollMs, positiveInteger(options.pollMaxMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.pollMaxMs));
   const maxAttempts = Math.max(1, Math.min(10, Math.floor(positiveInteger(options.maxAttempts, IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts))));
   const wallMs = positiveInteger(options.wallMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.wallMs);
   const generatingWallMs = Math.max(
     wallMs,
     positiveInteger(options.generatingWallMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.generatingWallMs)
   );
+  const generatingStallMs = Math.min(
+    generatingWallMs,
+    positiveInteger(options.generatingStallMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.generatingStallMs)
+  );
+  const userQuietMs = positiveInteger(options.userQuietMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.userQuietMs);
+  const abortBackoffMs = positiveInteger(options.abortBackoffMs, IDLE_FULLTEXT_CAPTURE_DEFAULTS.abortBackoffMs);
+  const maxAborts = Math.max(1, Math.floor(positiveInteger(options.maxAborts, IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAborts)));
   const now = typeof options.now === "function" ? options.now : () => Date.now();
   const sleep = typeof options.sleep === "function"
     ? options.sleep
@@ -86,6 +131,8 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
   const listFrames = typeof options.listFrames === "function" ? options.listFrames : () => [];
   const getFingerprint = typeof options.getFingerprint === "function" ? options.getFingerprint : async () => null;
   const collectFrame = typeof options.collectFrame === "function" ? options.collectFrame : async () => null;
+  const cancelCollect = typeof options.cancelCollect === "function" ? options.cancelCollect : () => {};
+  const waitUntilVisible = typeof options.waitUntilVisible === "function" ? options.waitUntilVisible : () => {};
   const persistItem = typeof options.persistItem === "function" ? options.persistItem : async () => {};
   const itemMatchesPrompt = typeof options.itemMatchesPrompt === "function"
     ? options.itemMatchesPrompt
@@ -96,14 +143,64 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     ? options.loadStoredSnapshots
     : async () => [];
   const savedSignatures = new Map();
+  const inFlightCollects = new Map();
+  const cancelledCollectIds = new Set();
+  const sleepWaiters = [];
   let workspaceHasStoredPair = false;
 
   let generation = 0;
   let activeKind = "";
 
+  function interruptSleeps() {
+    const waiters = sleepWaiters.splice(0);
+    for (const waiter of waiters) {
+      try { waiter(); } catch {}
+    }
+  }
+
+  function wait(ms) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        const index = sleepWaiters.indexOf(finish);
+        if (index >= 0) sleepWaiters.splice(index, 1);
+        resolve();
+      };
+      sleepWaiters.push(finish);
+      Promise.resolve(sleep(ms)).then(finish, finish);
+    });
+  }
+
+  function requestCollectCancel(frame, collectRunId) {
+    const id = String(collectRunId || "").trim();
+    if (id) cancelledCollectIds.add(id);
+    if (!frame || !id) return;
+    try {
+      const cancelled = cancelCollect(frame, id);
+      if (cancelled && typeof cancelled.catch === "function") cancelled.catch(() => {});
+    } catch {}
+  }
+
+  function collectIsCancelled(runId, collectRunId) {
+    return runId !== generation || cancelledCollectIds.has(String(collectRunId || ""));
+  }
+
+  function cancelInFlightCollects() {
+    for (const [collectRunId, frame] of [...inFlightCollects]) {
+      inFlightCollects.delete(collectRunId);
+      requestCollectCancel(frame, collectRunId);
+    }
+  }
+
+  // Cancelling the parent loop alone left the frame clicking Copy until its
+  // own timeout; the in-flight frame runs are told to stop as well.
   function cancel() {
     generation += 1;
     activeKind = "";
+    cancelInFlightCollects();
+    interruptSleeps();
   }
 
   function isRunning() {
@@ -252,6 +349,8 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     if (!isEnabled()) return { scheduled: false, runId: generation };
     if (existing && isRunning()) return { scheduled: false, runId: generation };
     generation += 1;
+    cancelInFlightCollects();
+    interruptSleeps();
     const runId = generation;
     const kind = existing ? "existing" : "send";
     activeKind = kind;
@@ -272,14 +371,23 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
   }
 
   async function collectOnce({ frame, prompt, runId, attempts }) {
-    if (runId !== generation) return { status: "cancelled", attempts };
+    const collectRunId = `${runId}:${frameCaptureKey(frame) || "frame"}:${attempts}`;
+    if (collectIsCancelled(runId, collectRunId)) return { status: "cancelled", attempts };
     let item = null;
+    inFlightCollects.set(collectRunId, frame);
     try {
-      item = await collectFrame(frame, prompt);
+      item = await collectFrame(frame, prompt, {
+        runId: collectRunId,
+        isCancelled: () => collectIsCancelled(runId, collectRunId)
+      });
     } catch {
+      requestCollectCancel(frame, collectRunId);
       return { status: "collect-error", attempts };
+    } finally {
+      inFlightCollects.delete(collectRunId);
     }
-    if (runId !== generation) return { status: "cancelled", attempts };
+    if (collectIsCancelled(runId, collectRunId)) return { status: "cancelled", attempts };
+    if (item?.aborted === true) return { status: "aborted", attempts };
     if (!itemMatchesPrompt(item, prompt)) return { status: "unmatched", attempts };
     try {
       const persisted = await persistItem(item, prompt);
@@ -287,7 +395,7 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     } catch {
       return { status: "persist-error", attempts };
     }
-    if (runId !== generation) return { status: "cancelled", attempts };
+    if (collectIsCancelled(runId, collectRunId)) return { status: "cancelled", attempts };
     return { status: "saved", attempts, item };
   }
 
@@ -295,23 +403,48 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
     let lastSignature = "";
     let lastFingerprint = null;
     let idleSince = startedAt;
+    let lastChangeAt = startedAt;
     let attempts = 0;
+    let aborts = 0;
+    let abortedUntil = 0;
     let sawFingerprint = false;
     let sawChange = false;
     let sawPrompt = false;
+    let sawGenerating = false;
     let lastKnownGenerating;
+    let nextWaitMs = pollMs;
+
+    // Sleep out whatever the long poll did not already wait, so a frame that
+    // answers at once still sees the pollMs cadence and a frame that held the
+    // request for waitMs is probed again without delay. Returns the sleep
+    // itself (or null) so an awaiting caller costs one microtask, not three.
+    const rest = (targetMs, waited) => {
+      const ms = Math.min(pollMs, targetMs) - waited;
+      return ms > 0 ? wait(ms) : null;
+    };
 
     while (runId === generation) {
       if (!isEnabled()) return { status: "disabled", attempts };
       if (frameExists(frame) !== true) return { status: "gone", attempts };
+      // A hidden ChatClub tab cannot Copy (the Clipboard API needs focus) and
+      // its frames are not being read; park until it is shown again.
+      const visible = waitUntilVisible();
+      if (visible && typeof visible.then === "function") {
+        await visible;
+        if (runId !== generation) return { status: "cancelled", attempts };
+      }
 
       const elapsed = now() - startedAt;
       const generatingCapHit = elapsed >= generatingWallMs;
+      const pollStartedAt = now();
       let fingerprint = null;
       let signature = "";
       let probeFailed = false;
       try {
-        fingerprint = await getFingerprint(frame, prompt);
+        fingerprint = await getFingerprint(frame, prompt, {
+          waitMs: Math.min(pollMaxMs, Math.max(pollMs, nextWaitMs)),
+          since: fingerprintSince(lastFingerprint)
+        });
         signature = conversationFingerprintSignature(fingerprint);
         probeFailed = !fingerprint;
       } catch {
@@ -319,11 +452,14 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
         probeFailed = true;
       }
       if (runId !== generation) return { status: "cancelled", attempts };
+      const waited = Math.max(0, now() - pollStartedAt);
 
       const generating = probeFailed
         ? lastKnownGenerating !== false
         : fingerprintIsGenerating(fingerprint);
       if (!probeFailed) lastKnownGenerating = generating;
+      if (generating && !probeFailed) sawGenerating = true;
+      const userBusy = !probeFailed && fingerprintUserBusy(fingerprint, userQuietMs);
       const stored = savedRecordFor(frame, fingerprint);
       const liveMetrics = fingerprint ? fullTextContentMetricsFromFingerprint(fingerprint) : null;
       const liveIsHome = !fullTextConversationHrefIsStable(liveMetrics?.href);
@@ -334,8 +470,11 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
         return { status: "unchanged", attempts };
       }
       if (signature) {
-        if (sawFingerprint && signature !== lastSignature) sawChange = true;
-        if (!sawFingerprint || signature !== lastSignature || generating) idleSince = now();
+        if (sawFingerprint && signature !== lastSignature) {
+          sawChange = true;
+          lastChangeAt = now();
+        }
+        if (!sawFingerprint || signature !== lastSignature || generating || userBusy) idleSince = now();
         lastSignature = signature;
         lastFingerprint = fingerprint;
         sawFingerprint = true;
@@ -347,7 +486,12 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       const waitingForReply = !existing && (sawPrompt || sawChange);
       const wallHit = !generatingCapHit && !waitingForReply && elapsed >= wallMs;
       const canCollect = existing ? sawFingerprint : (sawPrompt || sawChange);
-      const idle = !generating && canCollect && sawFingerprint && (now() - idleSince >= idleMs);
+      // A reply that showed a generating signal and finished only needs the
+      // DOM to settle; without that signal the full idle window stands.
+      const idleWindowMs = sawGenerating && lastKnownGenerating === false ? settleMs : idleMs;
+      const idleFor = now() - idleSince;
+      const backingOff = now() < abortedUntil;
+      const idle = !generating && !userBusy && !backingOff && canCollect && sawFingerprint && idleFor >= idleWindowMs;
       const storedPair = stored?.hasPair === true || homeCovered;
       const needsCollect = existing
         ? (homeCovered ? false : fullTextExistingNeedsCollect(liveMetrics, stored))
@@ -355,10 +499,19 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
       if (generating && generatingCapHit) {
         return { status: "expired", attempts };
       }
+      if (generating && sawFingerprint && now() - lastChangeAt >= generatingStallMs) {
+        return { status: "expired", attempts };
+      }
+      // Ask the frame to hold the next probe until something changes or the
+      // idle window would end; while generating or busy, the full long poll.
+      nextWaitMs = !generating && !userBusy && canCollect && sawFingerprint
+        ? Math.max(pollMs, idleWindowMs - idleFor)
+        : pollMaxMs;
+      if (backingOff) nextWaitMs = Math.max(pollMs, Math.min(nextWaitMs, abortedUntil - now()));
       if (homeCovered) {
         const remainingHome = wallMs - (now() - startedAt);
         if (remainingHome <= 0 || wallHit) return { status: "unchanged", attempts };
-        await sleep(Math.min(pollMs, remainingHome));
+        await rest(remainingHome, waited);
         continue;
       }
       if (existing && wallHit && storedPair && !needsCollect) {
@@ -385,10 +538,21 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
         }
         if (result.status === "cancelled") return result;
         idleSince = now();
+        if (result.status === "aborted") {
+          // The user moved inside the frame while Copy ran; that pass is not
+          // an attempt against them. Back off and wait for them to stop.
+          aborts += 1;
+          if (aborts >= maxAborts) return { status: "aborted", attempts };
+          abortedUntil = now() + abortBackoffMs;
+          nextWaitMs = pollMs;
+          await rest(abortBackoffMs, 0);
+          continue;
+        }
         if (result.status === "unmatched" && (!wallHit || waitingForReply) && (now() - startedAt) < generatingWallMs) {
           const remainingIdle = generatingWallMs - (now() - startedAt);
           if (remainingIdle <= 0) return { status: "expired", attempts };
-          await sleep(Math.min(pollMs, remainingIdle));
+          nextWaitMs = pollMs;
+          await rest(remainingIdle, 0);
           continue;
         }
         attempts += 1;
@@ -424,7 +588,8 @@ export function createIdleFullTextCaptureScheduler(options = {}) {
         }
         return { status: "expired", attempts };
       }
-      await sleep(Math.min(pollMs, remaining));
+      nextWaitMs = Math.min(nextWaitMs, remaining);
+      await rest(remaining, waited);
     }
     return { status: "cancelled", attempts };
   }

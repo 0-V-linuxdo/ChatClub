@@ -161,7 +161,7 @@ export function createAppsSettingsSection(ctx) {
       settingsPaneToolbar(t("apps.builtInManage")),
       settingsList([
         "", "", t("apps.platformName"), t("apps.platformUrl"), t("apps.imagePasteStrategy"), t("apps.action")
-      ], rows, "settings-manager-list built-in-config-list")
+      ], rows, "settings-manager-list built-in-config-list settings-list-fill")
     );
   }
 
@@ -941,7 +941,7 @@ export function createAppsSettingsSection(ctx) {
       ),
       settingsList([
         "", "", t("apps.platformName"), t("apps.platformUrl"), t("apps.imagePasteStrategy"), t("apps.action")
-      ], rows, "settings-manager-list custom-config-list")
+      ], rows, "settings-manager-list custom-config-list settings-list-fill")
     );
   }
 

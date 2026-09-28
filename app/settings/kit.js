@@ -30,6 +30,31 @@ export function moveListItemByDelta(items, sourceId, delta = 0) {
   return nextIds.map((id) => byId.get(id)).filter(Boolean);
 }
 
+// A table pane scrolls its `.settings-list-fill`, not `.settings-main`, so a
+// redraw that replaces the pane must carry the list offsets across itself.
+export function captureSettingsListScroll(root) {
+  return Array.from(root?.querySelectorAll?.(".settings-list-fill") || [], (list) => [list.scrollTop, list.scrollLeft]);
+}
+
+export function restoreSettingsListScroll(root, offsets = []) {
+  root?.querySelectorAll?.(".settings-list-fill").forEach((list, index) => {
+    if (!offsets[index]) return;
+    [list.scrollTop, list.scrollLeft] = offsets[index];
+  });
+}
+
+// Filling is only worth it while every table keeps its header and two rows
+// (or all of itself when shorter) in view; past that the pane scrolls whole.
+export function syncSettingsListFill(main) {
+  if (!main?.classList || typeof main.querySelectorAll !== "function") return;
+  main.classList.remove("settings-list-fill-off");
+  const squeezed = Array.from(main.querySelectorAll(".settings-list-fill")).some((list) => {
+    const floor = Array.from(list.children).slice(0, 3).reduce((sum, child) => sum + child.offsetHeight, 0);
+    return list.clientHeight + 1 < Math.min(list.scrollHeight, floor);
+  });
+  main.classList.toggle("settings-list-fill-off", squeezed);
+}
+
 export function cleanupSettingsDragRows(selector) {
   document.querySelectorAll(selector).forEach((row) => {
     row.classList.remove("dragging", "drop-before", "drop-after");

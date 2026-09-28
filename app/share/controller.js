@@ -4,7 +4,7 @@ import { findSummarySiteConfig } from "../../shared/url-match.js";
 import { summaryConfigHasCollector } from "../../shared/summary-sites.js";
 import { createActionButton } from "../../ui/components.js";
 import { el, iconButton, toast } from "../../ui/dom.js";
-import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
+import { optionalControllerFunction, requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 import { createFrameRequest } from "../frame-request.js";
 import {
   blobUrl,
@@ -53,7 +53,8 @@ export function createShareController(ctx) {
     setFramePointerBlockedForOverlay: "function",
     inferAppName: "function",
     framePort: "object",
-    recordFunctionalAnomaly: "function"
+    recordFunctionalAnomaly: "function",
+    cancelIdleFullTextCapture: "function?"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
@@ -66,6 +67,7 @@ export function createShareController(ctx) {
   const inferAppName = requireControllerFunction(ctx, controllerName, "inferAppName");
   const recordFunctionalAnomaly = requireControllerFunction(ctx, controllerName, "recordFunctionalAnomaly");
   const sendToContentFrame = createFrameRequest(ctx.framePort, controllerName);
+  const cancelIdleFullTextCapture = optionalControllerFunction(ctx, "cancelIdleFullTextCapture", () => false);
   let captureAbort = null;
   let previewCanvas = null;
 
@@ -580,6 +582,9 @@ export function createShareController(ctx) {
   async function collectShareText(targets, signal) {
     state.shareStatus = t("sharePanel.collectingText");
     syncSharePanel();
+    // Share text runs the same Copy-based collector as Summary; a background
+    // full-text capture on the same frame must yield rather than run alongside.
+    try { cancelIdleFullTextCapture(); } catch { /* optional port */ }
     const sections = [];
     for (const [index, target] of targets.entries()) {
       throwIfAborted(signal);

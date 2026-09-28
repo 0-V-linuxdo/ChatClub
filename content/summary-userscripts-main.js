@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "f52a9ec8a6285e97bfbf1bf19145ee52ea482d0bc59305b38edf07961bde3016";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "8a868747c0e99158cd9604a1910ffc0a1d84095649e47daaa2615440aa458c7c", "implementationSha256": "11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9", "implementationVersion": "2026.07.16.2+bundle.11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "7395a4a5b8ac71366f802862bf00119acffeebcf5348e1139b085effa8d6fb40", "implementationSha256": "01f1727364aa5b473a14f00ed73cb81463b03e769ea0e43c345b8d3fa2bc66e3", "implementationVersion": "2026.07.16.2+bundle.01f1727364aa5b473a14f00ed73cb81463b03e769ea0e43c345b8d3fa2bc66e3" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2944,7 +2944,7 @@
       return [];
     };
     scripts["qianwen.js"] = scripts["qianwen"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde" });
     return scripts;
   }
 
@@ -3178,6 +3178,7 @@
     closest: () => closest,
     conversationFingerprint: () => conversationFingerprint,
     conversationIsGenerating: () => conversationIsGenerating,
+    conversationSampleRoot: () => conversationSampleRoot,
     copy: () => copy,
     copyFirst: () => copyFirst,
     extractCopySequence: () => extractCopySequence,
@@ -3198,6 +3199,75 @@
     userscriptFindCopyButtons: () => userscriptFindCopyButtons,
     visible: () => visible
   });
+
+  // content-src/shared/summary-collection-guard.js
+  var SUMMARY_COLLECTION_ABORTED = "SUMMARY_COLLECTION_ABORTED";
+  var USER_INPUT_EVENTS = Object.freeze(["pointerdown", "wheel", "keydown", "touchstart"]);
+  var USER_ACTIVITY_EVENTS = Object.freeze([...USER_INPUT_EVENTS, "pointermove"]);
+  var activeRun = null;
+  var runnerOpenedMenus = 0;
+  var SummaryCollectionAbortedError = class extends Error {
+    constructor(reason = "cancelled") {
+      super(`Summary collection aborted: ${reason}`);
+      this.name = "SummaryCollectionAbortedError";
+      this.code = SUMMARY_COLLECTION_ABORTED;
+      this.reason = String(reason || "cancelled");
+    }
+  };
+  function isSummaryCollectionAborted(error) {
+    return Boolean(error) && (error.code === SUMMARY_COLLECTION_ABORTED || error.name === "SummaryCollectionAbortedError");
+  }
+  function summaryCollectionAborted() {
+    return Boolean(activeRun?.aborted);
+  }
+  function throwIfSummaryCollectionAborted() {
+    if (activeRun?.aborted) throw new SummaryCollectionAbortedError(activeRun.reason);
+  }
+  function abortableSleep(ms, sleep2) {
+    throwIfSummaryCollectionAborted();
+    const run = activeRun;
+    const wait = typeof sleep2 === "function" ? sleep2(ms) : new Promise((resolve) => {
+      setTimeout(resolve, Math.max(0, Number(ms) || 0));
+    });
+    if (!run) {
+      return Promise.resolve(wait).then(() => {
+        throwIfSummaryCollectionAborted();
+      });
+    }
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (next) => {
+        if (settled) return;
+        settled = true;
+        const index = run.waiters.indexOf(onAbort);
+        if (index >= 0) run.waiters.splice(index, 1);
+        next();
+      };
+      const onAbort = () => finish(() => reject(new SummaryCollectionAbortedError(run.reason)));
+      run.waiters.push(onAbort);
+      Promise.resolve(wait).then(
+        () => finish(() => {
+          if (run.aborted) reject(new SummaryCollectionAbortedError(run.reason));
+          else resolve();
+        }),
+        (error) => finish(() => reject(error))
+      );
+    });
+  }
+  function noteRunnerOpenedMenu() {
+    runnerOpenedMenus += 1;
+  }
+  function closeRunnerOpenedMenus(dispatchEscape) {
+    if (runnerOpenedMenus <= 0) return false;
+    runnerOpenedMenus = 0;
+    try {
+      dispatchEscape();
+    } catch {
+    }
+    return true;
+  }
+
+  // content-src/shared/summary-runtime.js
   var COPY_SOURCE = NATIVE_COPY_SOURCE;
   var sleep = (ms) => new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -3238,7 +3308,7 @@
     return el.innerText || el.textContent || "";
   }
   function reveal(el) {
-    if (!el) return;
+    if (!el || summaryCollectionAborted()) return;
     try {
       el.scrollIntoView({ block: "center", inline: "nearest" });
       for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
@@ -3379,12 +3449,14 @@ ${value}`);
     }
     return nodes.sort(elementOrder);
   }
-  function lastAssistantTurnNode() {
-    const turns = conversationTurnNodes();
+  function lastAssistantTurnNodeFrom(turns) {
     for (let index = turns.length - 1; index >= 0; index -= 1) {
       if (conversationTurnRole(turns[index]) === "assistant") return turns[index];
     }
     return null;
+  }
+  function lastAssistantTurnNode() {
+    return lastAssistantTurnNodeFrom(conversationTurnNodes());
   }
   function controlLayoutVisible(el) {
     if (!el?.getBoundingClientRect) return false;
@@ -3426,13 +3498,14 @@ ${value}`);
   function conversationSampleRoot() {
     return qs("#notion-app") || qs("main,[role=main]") || document.body;
   }
-  function conversationLineSample() {
+  function conversationLineSample(options = {}) {
     let raw = "";
     try {
       raw = String(conversationSampleRoot()?.textContent || "");
     } catch {
     }
-    if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
+    if (options.tailOnly === true) raw = raw.slice(-36e3);
+    else if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
 ${raw.slice(-36e3)}`;
     const lines = [];
     for (const part of raw.split(/\n+/)) {
@@ -3454,7 +3527,7 @@ ${raw.slice(-36e3)}`;
   }
   function conversationToolActivityIsActive() {
     try {
-      return conversationToolActivityFromLines(conversationLineSample());
+      return conversationToolActivityFromLines(conversationLineSample({ tailOnly: true }));
     } catch {
     }
     return false;
@@ -3509,28 +3582,49 @@ ${raw.slice(-36e3)}`;
     const article = closest(node, "article,[data-testid^='conversation-turn'],[data-testid*='conversation-turn']");
     return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
   }
+  var TURN_FINGERPRINT_SKIP_SELECTOR = [
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons"
+  ].join(",");
+  function turnTextSkippingControls(turn) {
+    const doc = turn.ownerDocument || document;
+    if (typeof doc?.createTreeWalker !== "function" || typeof NodeFilter === "undefined") return null;
+    const walker = doc.createTreeWalker(turn, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (node.nodeType === 3) return NodeFilter.FILTER_ACCEPT;
+        if (node !== turn && matches(node, TURN_FINGERPRINT_SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_SKIP;
+      }
+    });
+    const parts = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) parts.push(node.nodeValue || "");
+    return parts.join("");
+  }
   function conversationTurnFingerprintText(turn) {
     if (!turn) return "";
-    let source = turn;
+    let value = null;
     try {
-      const clone = turn.cloneNode(true);
-      for (const node of clone.querySelectorAll([
-        "button",
-        "[role='button']",
-        "[role='toolbar']",
-        "[role='menu']",
-        "[role='menuitem']",
-        "[aria-label*='copy' i]",
-        "[title*='copy' i]",
-        "[data-testid*='copy' i]",
-        ".code-buttons"
-      ].join(","))) {
-        node.remove();
-      }
-      source = clone;
+      value = turnTextSkippingControls(turn);
     } catch {
+      value = null;
     }
-    const raw = normalize(source?.textContent || source?.innerText || "").replace(/\s+/g, " ");
+    if (value === null) {
+      try {
+        const clone = turn.cloneNode(true);
+        for (const node of clone.querySelectorAll(TURN_FINGERPRINT_SKIP_SELECTOR)) node.remove();
+        value = clone.textContent || "";
+      } catch {
+        value = turn.textContent || turn.innerText || "";
+      }
+    }
+    const raw = normalize(value).replace(/\s+/g, " ");
     try {
       return raw.normalize("NFKC").replace(/\s+/g, " ").trim();
     } catch {
@@ -3540,7 +3634,6 @@ ${raw.slice(-36e3)}`;
   function conversationFingerprint(documentId = "", data = {}) {
     const turns = conversationTurnNodes();
     const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-    const lines = conversationLineSample();
     let userChars = 0;
     let assistantChars = 0;
     let lastText = "";
@@ -3562,7 +3655,11 @@ ${raw.slice(-36e3)}`;
       }
     }
     const haystack = haystackParts.join(" ");
-    const promptHaystack = haystack || [...lines.slice(0, 48), ...lines.slice(-80)].join(" ");
+    let containsPrompt = Boolean(prompt && haystack && haystack.includes(prompt));
+    if (prompt && !haystack) {
+      const lines = conversationLineSample();
+      containsPrompt = [...lines.slice(0, 48), ...lines.slice(-80)].join(" ").includes(prompt);
+    }
     return {
       href: conversationHref(),
       documentId: String(documentId || ""),
@@ -3570,8 +3667,8 @@ ${raw.slice(-36e3)}`;
       userChars,
       assistantChars,
       tailHash: lastText ? fingerprintHash(lastText.slice(-500)) : "",
-      containsPrompt: Boolean(prompt && promptHaystack.includes(prompt)),
-      generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(lines) || lastAssistantTurnIsStreaming(lastAssistantTurnNode())
+      containsPrompt,
+      generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(conversationLineSample({ tailOnly: true })) || lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(turns))
     };
   }
   function copyLooksUseful(value) {
@@ -3846,6 +3943,8 @@ ${raw.slice(-36e3)}`;
     return /_?sch[\s_-]*copy[\s_-]*probe[\s_-]*[a-z0-9-]+_?/i.test(String(value || ""));
   }
   function activateElement(button) {
+    throwIfSummaryCollectionAborted();
+    if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
     button.focus?.();
     reveal(button);
     const init = { bubbles: true, cancelable: true, view: window };
@@ -3863,6 +3962,7 @@ ${raw.slice(-36e3)}`;
   }
   async function copy(button, options = {}) {
     if (!button) return "";
+    throwIfSummaryCollectionAborted();
     if (shouldRefuseLiveAssistantCopy(button)) return "";
     const copyTimeoutMs = Math.max(300, Math.min(1e4, Number(options.copyTimeoutMs || options.timeoutMs) || 2600));
     const copyPollMs = Math.max(20, Math.min(150, Number(options.copyPollMs) || 50));
@@ -3895,16 +3995,18 @@ ${raw.slice(-36e3)}`;
     try {
       const bridge = await copyBridgeRequest("install", id, { timeoutMs: copyTimeoutMs }, 900);
       if (!bridge?.installed || !bridge?.hooks) return "";
+      throwIfSummaryCollectionAborted();
       try {
         activateElement(button);
-      } catch {
+      } catch (error) {
+        if (isSummaryCollectionAborted(error)) throw error;
         try {
           button.click?.();
         } catch {
         }
       }
       for (let index = 0, max = Math.ceil(copyTimeoutMs / copyPollMs); index < max; index += 1) {
-        await sleep(copyPollMs);
+        await abortableSleep(copyPollMs, sleep);
         if (captured && (capturedPriority >= 5 || Date.now() - capturedAt >= copyCaptureGraceMs)) break;
         try {
           const current = normalize(await navigator.clipboard.readText());
@@ -3937,15 +4039,17 @@ ${raw.slice(-36e3)}`;
     }
     if (details.scope && options.copyMenu !== false) {
       for (const menuButton of userscriptFindMenuButtons(details.scope, options).slice(0, 8)) {
-        userscriptCloseMenus();
+        throwIfSummaryCollectionAborted();
         reveal(menuButton);
+        noteRunnerOpenedMenu();
         try {
           activateElement(menuButton);
-        } catch {
+        } catch (error) {
+          if (isSummaryCollectionAborted(error)) throw error;
         }
-        await sleep(180);
+        await abortableSleep(180, sleep);
         const value = await copyFirst(userscriptOpenCopyButtons(options).filter((button) => button !== menuButton && !menuButton.contains(button)), details);
-        userscriptCloseMenus();
+        closeRunnerOpenedMenus(userscriptCloseMenus);
         if (value) return value;
       }
     }
@@ -4008,8 +4112,9 @@ ${raw.slice(-36e3)}`;
       let role = userscriptRole(turn, options) || fallbackRole(roleIndex, options);
       if (role !== "user" && role !== "assistant") continue;
       if (shouldRefuseLiveAssistantCopy(turn)) continue;
+      throwIfSummaryCollectionAborted();
       reveal(turn);
-      await sleep(80);
+      await abortableSleep(80, sleep);
       const expected = text(turn);
       const copied = await copyFirst(userscriptFindCopyButtons(turn, options), { expected, role, options, scope: turn });
       if (copied) {
@@ -4052,18 +4157,20 @@ ${raw.slice(-36e3)}`;
     if (out.length < 2 && options.copyMenu !== false) {
       for (const root of searchRoots) {
         for (const menuButton of userscriptFindMenuButtons(root, options).slice(0, Math.min(maxButtons, 16))) {
-          userscriptCloseMenus();
+          throwIfSummaryCollectionAborted();
           reveal(menuButton);
+          noteRunnerOpenedMenu();
           try {
             activateElement(menuButton);
-          } catch {
+          } catch (error) {
+            if (isSummaryCollectionAborted(error)) throw error;
           }
-          await sleep(180);
+          await abortableSleep(180, sleep);
           const roleHint = userscriptRole(menuButton, options) || fallbackRole(roleIndex, options);
           for (const button of userscriptOpenCopyButtons(options).filter((item) => item !== menuButton && !menuButton.contains(item)).slice(0, 8)) {
             if (await accept(button, roleHint)) break;
           }
-          userscriptCloseMenus();
+          closeRunnerOpenedMenus(userscriptCloseMenus);
           if (out.length >= 2) break;
         }
       }
@@ -4268,8 +4375,9 @@ ${raw.slice(-36e3)}`;
       const expected = nodeTextForCopy(anchor);
       if (role !== "user" && role !== "assistant") continue;
       if (shouldRefuseLiveAssistantCopy(anchor)) continue;
+      throwIfSummaryCollectionAborted();
       reveal(anchor);
-      await sleep(180);
+      await abortableSleep(180, sleep);
       for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
         const copied = await copy(button, options);
         const value = userscriptCopyAccepted(copied, expected, options);
@@ -4278,8 +4386,8 @@ ${raw.slice(-36e3)}`;
           roleIndex += 1;
           break;
         }
-        userscriptCloseMenus();
-        await sleep(80);
+        closeRunnerOpenedMenus(userscriptCloseMenus);
+        await abortableSleep(80, sleep);
       }
       if (hasUserAndAssistant(out)) break;
     }

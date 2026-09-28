@@ -11,15 +11,26 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   const {
     buildSidebarTree,
     normalizeTabsSidebarSortMode,
-    sortSidebarItems
+    sortSidebarItems,
+    TABS_SIDEBAR_SORT_LABEL_KEYS,
+    TABS_SIDEBAR_SORT_MODES
   } = await import(moduleUrl("app/workspace/tabs-sidebar-sort.js"));
   const { groupByDate } = await import(moduleUrl("shared/date-groups.js"));
 
-  assert.equal(normalizeTabsSidebarSortMode("open"), "open");
-  assert.equal(normalizeTabsSidebarSortMode("viewed"), "viewed");
-  assert.equal(normalizeTabsSidebarSortMode("time"), "viewed");
-  assert.equal(normalizeTabsSidebarSortMode("nope"), "viewed");
-  assert.equal(normalizeTabsSidebarSortMode(""), "viewed");
+  assert.deepEqual([...TABS_SIDEBAR_SORT_MODES], ["name", "created", "activity"], "the sort menu offers Name, Date created, Last activity in that order");
+  assert.deepEqual({ ...TABS_SIDEBAR_SORT_LABEL_KEYS }, {
+    name: "workspace.tabs.sortName",
+    created: "workspace.tabs.sortCreated",
+    activity: "workspace.tabs.sortActivity"
+  });
+  assert.equal(normalizeTabsSidebarSortMode("name"), "name");
+  assert.equal(normalizeTabsSidebarSortMode("created"), "created");
+  assert.equal(normalizeTabsSidebarSortMode("activity"), "activity");
+  for (const retired of ["viewed", "edited", "open", "time"]) {
+    assert.equal(normalizeTabsSidebarSortMode(retired), "activity", `a saved ${retired} sort must land on Last activity`);
+  }
+  assert.equal(normalizeTabsSidebarSortMode("nope"), "activity");
+  assert.equal(normalizeTabsSidebarSortMode(""), "activity");
 
   const now = new Date(2026, 7, 8, 12, 0, 0).getTime();
   const daysAgo = (days, hour = 12) => new Date(2026, 7, 8 - days, hour, 0, 0).getTime();
@@ -31,7 +42,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     { workspaceId: "page-month", live: false, detachedAt: daysAgo(8), topicTitle: "Month" }
   ];
 
-  assert.equal(sortSidebarItems(tabs, { mode: "viewed", now }).find((item) => item.workspaceId === "page-month")?.detachedAt, daysAgo(8));
+  assert.equal(sortSidebarItems(tabs, { mode: "activity", now }).find((item) => item.workspaceId === "page-month")?.detachedAt, daysAgo(8));
   const sorted = sortSidebarItems(tabs, { mode: "time", now });
   assert.deepEqual(sorted.map((item) => item.workspaceId), [
     "page-today",
@@ -41,7 +52,7 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     "page-older"
   ]);
 
-  const tree = buildSidebarTree({ items: tabs, folders: [], mode: "viewed", now });
+  const tree = buildSidebarTree({ items: tabs, folders: [], mode: "activity", now });
   assert.deepEqual(
     tree.map((node) => [node.id, (node.items || []).map((item) => item.workspaceId)]),
     [
@@ -90,29 +101,40 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     }
   ];
   assert.deepEqual(
-    sortSidebarItems(stamped, { mode: "viewed", now }).map((item) => item.workspaceId),
-    ["page-viewed", "page-edited", "page-created"]
+    sortSidebarItems(stamped, { mode: "activity", now }).map((item) => item.workspaceId),
+    ["page-created", "page-edited", "page-viewed"],
+    "each stamped desk was touched today in some way, so Last activity ties and the id breaks it"
   );
   assert.deepEqual(
-    sortSidebarItems(stamped, { mode: "edited", now }).map((item) => item.workspaceId),
-    ["page-edited", "page-created", "page-viewed"]
+    sortSidebarItems([
+      { workspaceId: "page-a", viewedAt: daysAgo(3), editedAt: daysAgo(1), createdAt: daysAgo(9) },
+      { workspaceId: "page-b", viewedAt: daysAgo(2), editedAt: daysAgo(5), createdAt: daysAgo(9) },
+      { workspaceId: "page-c", viewedAt: daysAgo(4), editedAt: daysAgo(4), updatedAt: daysAgo(0), createdAt: daysAgo(9) }
+    ], { mode: "activity", now }).map((item) => item.workspaceId),
+    ["page-c", "page-a", "page-b"],
+    "an edit newer than the last view must count as activity"
   );
   assert.deepEqual(
     sortSidebarItems(stamped, { mode: "created", now }).map((item) => item.workspaceId),
     ["page-created", "page-edited", "page-viewed"]
   );
   assert.deepEqual(
-    buildSidebarTree({ items: stamped, folders: [], mode: "edited", now }).map((node) => node.id),
-    ["today", "pastWeek", "pastMonth"]
+    buildSidebarTree({ items: stamped, folders: [], mode: "created", now }).map((node) => node.id),
+    ["today", "pastMonth", "older"]
+  );
+  assert.deepEqual(
+    buildSidebarTree({ items: stamped, folders: [], mode: "activity", now }).map((node) => node.id),
+    ["today"]
+  );
+  assert.equal(
+    buildSidebarTree({ items: tabs, folders: [], mode: "open", now }).some((node) => node.type === "divider"),
+    false,
+    "a saved Open first sort must not bring back the open/closed divider"
   );
 
-  const open = sortSidebarItems(tabs, { mode: "open", now });
-  assert.deepEqual(open.filter((item) => item.live).map((item) => item.workspaceId), [
-    "page-today",
-    "page-yesterday"
-  ]);
-  assert.equal(open[0].live, true);
-  assert.equal(open.at(-1).live, false);
+  const pinnedTree = buildSidebarTree({ items: tabs, folders: [], mode: "created", pinnedOrder: ["page-older"], now });
+  assert.equal(pinnedTree[0].id, "pinned");
+  assert.deepEqual(pinnedTree[0].items.map((item) => item.workspaceId), ["page-older"]);
 
   const named = sortSidebarItems(tabs, {
     mode: "name",

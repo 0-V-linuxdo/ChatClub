@@ -263,7 +263,7 @@ export function createPromptHistorySettingsSection(ctx) {
           t("promptHistory.manage"),
           ...(history.length ? [settingsPrimaryAction(t("promptHistory.clear"), "trash", () => clear(redraw))] : [])
         ),
-        settingsList([t("promptHistory.time"), t("promptHistory.prompt"), t("profiles.actions")], rows, "prompt-history-list")
+        settingsList([t("promptHistory.time"), t("promptHistory.prompt"), t("profiles.actions")], rows, "prompt-history-list settings-list-fill")
       )
     );
   }

@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "f52a9ec8a6285e97bfbf1bf19145ee52ea482d0bc59305b38edf07961bde3016";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "69380307ca8d1cda211127883a29c5bbe8b2a2d6296e830e84cab04ab97ca56f", "implementationSha256": "f22edda721c7df3e7dc5d4f8579d2df6ee408e561b730e396b5cc2ab13b66342", "implementationVersion": "2026.07.16.2+bundle.f22edda721c7df3e7dc5d4f8579d2df6ee408e561b730e396b5cc2ab13b66342" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_DELETE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/delete.js", "entryPath": "content-src/content-delete.js", "sourceSha256": "76eaa136a826246c3ea6dc737cd970d265f4b83257a11916aab694fc492dc3f2", "implementationSha256": "2a2ae553d54c1a3ee9535603003dde08e9c699f4482d82a6a3426eb37382c947", "implementationVersion": "2026.07.16.2+bundle.2a2ae553d54c1a3ee9535603003dde08e9c699f4482d82a6a3426eb37382c947" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -481,6 +481,30 @@
     EXECUTE_TOPIC_DELETE_USERSCRIPT_REQUEST
   ]);
 
+  // content-src/shared/summary-collection-guard.js
+  var SUMMARY_COLLECTION_ABORTED = "SUMMARY_COLLECTION_ABORTED";
+  var USER_INPUT_EVENTS = Object.freeze(["pointerdown", "wheel", "keydown", "touchstart"]);
+  var USER_ACTIVITY_EVENTS = Object.freeze([...USER_INPUT_EVENTS, "pointermove"]);
+  var activeRun = null;
+  var runnerOpenedMenus = 0;
+  var SummaryCollectionAbortedError = class extends Error {
+    constructor(reason = "cancelled") {
+      super(`Summary collection aborted: ${reason}`);
+      this.name = "SummaryCollectionAbortedError";
+      this.code = SUMMARY_COLLECTION_ABORTED;
+      this.reason = String(reason || "cancelled");
+    }
+  };
+  function summaryCollectionAborted() {
+    return Boolean(activeRun?.aborted);
+  }
+  function throwIfSummaryCollectionAborted() {
+    if (activeRun?.aborted) throw new SummaryCollectionAbortedError(activeRun.reason);
+  }
+  function noteRunnerOpenedMenu() {
+    runnerOpenedMenus += 1;
+  }
+
   // content-src/shared/summary-runtime.js
   var sleep = (ms) => new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -509,7 +533,7 @@
     }
   }
   function reveal(el) {
-    if (!el) return;
+    if (!el || summaryCollectionAborted()) return;
     try {
       el.scrollIntoView({ block: "center", inline: "nearest" });
       for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
@@ -518,6 +542,17 @@
     } catch {
     }
   }
+  var TURN_FINGERPRINT_SKIP_SELECTOR = [
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons"
+  ].join(",");
   function classText(el) {
     const value = el?.getAttribute?.("class") || el?.className || "";
     return typeof value === "string" ? value : value?.baseVal || "";
@@ -544,6 +579,8 @@
     }
   }
   function activateElement(button) {
+    throwIfSummaryCollectionAborted();
+    if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
     button.focus?.();
     reveal(button);
     const init = { bubbles: true, cancelable: true, view: window };
@@ -715,6 +752,7 @@
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),
     getSummaryRuntimeState: command({ timeoutMs: 1800, features: Object.freeze(["summary"]) }),
     collectSummary: command({ timeoutMs: 36e3, mutating: true, features: Object.freeze(["summary"]) }),
+    cancelSummaryCollection: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["summary"]) }),
     sendText: command({ timeoutMs: 12e3, mutating: true, features: Object.freeze(["send"]) }),
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),

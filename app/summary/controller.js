@@ -786,7 +786,7 @@ export function createSummaryController(ctx) {
     };
   }
   
-  async function collectFrameSummary(iframe, index = 0, { recordFailures = true, timeoutMs, idleFullText = false } = {}) {
+  async function collectFrameSummary(iframe, index = 0, { recordFailures = true, timeoutMs, idleFullText = false, runId = "", isCancelled } = {}) {
     const app = frameApp(iframe);
     // Probe the already-registered content bridge before deciding that a page
     // is blank. This both discovers Firefox-safe declared favicons for skipped
@@ -847,19 +847,31 @@ export function createSummaryController(ctx) {
     if (siteContext.failure) return siteContext.failure;
     const siteConfig = siteContext.config;
     const siteFields = siteContext.fields;
+    const collectionCancelled = () => typeof isCancelled === "function" && isCancelled();
+    const abortIdleCollect = () => {
+      if (!runId) return;
+      sendToContentFrame(iframe, "cancelSummaryCollection", { runId }, { timeoutMs: 2000, skipEnsure: true }).catch(() => {});
+    };
   
     try {
       let messages = [];
       const hasSummaryRunner = summaryConfigHasCollector(siteConfig);
       if (hasSummaryRunner) {
+        if (collectionCancelled()) {
+          return { diagnostic: diagnostic("skipped", t("summaryPanel.collectionInterrupted"), { ...siteFields, aborted: true }) };
+        }
         const runtimeConfig = { ...siteConfig };
         delete runtimeConfig.userscript;
         delete runtimeConfig.customUserscript;
         const result = await sendToContentFrame(iframe, "collectSummary", {
           config: idleFullText ? { ...runtimeConfig, idleFullText: true } : runtimeConfig,
           expectedDocumentId: summaryReady.registration.documentId,
-          expectedHref: base.href
+          expectedHref: base.href,
+          runId: runId || undefined
         }, timeoutMs || siteConfig.userscriptTimeoutMs || 36000);
+        if (result?.aborted) {
+          return { diagnostic: diagnostic("skipped", t("summaryPanel.collectionInterrupted"), { ...siteFields, aborted: true }) };
+        }
         messages = result?.messages || [];
         if (!messages.length && result?.rawMessageCount) {
           return {
@@ -896,6 +908,7 @@ export function createSummaryController(ctx) {
         diagnostic: diagnostic("skipped", t("summaryPanel.userscriptNoTurns", { name: siteConfig.name || siteConfig.id }), siteFields)
       };
     } catch (error) {
+      abortIdleCollect();
       const message = error.message || t("summaryPanel.collectionFailed");
       if (recordFailures) recordSummaryFailure("collectSource", app, { ...base, ...siteFields }, error, message);
       return { diagnostic: diagnostic("error", message, siteFields) };
@@ -925,6 +938,9 @@ export function createSummaryController(ctx) {
 
   async function collectLockedFrameSummary(iframe, index = 0, options = {}) {
     return withSummaryCollectionLock(async () => {
+      if (typeof options.isCancelled === "function" && options.isCancelled()) {
+        return { diagnostic: { status: "skipped", message: t("summaryPanel.collectionInterrupted"), aborted: true } };
+      }
       try {
         return await collectFrameSummary(iframe, index, options);
       } catch (error) {
@@ -941,6 +957,7 @@ export function createSummaryController(ctx) {
   async function collectWorkspacePreviewItems() {
     const frames = currentFrames();
     if (!frames.length) return [];
+    cancelIdleFullTextCapture();
     const results = await Promise.all(frames.map((iframe, index) => collectLockedFrameSummary(iframe, index)));
     const items = results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
     await persistRecordedFullText(items).catch(() => {});
@@ -972,24 +989,49 @@ export function createSummaryController(ctx) {
       iframe
     })),
     frameExists: (frame) => Boolean(resolveIdleCaptureFrame(frame)),
-    getFingerprint: async (frame, prompt) => {
+    getFingerprint: async (frame, prompt, poll = {}) => {
       const iframe = resolveIdleCaptureFrame(frame);
       if (!iframe) return null;
-      return sendToContentFrame(iframe, "getConversationFingerprint", { prompt }, { timeoutMs: 8000, skipEnsure: false });
+      const waitMs = Math.max(0, Number(poll?.waitMs) || 0);
+      return sendToContentFrame(
+        iframe,
+        "getConversationFingerprint",
+        { prompt, waitMs, since: poll?.since || null },
+        { timeoutMs: waitMs + 8000, skipEnsure: false }
+      );
     },
-    collectFrame: async (frame) => {
+    collectFrame: async (frame, _prompt, { runId = "", isCancelled } = {}) => {
       const iframe = resolveIdleCaptureFrame(frame);
       if (!iframe) return null;
       const index = Math.max(0, currentFrames().indexOf(iframe));
       const result = await collectLockedFrameSummary(iframe, index, {
         recordFailures: false,
         timeoutMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.collectTimeoutMs,
-        idleFullText: true
+        idleFullText: true,
+        runId,
+        isCancelled
       });
+      if (result?.diagnostic?.aborted) return { aborted: true, diagnostic: result.diagnostic };
       return summaryPreviewItemFromResult(result, {
         index,
         order: index,
         instanceId: iframe.dataset.instanceId || ""
+      });
+    },
+    cancelCollect: (frame, runId) => {
+      const iframe = resolveIdleCaptureFrame(frame);
+      if (!iframe || !runId) return undefined;
+      return sendToContentFrame(iframe, "cancelSummaryCollection", { runId }, { timeoutMs: 2000, skipEnsure: true }).catch(() => null);
+    },
+    waitUntilVisible: () => {
+      if (typeof document === "undefined" || document.visibilityState !== "hidden") return undefined;
+      return new Promise((resolve) => {
+        const onChange = () => {
+          if (document.visibilityState === "hidden") return;
+          document.removeEventListener("visibilitychange", onChange);
+          resolve();
+        };
+        document.addEventListener("visibilitychange", onChange);
       });
     },
     itemMatchesPrompt: (item, prompt) => (
@@ -1001,13 +1043,16 @@ export function createSummaryController(ctx) {
     loadStoredSnapshots: async () => {
       const workspaceId = workspaceSessionIdFromUrl(globalThis.location?.href || "");
       if (!workspaceId) return [];
-      let store = {};
+      let record = null;
       try {
-        store = await loadWorkspaceTabFullText() || {};
+        // The port answers for one desk; a legacy store-shaped answer still
+        // resolves through its own workspace entry.
+        const loaded = await loadWorkspaceTabFullText(workspaceId);
+        record = Array.isArray(loaded?.frames) ? loaded : loaded?.[workspaceId] || null;
       } catch {
         return [];
       }
-      const frames = Array.isArray(store[workspaceId]?.frames) ? store[workspaceId].frames : [];
+      const frames = Array.isArray(record?.frames) ? record.frames : [];
       return frames.flatMap((frame) => {
         if (!fullTextMessagesHavePair(frame?.messages)) return [];
         const metrics = fullTextContentMetricsFromMessages(frame.messages);
@@ -1032,6 +1077,13 @@ export function createSummaryController(ctx) {
   function scheduleIdleFullTextCapture(prompt) {
     if (state.options?.recordFullText !== true) return { scheduled: false };
     return idleFullTextCapture.schedule(prompt);
+  }
+
+  // A user-initiated collect (Summary, Share, Pocket, source refresh) must not
+  // queue behind a background capture that is busy hovering Copy buttons in the
+  // same frame: abandon that capture, including its in-flight collect, first.
+  function cancelIdleFullTextCapture() {
+    return idleFullTextCapture.cancel();
   }
 
   function scheduleExistingIdleFullTextCapture() {
@@ -1063,6 +1115,7 @@ export function createSummaryController(ctx) {
     try {
       const frames = currentFrames();
       if (!frames.length) throw new Error(t("summaryPanel.noIframe"));
+      cancelIdleFullTextCapture();
       const results = await Promise.all(frames.map((iframe, index) => collectLockedFrameSummary(iframe, index)));
       state.summaryLoadingPhase = "build";
       state.summaryPreviewItems = results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
@@ -1098,6 +1151,7 @@ export function createSummaryController(ctx) {
     state.summaryNotice = "";
     syncSummaryPanel();
     try {
+      cancelIdleFullTextCapture();
       const frameIndex = currentFrames().indexOf(iframe);
       const result = await collectLockedFrameSummary(iframe, frameIndex >= 0 ? frameIndex : summarySourceOrder(item));
       const nextItem = summaryPreviewItemFromResult(result, item);
@@ -1169,6 +1223,7 @@ export function createSummaryController(ctx) {
     delete runtimeConfig.userscript;
     delete runtimeConfig.customUserscript;
     try {
+      cancelIdleFullTextCapture();
       const result = await sendToContentFrame(iframe, "collectSummary", {
         config: runtimeConfig,
         expectedDocumentId: summaryReady.registration?.documentId,
@@ -1208,6 +1263,7 @@ export function createSummaryController(ctx) {
     loadPanelSize: loadSummaryPanelSize,
     scheduleIdleFullTextCapture,
     scheduleExistingIdleFullTextCapture,
+    cancelIdleFullTextCapture,
     collectWorkspacePreviewItems,
     probeCollectorOnActiveFrame
   };

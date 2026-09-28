@@ -413,12 +413,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "f52a9ec8a6285e97bfbf1bf19145ee52ea482d0bc59305b38edf07961bde3016";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "4fb431701e2043c2649daff50a955fca18a1d0df435823974f88f96b3de69295", "implementationSha256": "90cf02939389e335283d43560d11b5a85a9492ba1136c95b2dcd11a895cea106", "implementationVersion": "2026.07.16.2+bundle.90cf02939389e335283d43560d11b5a85a9492ba1136c95b2dcd11a895cea106" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "c4313b050e5febc9de1f93e857cf1cb9fe4f2d8206af468047a7983680cf13d2", "implementationSha256": "3af199af759dd88d3820bd2fc6bd8b474a84090ebc402d5497ca90148bf2192e", "implementationVersion": "2026.07.16.2+bundle.3af199af759dd88d3820bd2fc6bd8b474a84090ebc402d5497ca90148bf2192e" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -680,6 +680,28 @@
     return null;
   }
 
+  // content-src/shared/summary-collection-guard.js
+  var USER_INPUT_EVENTS = Object.freeze(["pointerdown", "wheel", "keydown", "touchstart"]);
+  var USER_ACTIVITY_EVENTS = Object.freeze([...USER_INPUT_EVENTS, "pointermove"]);
+  var lastTrustedInputAt = 0;
+  var activityTrackingInstalled = false;
+  function trackTrustedActivity(event) {
+    if (event?.isTrusted) lastTrustedInputAt = Date.now();
+  }
+  function installUserActivityTracking() {
+    if (activityTrackingInstalled || typeof window === "undefined") return;
+    activityTrackingInstalled = true;
+    for (const type of USER_ACTIVITY_EVENTS) {
+      try {
+        window.addEventListener(type, trackTrustedActivity, { capture: true, passive: true });
+      } catch {
+      }
+    }
+  }
+  function userInputIdleMs(now = Date.now()) {
+    return lastTrustedInputAt ? Math.max(0, now - lastTrustedInputAt) : null;
+  }
+
   // content-src/shared/summary-runtime.js
   var normalize = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   function visible(el) {
@@ -810,8 +832,7 @@
     }
     return nodes.sort(elementOrder);
   }
-  function lastAssistantTurnNode() {
-    const turns = conversationTurnNodes();
+  function lastAssistantTurnNodeFrom(turns) {
     for (let index = turns.length - 1; index >= 0; index -= 1) {
       if (conversationTurnRole(turns[index]) === "assistant") return turns[index];
     }
@@ -857,13 +878,14 @@
   function conversationSampleRoot() {
     return qs("#notion-app") || qs("main,[role=main]") || document.body;
   }
-  function conversationLineSample() {
+  function conversationLineSample(options = {}) {
     let raw = "";
     try {
       raw = String(conversationSampleRoot()?.textContent || "");
     } catch {
     }
-    if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
+    if (options.tailOnly === true) raw = raw.slice(-36e3);
+    else if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
 ${raw.slice(-36e3)}`;
     const lines = [];
     for (const part of raw.split(/\n+/)) {
@@ -916,28 +938,49 @@ ${raw.slice(-36e3)}`;
     if (!turn) return false;
     return nodeLooksLikeStreamingTurn(turn);
   }
+  var TURN_FINGERPRINT_SKIP_SELECTOR = [
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons"
+  ].join(",");
+  function turnTextSkippingControls(turn) {
+    const doc = turn.ownerDocument || document;
+    if (typeof doc?.createTreeWalker !== "function" || typeof NodeFilter === "undefined") return null;
+    const walker = doc.createTreeWalker(turn, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (node.nodeType === 3) return NodeFilter.FILTER_ACCEPT;
+        if (node !== turn && matches(node, TURN_FINGERPRINT_SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_SKIP;
+      }
+    });
+    const parts = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) parts.push(node.nodeValue || "");
+    return parts.join("");
+  }
   function conversationTurnFingerprintText(turn) {
     if (!turn) return "";
-    let source = turn;
+    let value = null;
     try {
-      const clone = turn.cloneNode(true);
-      for (const node of clone.querySelectorAll([
-        "button",
-        "[role='button']",
-        "[role='toolbar']",
-        "[role='menu']",
-        "[role='menuitem']",
-        "[aria-label*='copy' i]",
-        "[title*='copy' i]",
-        "[data-testid*='copy' i]",
-        ".code-buttons"
-      ].join(","))) {
-        node.remove();
-      }
-      source = clone;
+      value = turnTextSkippingControls(turn);
     } catch {
+      value = null;
     }
-    const raw = normalize(source?.textContent || source?.innerText || "").replace(/\s+/g, " ");
+    if (value === null) {
+      try {
+        const clone = turn.cloneNode(true);
+        for (const node of clone.querySelectorAll(TURN_FINGERPRINT_SKIP_SELECTOR)) node.remove();
+        value = clone.textContent || "";
+      } catch {
+        value = turn.textContent || turn.innerText || "";
+      }
+    }
+    const raw = normalize(value).replace(/\s+/g, " ");
     try {
       return raw.normalize("NFKC").replace(/\s+/g, " ").trim();
     } catch {
@@ -947,7 +990,6 @@ ${raw.slice(-36e3)}`;
   function conversationFingerprint(documentId = "", data = {}) {
     const turns = conversationTurnNodes();
     const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-    const lines = conversationLineSample();
     let userChars = 0;
     let assistantChars = 0;
     let lastText = "";
@@ -969,7 +1011,11 @@ ${raw.slice(-36e3)}`;
       }
     }
     const haystack = haystackParts.join(" ");
-    const promptHaystack = haystack || [...lines.slice(0, 48), ...lines.slice(-80)].join(" ");
+    let containsPrompt = Boolean(prompt && haystack && haystack.includes(prompt));
+    if (prompt && !haystack) {
+      const lines = conversationLineSample();
+      containsPrompt = [...lines.slice(0, 48), ...lines.slice(-80)].join(" ").includes(prompt);
+    }
     return {
       href: conversationHref(),
       documentId: String(documentId || ""),
@@ -977,8 +1023,8 @@ ${raw.slice(-36e3)}`;
       userChars,
       assistantChars,
       tailHash: lastText ? fingerprintHash(lastText.slice(-500)) : "",
-      containsPrompt: Boolean(prompt && promptHaystack.includes(prompt)),
-      generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(lines) || lastAssistantTurnIsStreaming(lastAssistantTurnNode())
+      containsPrompt,
+      generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(conversationLineSample({ tailOnly: true })) || lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(turns))
     };
   }
   function elementOrder(a, b) {
@@ -1018,6 +1064,13 @@ ${raw.slice(-36e3)}`;
       el.getAttribute?.("data-message-author-role")
     ].filter(Boolean).join(" "));
   }
+  function matches(el, selector) {
+    try {
+      return Boolean(el?.matches?.(selector));
+    } catch {
+      return false;
+    }
+  }
   function internalTool(el) {
     return Boolean(closest(el, "nav,header,footer,aside,form,input,textarea,select,[contenteditable=true],pre,code,table,kbd,samp,[data-language]"));
   }
@@ -1035,6 +1088,105 @@ ${raw.slice(-36e3)}`;
     if (assistantPattern?.test(value)) return "assistant";
     const role = String(closest(el, "[data-message-author-role]")?.getAttribute?.("data-message-author-role") || "").toLowerCase();
     return role === "user" || role === "assistant" ? role : null;
+  }
+
+  // content-src/shared/conversation-observer.js
+  var CONVERSATION_FINGERPRINT_MAX_WAIT_MS = 25e3;
+  var CONVERSATION_FINGERPRINT_QUIET_MS = 1200;
+  var SIGNATURE_FIELDS = Object.freeze(["turnCount", "userChars", "assistantChars", "tailHash"]);
+  var STATE_FIELDS = Object.freeze(["generating", "containsPrompt"]);
+  function fieldValue(fingerprint, key) {
+    const value = fingerprint?.[key];
+    if (key === "tailHash") return String(value || "");
+    if (STATE_FIELDS.includes(key)) return value === true;
+    return Number(value) || 0;
+  }
+  function conversationFingerprintDiffers(next, since) {
+    if (!since || typeof since !== "object") return true;
+    for (const key of [...SIGNATURE_FIELDS, ...STATE_FIELDS]) {
+      if (fieldValue(next, key) !== fieldValue(since, key)) return true;
+    }
+    return false;
+  }
+  function decorate(fingerprint, startedAt) {
+    return {
+      ...fingerprint,
+      inputIdleMs: userInputIdleMs(),
+      waitedMs: Math.max(0, Date.now() - startedAt)
+    };
+  }
+  function observedRoot() {
+    return document.body || conversationSampleRoot() || document.documentElement;
+  }
+  function conversationFingerprintWhenChanged(documentId = "", data = {}) {
+    installUserActivityTracking();
+    const startedAt = Date.now();
+    const waitMs = Math.max(0, Math.min(CONVERSATION_FINGERPRINT_MAX_WAIT_MS, Number(data?.waitMs) || 0));
+    const since = data?.since && typeof data.since === "object" ? data.since : null;
+    const probe = () => conversationFingerprint(documentId, data);
+    let current = probe();
+    if (!waitMs || !since || conversationFingerprintDiffers(current, since) || typeof MutationObserver !== "function") {
+      return Promise.resolve(decorate(current, startedAt));
+    }
+    return new Promise((resolve) => {
+      let finished = false;
+      let dirty = false;
+      let quietTimer = 0;
+      const deadline = startedAt + waitMs;
+      const finish = (fingerprint) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(quietTimer);
+        clearTimeout(deadlineTimer);
+        try {
+          observer.disconnect();
+        } catch {
+        }
+        window.removeEventListener("pagehide", onPageHide, true);
+        resolve(decorate(fingerprint, startedAt));
+      };
+      const recompute = () => {
+        quietTimer = 0;
+        if (finished) return;
+        dirty = false;
+        try {
+          current = probe();
+        } catch {
+          return;
+        }
+        if (conversationFingerprintDiffers(current, since)) finish(current);
+      };
+      const observer = new MutationObserver(() => {
+        if (finished) return;
+        dirty = true;
+        if (quietTimer) clearTimeout(quietTimer);
+        quietTimer = setTimeout(recompute, Math.max(0, Math.min(CONVERSATION_FINGERPRINT_QUIET_MS, deadline - Date.now())));
+      });
+      const onPageHide = () => finish(current);
+      const deadlineTimer = setTimeout(() => {
+        if (finished) return;
+        if (dirty) {
+          try {
+            current = probe();
+          } catch {
+          }
+        }
+        finish(current);
+      }, waitMs);
+      try {
+        observer.observe(observedRoot(), {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true,
+          attributeFilter: ["aria-busy", "data-is-streaming"]
+        });
+      } catch {
+        finish(current);
+        return;
+      }
+      window.addEventListener("pagehide", onPageHide, true);
+    });
   }
 
   // content-src/shared/capture-runtime.js
@@ -1858,6 +2010,7 @@ ${raw.slice(-36e3)}`;
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),
     getSummaryRuntimeState: command({ timeoutMs: 1800, features: Object.freeze(["summary"]) }),
     collectSummary: command({ timeoutMs: 36e3, mutating: true, features: Object.freeze(["summary"]) }),
+    cancelSummaryCollection: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["summary"]) }),
     sendText: command({ timeoutMs: 12e3, mutating: true, features: Object.freeze(["send"]) }),
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
@@ -2339,7 +2492,7 @@ ${raw.slice(-36e3)}`;
           grokCookieRuntime: grokCookieRuntimeAttestation()
         }),
         getPageText: () => normalize(document.body?.innerText || ""),
-        getConversationFingerprint: (data) => conversationFingerprint(contentDocumentId, data),
+        getConversationFingerprint: (data) => conversationFingerprintWhenChanged(contentDocumentId, data),
         captureStart: () => captureRuntime.captureStart(),
         triggerScroll: () => captureRuntime.triggerScroll(),
         captureEnd: () => captureRuntime.captureEnd()
@@ -2372,7 +2525,7 @@ ${raw.slice(-36e3)}`;
       if (versionedSendTextRequest && message.action !== "sendText") return;
       if (versionedPreferredModelRequest && !["applyPreferredModel", "cancelPreferredModelApply"].includes(message.action)) return;
       if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState", "getConversationOpening"].includes(message.action)) return;
-      if (versionedSummaryRequest && !["getLocationHref", "getPageMeta", "getPageText", "collectSummary"].includes(message.action)) return;
+      if (versionedSummaryRequest && !["getLocationHref", "getPageMeta", "getPageText", "collectSummary", "cancelSummaryCollection"].includes(message.action)) return;
       const responseSource = versionedDeleteRequest ? DELETE_THREAD_POST_MESSAGE_SOURCE2 : versionedSendTextRequest ? SEND_TEXT_POST_MESSAGE_SOURCE2 : versionedPreferredModelRequest ? PREFERRED_MODEL_POST_MESSAGE_SOURCE2 : versionedNavigatorRequest ? MESSAGE_NAVIGATOR_POST_MESSAGE_SOURCE2 : versionedSummaryRequest ? SUMMARY_POST_MESSAGE_SOURCE2 : SOURCE;
       try {
         const data = await handleContentAction(message.action, message.data || {});

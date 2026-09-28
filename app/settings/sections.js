@@ -15,3 +15,8 @@ export const SETTINGS_SECTIONS = Object.freeze([
   ["functionalAnomalies", "settings.functionalAnomalies.title", "settings.functionalAnomalies.desc", "alert"],
   ["about", "settings.about.title", "settings.about.desc", "info"]
 ]);
+
+// The Settings nav draws a hairline before each of these ids so fifteen rows
+// read as five groups: appearance, connections, page features, prompt input,
+// and data/diagnostics. The order above stays the single source of order.
+export const SETTINGS_SECTION_GROUP_STARTS = Object.freeze(["profiles", "summary", "prompts", "io"]);

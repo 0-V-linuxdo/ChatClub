@@ -1,4 +1,12 @@
 import { NATIVE_COPY_SOURCE, PAGE_SUMMARY_SOURCE } from "../../shared/protocol.js";
+import {
+  abortableSleep,
+  closeRunnerOpenedMenus,
+  isSummaryCollectionAborted,
+  noteRunnerOpenedMenu,
+  summaryCollectionAborted,
+  throwIfSummaryCollectionAborted
+} from "./summary-collection-guard.js";
 
 const COPY_SOURCE = NATIVE_COPY_SOURCE;
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
@@ -40,7 +48,9 @@ function text(el) {
 }
 
 function reveal(el) {
-  if (!el) return;
+  // An aborted run must stop moving the user's viewport even if a userscript
+  // swallows the abort and keeps iterating.
+  if (!el || summaryCollectionAborted()) return;
   try {
     el.scrollIntoView({ block: "center", inline: "nearest" });
     for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
@@ -191,12 +201,15 @@ function conversationTurnNodes() {
   return nodes.sort(elementOrder);
 }
 
-function lastAssistantTurnNode() {
-  const turns = conversationTurnNodes();
+function lastAssistantTurnNodeFrom(turns) {
   for (let index = turns.length - 1; index >= 0; index -= 1) {
     if (conversationTurnRole(turns[index]) === "assistant") return turns[index];
   }
   return null;
+}
+
+function lastAssistantTurnNode() {
+  return lastAssistantTurnNodeFrom(conversationTurnNodes());
 }
 
 function controlLayoutVisible(el) {
@@ -244,12 +257,15 @@ function conversationSampleRoot() {
   return qs("#notion-app") || qs("main,[role=main]") || document.body;
 }
 
-function conversationLineSample() {
+function conversationLineSample(options = {}) {
   let raw = "";
   try {
     raw = String(conversationSampleRoot()?.textContent || "");
   } catch {}
-  if (raw.length > 96_000) raw = `${raw.slice(0, 12_000)}\n${raw.slice(-36_000)}`;
+  // The live tool status sits in the tail, so the generating probe only needs
+  // the last 36k characters; the head is kept for the prompt fallback only.
+  if (options.tailOnly === true) raw = raw.slice(-36_000);
+  else if (raw.length > 96_000) raw = `${raw.slice(0, 12_000)}\n${raw.slice(-36_000)}`;
   const lines = [];
   for (const part of raw.split(/\n+/)) {
     const line = normalize(part).replace(/\s+/g, " ");
@@ -276,7 +292,7 @@ function conversationToolActivityFromLines(lines) {
 
 function conversationToolActivityIsActive() {
   try {
-    return conversationToolActivityFromLines(conversationLineSample());
+    return conversationToolActivityFromLines(conversationLineSample({ tailOnly: true }));
   } catch {}
   return false;
 }
@@ -336,29 +352,53 @@ function shouldRefuseLiveAssistantCopy(node) {
   return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
 }
 
+const TURN_FINGERPRINT_SKIP_SELECTOR = [
+  "button",
+  "[role='button']",
+  "[role='toolbar']",
+  "[role='menu']",
+  "[role='menuitem']",
+  "[aria-label*='copy' i]",
+  "[title*='copy' i]",
+  "[data-testid*='copy' i]",
+  ".code-buttons"
+].join(",");
+
+function turnTextSkippingControls(turn) {
+  // Walk the live subtree and reject control subtrees instead of cloning the
+  // whole turn and pruning the copy; the walk allocates no DOM at all.
+  const doc = turn.ownerDocument || document;
+  if (typeof doc?.createTreeWalker !== "function" || typeof NodeFilter === "undefined") return null;
+  const walker = doc.createTreeWalker(turn, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (node.nodeType === 3) return NodeFilter.FILTER_ACCEPT;
+      if (node !== turn && matches(node, TURN_FINGERPRINT_SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_SKIP;
+    }
+  });
+  const parts = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) parts.push(node.nodeValue || "");
+  return parts.join("");
+}
+
 function conversationTurnFingerprintText(turn) {
   if (!turn) return "";
-  let source = turn;
+  let value = null;
   try {
-    const clone = turn.cloneNode(true);
-    for (const node of clone.querySelectorAll([
-      "button",
-      "[role='button']",
-      "[role='toolbar']",
-      "[role='menu']",
-      "[role='menuitem']",
-      "[aria-label*='copy' i]",
-      "[title*='copy' i]",
-      "[data-testid*='copy' i]",
-      ".code-buttons"
-    ].join(","))) {
-      node.remove();
-    }
-    source = clone;
+    value = turnTextSkippingControls(turn);
   } catch {
-    /* keep the live node */
+    value = null;
   }
-  const raw = normalize(source?.textContent || source?.innerText || "").replace(/\s+/g, " ");
+  if (value === null) {
+    try {
+      const clone = turn.cloneNode(true);
+      for (const node of clone.querySelectorAll(TURN_FINGERPRINT_SKIP_SELECTOR)) node.remove();
+      value = clone.textContent || "";
+    } catch {
+      value = turn.textContent || turn.innerText || "";
+    }
+  }
+  const raw = normalize(value).replace(/\s+/g, " ");
   try {
     return raw.normalize("NFKC").replace(/\s+/g, " ").trim();
   } catch {
@@ -369,7 +409,6 @@ function conversationTurnFingerprintText(turn) {
 function conversationFingerprint(documentId = "", data = {}) {
   const turns = conversationTurnNodes();
   const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-  const lines = conversationLineSample();
   let userChars = 0;
   let assistantChars = 0;
   let lastText = "";
@@ -391,7 +430,13 @@ function conversationFingerprint(documentId = "", data = {}) {
     }
   }
   const haystack = haystackParts.join(" ");
-  const promptHaystack = haystack || [...lines.slice(0, 48), ...lines.slice(-80)].join(" ");
+  // The full line sample reads the whole conversation root; only pay for it
+  // when no turn selector matched and a prompt still has to be located.
+  let containsPrompt = Boolean(prompt && haystack && haystack.includes(prompt));
+  if (prompt && !haystack) {
+    const lines = conversationLineSample();
+    containsPrompt = [...lines.slice(0, 48), ...lines.slice(-80)].join(" ").includes(prompt);
+  }
   return {
     href: conversationHref(),
     documentId: String(documentId || ""),
@@ -399,10 +444,10 @@ function conversationFingerprint(documentId = "", data = {}) {
     userChars,
     assistantChars,
     tailHash: lastText ? fingerprintHash(lastText.slice(-500)) : "",
-    containsPrompt: Boolean(prompt && promptHaystack.includes(prompt)),
+    containsPrompt,
     generating: conversationComposerIsGenerating()
-      || conversationToolActivityFromLines(lines)
-      || lastAssistantTurnIsStreaming(lastAssistantTurnNode())
+      || conversationToolActivityFromLines(conversationLineSample({ tailOnly: true }))
+      || lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(turns))
   };
 }
 
@@ -710,6 +755,8 @@ function isCopyProbeText(value) {
 }
 
 function activateElement(button) {
+  throwIfSummaryCollectionAborted();
+  if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
   button.focus?.();
   reveal(button);
   const init = { bubbles: true, cancelable: true, view: window };
@@ -727,6 +774,7 @@ function activateElement(button) {
 
 async function copy(button, options = {}) {
   if (!button) return "";
+  throwIfSummaryCollectionAborted();
   if (shouldRefuseLiveAssistantCopy(button)) return "";
   const copyTimeoutMs = Math.max(300, Math.min(10000, Number(options.copyTimeoutMs || options.timeoutMs) || 2600));
   const copyPollMs = Math.max(20, Math.min(150, Number(options.copyPollMs) || 50));
@@ -758,9 +806,15 @@ async function copy(button, options = {}) {
   try {
     const bridge = await copyBridgeRequest("install", id, { timeoutMs: copyTimeoutMs }, 900);
     if (!bridge?.installed || !bridge?.hooks) return "";
-    try { activateElement(button); } catch { try { button.click?.(); } catch {} }
+    throwIfSummaryCollectionAborted();
+    try {
+      activateElement(button);
+    } catch (error) {
+      if (isSummaryCollectionAborted(error)) throw error;
+      try { button.click?.(); } catch {}
+    }
     for (let index = 0, max = Math.ceil(copyTimeoutMs / copyPollMs); index < max; index += 1) {
-      await sleep(copyPollMs);
+      await abortableSleep(copyPollMs, sleep);
       if (captured && (capturedPriority >= 5 || Date.now() - capturedAt >= copyCaptureGraceMs)) break;
       try {
         const current = normalize(await navigator.clipboard.readText());
@@ -792,12 +846,17 @@ async function copyFirst(buttons, params = {}) {
   }
   if (details.scope && options.copyMenu !== false) {
     for (const menuButton of userscriptFindMenuButtons(details.scope, options).slice(0, 8)) {
-      userscriptCloseMenus();
+      throwIfSummaryCollectionAborted();
       reveal(menuButton);
-      try { activateElement(menuButton); } catch {}
-      await sleep(180);
+      noteRunnerOpenedMenu();
+      try {
+        activateElement(menuButton);
+      } catch (error) {
+        if (isSummaryCollectionAborted(error)) throw error;
+      }
+      await abortableSleep(180, sleep);
       const value = await copyFirst(userscriptOpenCopyButtons(options).filter((button) => button !== menuButton && !menuButton.contains(button)), details);
-      userscriptCloseMenus();
+      closeRunnerOpenedMenus(userscriptCloseMenus);
       if (value) return value;
     }
   }
@@ -864,8 +923,9 @@ async function extractTurns(options = {}) {
     let role = userscriptRole(turn, options) || fallbackRole(roleIndex, options);
     if (role !== "user" && role !== "assistant") continue;
     if (shouldRefuseLiveAssistantCopy(turn)) continue;
+    throwIfSummaryCollectionAborted();
     reveal(turn);
-    await sleep(80);
+    await abortableSleep(80, sleep);
     const expected = text(turn);
     const copied = await copyFirst(userscriptFindCopyButtons(turn, options), { expected, role, options, scope: turn });
     if (copied) {
@@ -909,15 +969,20 @@ async function extractCopySequence(options = {}) {
   if (out.length < 2 && options.copyMenu !== false) {
     for (const root of searchRoots) {
       for (const menuButton of userscriptFindMenuButtons(root, options).slice(0, Math.min(maxButtons, 16))) {
-        userscriptCloseMenus();
+        throwIfSummaryCollectionAborted();
         reveal(menuButton);
-        try { activateElement(menuButton); } catch {}
-        await sleep(180);
+        noteRunnerOpenedMenu();
+        try {
+          activateElement(menuButton);
+        } catch (error) {
+          if (isSummaryCollectionAborted(error)) throw error;
+        }
+        await abortableSleep(180, sleep);
         const roleHint = userscriptRole(menuButton, options) || fallbackRole(roleIndex, options);
         for (const button of userscriptOpenCopyButtons(options).filter((item) => item !== menuButton && !menuButton.contains(item)).slice(0, 8)) {
           if (await accept(button, roleHint)) break;
         }
-        userscriptCloseMenus();
+        closeRunnerOpenedMenus(userscriptCloseMenus);
         if (out.length >= 2) break;
       }
     }
@@ -1138,8 +1203,9 @@ async function extractHoverNativeCopyConversation(root = document.body) {
     const expected = nodeTextForCopy(anchor);
     if (role !== "user" && role !== "assistant") continue;
     if (shouldRefuseLiveAssistantCopy(anchor)) continue;
+    throwIfSummaryCollectionAborted();
     reveal(anchor);
-    await sleep(180);
+    await abortableSleep(180, sleep);
     for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
       const copied = await copy(button, options);
       const value = userscriptCopyAccepted(copied, expected, options);
@@ -1148,8 +1214,8 @@ async function extractHoverNativeCopyConversation(root = document.body) {
         roleIndex += 1;
         break;
       }
-      userscriptCloseMenus();
-      await sleep(80);
+      closeRunnerOpenedMenus(userscriptCloseMenus);
+      await abortableSleep(80, sleep);
     }
     if (hasUserAndAssistant(out)) break;
   }
@@ -1214,6 +1280,7 @@ export {
   merge,
   pageMeta,
   conversationFingerprint,
+  conversationSampleRoot,
   conversationIsGenerating,
   hasUserAndAssistant,
   classText,

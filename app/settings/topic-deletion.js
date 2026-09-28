@@ -72,7 +72,7 @@ export function createTopicDeletionSettingsSection(ctx) {
           t("topicDeletion.site.scope"),
           t("topicDeletion.site.enabled"),
           t("topicDeletion.site.actions")
-        ], siteRows(redraw), "topic-delete-list")
+        ], siteRows(redraw), "topic-delete-list settings-list-fill")
       )
     );
   }

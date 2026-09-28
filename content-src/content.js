@@ -15,7 +15,8 @@ import {
   normalizeKeyboardPlatform,
   normalizeShortcutConfig
 } from "../shared/shortcuts.js";
-import { conversationFingerprint, normalize, pageMeta } from "./shared/summary-runtime.js";
+import { normalize, pageMeta } from "./shared/summary-runtime.js";
+import { conversationFingerprintWhenChanged } from "./shared/conversation-observer.js";
 import { createCaptureRuntime } from "./shared/capture-runtime.js";
 import { createContentDocumentIdentity } from "./shared/content-document-identity.js";
 import { createSubmissionNavigationTracker } from "./shared/submission-navigation.js";
@@ -353,7 +354,7 @@ function installContentBridge() {
         grokCookieRuntime: grokCookieRuntimeAttestation()
       }),
       getPageText: () => normalize(document.body?.innerText || ""),
-      getConversationFingerprint: (data) => conversationFingerprint(contentDocumentId, data),
+      getConversationFingerprint: (data) => conversationFingerprintWhenChanged(contentDocumentId, data),
       captureStart: () => captureRuntime.captureStart(),
       triggerScroll: () => captureRuntime.triggerScroll(),
       captureEnd: () => captureRuntime.captureEnd()
@@ -387,7 +388,7 @@ function installContentBridge() {
     if (versionedSendTextRequest && message.action !== "sendText") return;
     if (versionedPreferredModelRequest && !["applyPreferredModel", "cancelPreferredModelApply"].includes(message.action)) return;
     if (versionedNavigatorRequest && !["setMessageNavigator", "hideMessageNavigatorMenu", "getMessageNavigatorState", "getConversationOpening"].includes(message.action)) return;
-    if (versionedSummaryRequest && !["getLocationHref", "getPageMeta", "getPageText", "collectSummary"].includes(message.action)) return;
+    if (versionedSummaryRequest && !["getLocationHref", "getPageMeta", "getPageText", "collectSummary", "cancelSummaryCollection"].includes(message.action)) return;
     const responseSource = versionedDeleteRequest
       ? DELETE_THREAD_POST_MESSAGE_SOURCE
       : versionedSendTextRequest

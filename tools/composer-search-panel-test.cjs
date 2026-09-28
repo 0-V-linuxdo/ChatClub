@@ -179,14 +179,16 @@ assert.match(css, /\.prompt-shell-search \.prompt-input-row\s*\{[\s\S]*?box-shad
 assert.match(css, /\.prompt-search-results \{[\s\S]*?box-shadow:\s*none/);
 assert.match(css, /\.prompt-shell-search:has\(\.prompt-search-results:not\(\[hidden\]\)\) \.prompt-search-results[\s\S]{0,280}padding-top:\s*0/);
 assert.match(css, /\.composer-center-host\.overlay-surface\s*\{[\s\S]*?background:\s*transparent/);
-assert.match(css, /\.prompt-search-list\s*\{[\s\S]*?scrollbar-width:\s*thin/);
-assert.match(css, /\.prompt-search-list::-webkit-scrollbar\s*\{[\s\S]*?width:\s*6px[\s\S]*?border:\s*0/);
-assert.match(css, /\.prompt-search-list::-webkit-scrollbar-track[\s\S]*?background:\s*transparent[\s\S]*?border:\s*0/);
-assert.match(css, /\.prompt-search-list::-webkit-scrollbar-thumb\s*\{[\s\S]*?border:\s*0/);
+// The result list uses the shared thin, trackless scrollbar instead of a private one.
+assert.doesNotMatch(css, /\.prompt-search-list::-webkit-scrollbar/, "the result list must not grow a private scrollbar skin");
+assert.match(css, /^\* \{\s*\n\s*scrollbar-width:\s*thin;/m);
+assert.match(css, /^::-webkit-scrollbar \{[^}]*width:\s*6px;[^}]*border:\s*0;/ms);
+assert.match(css, /^::-webkit-scrollbar-track,\s*\n::-webkit-scrollbar-corner \{[^}]*background:\s*transparent;[^}]*border:\s*0;/m);
+assert.match(css, /^::-webkit-scrollbar-thumb \{[^}]*border:\s*0;/ms);
 assert.match(
   css,
-  /\.prompt-search-list\s*\{[\s\S]*?scrollbar-gutter:\s*stable/,
-  "a styled ::-webkit-scrollbar is a classic scrollbar, so the gutter must be stable or row width jumps with the result count"
+  /\.prompt-search-list\s*\{[^}]*scrollbar-gutter:\s*stable/,
+  "the shared thin scrollbar is a classic scrollbar, so the gutter must be stable or row width jumps with the result count"
 );
 assert.match(css, /\.ui-empty-state\[hidden\][\s\S]{0,160}display:\s*none\s*!important/);
 assert.match(css, /\.prompt-search-empty\[hidden\][\s\S]{0,80}display:\s*none\s*!important/);

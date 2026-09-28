@@ -34,7 +34,7 @@ import {
   workspaceIdForChatClubTab,
   workspaceRecordTimes
 } from "./workspace-session-helpers.js";
-import { STORAGE_KEYS } from "../shared/constants.js";
+import { planWorkspaceTabFullTextForget } from "../shared/workspace-tab-fulltext-storage.js";
 
 export function clearedTabItem(candidate) {
   return {
@@ -358,17 +358,12 @@ export async function forgetRememberedWorkspaceTabOperation(api, request = {}, o
       await session.set({ [WORKSPACE_SESSION_RUNTIME_MARKER_KEY]: marker });
     }
   }
-  const fullTextStore = stored?.[STORAGE_KEYS.workspaceTabFullText];
-  if (
-    resolvedWorkspaceId
-    && fullTextStore
-    && typeof fullTextStore === "object"
-    && !Array.isArray(fullTextStore)
-    && Object.prototype.hasOwnProperty.call(fullTextStore, resolvedWorkspaceId)
-  ) {
-    const nextFullText = { ...fullTextStore };
-    delete nextFullText[resolvedWorkspaceId];
-    await storage.set({ [STORAGE_KEYS.workspaceTabFullText]: nextFullText });
+  // Recorded full text lives one record per desk plus an index, with the
+  // legacy aggregate still honoured until a page write migrates it.
+  const fullTextPlan = resolvedWorkspaceId ? planWorkspaceTabFullTextForget(stored, resolvedWorkspaceId) : null;
+  if (fullTextPlan?.changed) {
+    if (Object.keys(fullTextPlan.set).length) await storage.set(fullTextPlan.set);
+    if (fullTextPlan.remove.length && typeof storage.remove === "function") await storage.remove(fullTextPlan.remove);
   }
   const senderTabId = positiveTabId(options.sender?.tab?.id);
   let closed = false;

@@ -35,7 +35,6 @@ import {
 } from "./tabs-sidebar-folders.js";
 import {
   createTabsSidebarHoverMenu,
-  renderTabsSidebarDivider,
   renderTabsSidebarFolder,
   renderTabsSidebarGroup,
   renderTabsSidebarItem
@@ -57,7 +56,6 @@ import {
 const WORKSPACE_TABS_SIDEBAR_ID = "workspace-tabs-sidebar";
 const WORKSPACE_TABS_SIDEBAR_OPEN_KEY = "chatclubWorkspaceTabsSidebarOpenV1";
 const WORKSPACE_TABS_SIDEBAR_WIDTH_KEY = "chatclubWorkspaceTabsSidebarWidthV1";
-const WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY = "chatclubWorkspaceTabsClosedOrderV1";
 const WORKSPACE_TABS_SIDEBAR_PINNED_KEY = "chatclubWorkspaceTabsPinnedV1";
 const WORKSPACE_TABS_SIDEBAR_SORT_KEY = "chatclubWorkspaceTabsSidebarSortV1";
 const SIDEBAR_WIDTH_MIN = 220;
@@ -234,7 +232,6 @@ export function createWorkspaceTabsSidebarController({
   function sortOptions() {
     return {
       mode: sortMode,
-      closedOrder: readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY),
       pinnedOrder: readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY),
       getLabel: (item) => itemDisplayLabel(item, 0)
     };
@@ -275,29 +272,6 @@ export function createWorkspaceTabsSidebarController({
     }
     storageSet(localStorage, key, unique.length ? JSON.stringify(unique) : "");
     return unique;
-  }
-
-  function persistClosedOrder(list = items) {
-    return persistIdList(
-      WORKSPACE_TABS_SIDEBAR_CLOSED_ORDER_KEY,
-      list.filter((item) => !item.live).map((item) => item.workspaceId)
-    );
-  }
-
-  function persistPinnedFromItems(list = items) {
-    const existing = readIdList(localStorage, WORKSPACE_TABS_SIDEBAR_PINNED_KEY);
-    const present = [];
-    const seen = new Set();
-    for (const item of list) {
-      const id = workspaceIdValue(item.workspaceId);
-      if (!id || !item.pinned || seen.has(id)) continue;
-      seen.add(id);
-      present.push(id);
-    }
-    for (const id of existing) {
-      if (!seen.has(id)) present.push(id);
-    }
-    return persistIdList(WORKSPACE_TABS_SIDEBAR_PINNED_KEY, present);
   }
 
   function persistFolders() {
@@ -676,13 +650,6 @@ export function createWorkspaceTabsSidebarController({
         ? moveTabToFolder(folders, item.workspaceId, targetFolder, place, target.workspaceId)
         : removeTabFromFolder(folders, item.workspaceId);
       persistFolders();
-      if (sortMode === "open" && !targetFolder && Boolean(item.live) === Boolean(target.live)) {
-        const next = items.filter((entry) => !sameItem(entry, item));
-        const targetIndex = next.findIndex((entry) => sameItem(entry, target));
-        if (targetIndex >= 0) next.splice(place === "after" ? targetIndex + 1 : targetIndex, 0, item);
-        if (!item.live) persistClosedOrder(next);
-        return relayout(next);
-      }
       return relayout(items);
     }
     if (sourceFolder) {
@@ -690,18 +657,7 @@ export function createWorkspaceTabsSidebarController({
       persistFolders();
       return relayout(items);
     }
-    if (sortMode !== "open") return currentItems();
-    if (Boolean(item.live) !== Boolean(target.live)) return currentItems();
-    if (Boolean(item.pinned) !== Boolean(target.pinned)) return currentItems();
-    const next = items.filter((entry) => !sameItem(entry, item));
-    const targetIndex = next.findIndex((entry) => sameItem(entry, target));
-    if (targetIndex < 0) return currentItems();
-    next.splice(place === "after" ? targetIndex + 1 : targetIndex, 0, item);
-    if (!item.live) persistClosedOrder(next);
-    if (item.pinned) persistPinnedFromItems(next);
-    const ordered = relayout(next);
-    if (item.live) syncLiveWindowOrder(item).catch(() => {});
-    return ordered;
+    return currentItems();
   }
 
   function moveFolderRow(folder = {}, target = {}, place = "before") {
@@ -717,14 +673,8 @@ export function createWorkspaceTabsSidebarController({
   function reorderPeers(item = {}, kind = "tab") {
     if (kind === "folder") return folders.slice();
     const sourceFolder = folderIdForItem(item, folders);
-    return items.filter((entry) => {
-      if (folderIdForItem(entry, folders) !== sourceFolder) return false;
-      if (sourceFolder) return true;
-      if (sortMode !== "open") return false;
-      if (Boolean(entry.live) !== Boolean(item.live)) return false;
-      if (Boolean(entry.pinned) !== Boolean(item.pinned)) return false;
-      return true;
-    });
+    if (!sourceFolder) return [];
+    return items.filter((entry) => folderIdForItem(entry, folders) === sourceFolder);
   }
 
   function canMoveByDelta(item = {}, delta = 0, kind = "tab") {
@@ -1303,8 +1253,7 @@ export function createWorkspaceTabsSidebarController({
       else if (node.type === "group") {
         nodes.push(renderTabsSidebarGroup(node.labelKey));
         node.items.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
-      } else if (node.type === "divider") nodes.push(renderTabsSidebarDivider(node.labelKey));
-      else if (node.type === "items") node.items.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
+      } else if (node.type === "items") node.items.forEach((item, index) => nodes.push(renderSidebarItem(item, index)));
     }
     if (!nodes.length) {
       return el("div", { class: "workspace-tabs-sidebar-empty" },

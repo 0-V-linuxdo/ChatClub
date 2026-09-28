@@ -51,6 +51,7 @@ import {
   formatWorkspaceSearchTime,
   highlightQuery,
   loadRecordFullTextEnabled,
+  loadWorkspaceTabFullTextRecord,
   loadWorkspaceTabFullTextStore,
   persistWorkspaceTabFullTextFromPreview,
   workspaceSearchCopy
@@ -677,7 +678,7 @@ function ensureSummaryController() {
           }
           return result;
         },
-        loadWorkspaceTabFullText: loadWorkspaceTabFullTextStore,
+        loadWorkspaceTabFullText: loadWorkspaceTabFullTextRecord,
         pocketPort: {
           save: (...args) => ensurePocketController().then((pocket) => pocket.saveSummaryPreviewToPocket(...args)),
           entries: (...args) => pocketController?.pocketEntriesFromSummaryPreview(...args) || []
@@ -715,7 +716,8 @@ function ensureShareController() {
         setFramePointerBlockedForOverlay: workspaceController.setFramePointerBlockedForOverlay,
         inferAppName,
         framePort: frameRuntimePort,
-        recordFunctionalAnomaly
+        recordFunctionalAnomaly,
+        cancelIdleFullTextCapture: () => (summaryController?.cancelIdleFullTextCapture?.() ?? false)
       });
       if (!state.shareSize) {
         try { state.shareSize = await controller.loadPanelSize(); }

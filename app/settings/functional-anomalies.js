@@ -1,6 +1,6 @@
 import { t } from "../../shared/i18n.js";
 import { button, el, openConfirmationAction, toast, viewerModal } from "../../ui/dom.js";
-import { createSettingsKit } from "./kit.js";
+import { captureSettingsListScroll, createSettingsKit, restoreSettingsListScroll, syncSettingsListFill } from "./kit.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import {
   createControllerMethodValidator,
@@ -91,6 +91,22 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
       return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(parsed));
     } catch {
       return new Date(parsed).toLocaleString();
+    }
+  }
+
+  // The list stacks the clock above the day so the time column stays narrow;
+  // the details viewer keeps the one-line dateLabel.
+  function dateTimeLines(value) {
+    const parsed = parsedTimestamp(value);
+    if (!Number.isFinite(parsed)) return [t("functionalAnomalies.unknownTime")];
+    const date = new Date(parsed);
+    try {
+      return [
+        new Intl.DateTimeFormat(undefined, { timeStyle: "short" }).format(date),
+        new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date)
+      ];
+    } catch {
+      return [date.toLocaleTimeString(), date.toLocaleDateString()];
     }
   }
 
@@ -211,7 +227,7 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
       class: "functional-anomaly-time",
       datetime: dateTimeValue(record.updatedAt || record.createdAt)
     },
-      dateLabel(record.updatedAt || record.createdAt)
+      dateTimeLines(record.updatedAt || record.createdAt).map((line) => el("span", {}, line))
     ),
     el("div", { class: "functional-anomaly-identity" },
       el("strong", {}, recordTitle(record)),
@@ -262,6 +278,7 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
       const rows = current.length
         ? current.map(row)
         : settingsEmptyRow(t("functionalAnomalies.empty"));
+      const listScroll = captureSettingsListScroll(host);
       host.replaceChildren(
         settingsBlock(
           t("functionalAnomalies.title"),
@@ -276,9 +293,11 @@ export function createFunctionalAnomaliesSettingsSection(ctx) {
             t("functionalAnomalies.feature"),
             t("functionalAnomalies.problem"),
             t("functionalAnomalies.actions")
-          ], rows, "functional-anomaly-list")
+          ], rows, "functional-anomaly-list settings-list-fill")
         )
       );
+      syncSettingsListFill(host.closest?.(".settings-main"));
+      restoreSettingsListScroll(host, listScroll);
     };
     renderLivePane = () => {
       if (!host.isConnected) {

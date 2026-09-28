@@ -113,7 +113,7 @@ export function createMessageNavigationSettingsSection(ctx) {
         t("messageNavigator.site.scope"),
         t("messageNavigator.site.enabled"),
         t("messageNavigator.site.actions")
-      ], siteRows(redraw), "message-navigator-list")
+      ], siteRows(redraw), "message-navigator-list settings-list-fill")
     );
   }
 

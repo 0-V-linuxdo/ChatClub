@@ -265,7 +265,7 @@ export function createPromptTemplateSettings(ctx) {
       settingsPaneToolbar(t(meta.copyKey),
         settingsPrimaryAction(t("promptTemplates.add"), "plus", () => openPromptTemplateEditor(kind, null, redraw))
       ),
-      settingsList(["", t("promptTemplates.name"), t("promptTemplates.active"), t("promptTemplates.preview"), t("profiles.actions")], rows, "settings-manager-list prompt-template-list")
+      settingsList(["", t("promptTemplates.name"), t("promptTemplates.active"), t("promptTemplates.preview"), t("profiles.actions")], rows, "settings-manager-list prompt-template-list settings-list-fill")
     );
   }
 

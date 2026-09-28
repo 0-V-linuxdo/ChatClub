@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "f52a9ec8a6285e97bfbf1bf19145ee52ea482d0bc59305b38edf07961bde3016";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "5cb4b0b3b3015b28ccf42499fa8c8974221424ecb2a3007ffdb8694bff2b3dde", "implementationSha256": "bdde22842a88ccfc123d6cdedd6039cf051c8a2b702e0134836d184fef77fd6a", "implementationVersion": "2026.07.16.2+bundle.bdde22842a88ccfc123d6cdedd6039cf051c8a2b702e0134836d184fef77fd6a" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "568c45bf324a96fd5e9ced3dac40549d9066fd43e17914202ea79813bd831eac", "implementationSha256": "7f3c4428e3517eefd5eac849dc4ddc1170b9f39fe5d6b16f33444d92781ff20f", "implementationVersion": "2026.07.16.2+bundle.7f3c4428e3517eefd5eac849dc4ddc1170b9f39fe5d6b16f33444d92781ff20f" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -109,6 +109,30 @@
     return Object.freeze({ ...CONTENT_RUNTIME_IDENTITY, bundle: normalized });
   }
 
+  // content-src/shared/summary-collection-guard.js
+  var SUMMARY_COLLECTION_ABORTED = "SUMMARY_COLLECTION_ABORTED";
+  var USER_INPUT_EVENTS = Object.freeze(["pointerdown", "wheel", "keydown", "touchstart"]);
+  var USER_ACTIVITY_EVENTS = Object.freeze([...USER_INPUT_EVENTS, "pointermove"]);
+  var activeRun = null;
+  var runnerOpenedMenus = 0;
+  var SummaryCollectionAbortedError = class extends Error {
+    constructor(reason = "cancelled") {
+      super(`Summary collection aborted: ${reason}`);
+      this.name = "SummaryCollectionAbortedError";
+      this.code = SUMMARY_COLLECTION_ABORTED;
+      this.reason = String(reason || "cancelled");
+    }
+  };
+  function summaryCollectionAborted() {
+    return Boolean(activeRun?.aborted);
+  }
+  function throwIfSummaryCollectionAborted() {
+    if (activeRun?.aborted) throw new SummaryCollectionAbortedError(activeRun.reason);
+  }
+  function noteRunnerOpenedMenu() {
+    runnerOpenedMenus += 1;
+  }
+
   // content-src/shared/summary-runtime.js
   var normalize = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   function visible(el) {
@@ -141,7 +165,7 @@
     }
   }
   function reveal(el) {
-    if (!el) return;
+    if (!el || summaryCollectionAborted()) return;
     try {
       el.scrollIntoView({ block: "center", inline: "nearest" });
       for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
@@ -150,6 +174,17 @@
     } catch {
     }
   }
+  var TURN_FINGERPRINT_SKIP_SELECTOR = [
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons"
+  ].join(",");
   function matches(el, selector) {
     try {
       return Boolean(el?.matches?.(selector));
@@ -158,6 +193,8 @@
     }
   }
   function activateElement(button) {
+    throwIfSummaryCollectionAborted();
+    if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
     button.focus?.();
     reveal(button);
     const init = { bubbles: true, cancelable: true, view: window };
@@ -329,6 +366,7 @@
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),
     getSummaryRuntimeState: command({ timeoutMs: 1800, features: Object.freeze(["summary"]) }),
     collectSummary: command({ timeoutMs: 36e3, mutating: true, features: Object.freeze(["summary"]) }),
+    cancelSummaryCollection: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["summary"]) }),
     sendText: command({ timeoutMs: 12e3, mutating: true, features: Object.freeze(["send"]) }),
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),

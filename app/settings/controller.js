@@ -11,13 +11,17 @@ import { createPromptHistorySettingsSection } from "./history.js";
 import { createImportExportSettings } from "./import-export.js";
 import {
   SETTINGS_SECTIONS,
+  captureSettingsListScroll,
   cleanupSettingsDragRows,
   createSettingsKit,
   moveListItem,
   moveListItemByDelta,
-  settingsSectionMeta
+  restoreSettingsListScroll,
+  settingsSectionMeta,
+  syncSettingsListFill
 } from "./kit.js";
 import { createMessageNavigationSettingsSection } from "./message-navigation.js";
+import { SETTINGS_SECTION_GROUP_STARTS } from "./sections.js";
 import { createModelsSettingsSection } from "./models.js";
 import { createOptimizeSettingsSection } from "./optimize.js";
 import { createProfilesSettingsSection } from "./profiles.js";
@@ -415,7 +419,7 @@ export function createSettingsController(ctx) {
   function promptLibraryPane(redraw) {
     return el("div", { class: "settings-pane" },
       settingsKit.settingsBlock(t("prompts.title"), t("prompts.desc"),
-        promptLibraryController.promptLibraryManager(redraw)
+        promptLibraryController.promptLibraryManager(redraw, { className: "prompt-library-list settings-list-fill" })
       )
     );
   }
@@ -460,7 +464,9 @@ export function createSettingsController(ctx) {
     let active = validSectionIds.has(initialSection) ? initialSection : "appearance";
     const host = el("div", { class: "settings-shell" });
     let dialog;
+    let listFillObserver = null;
     const close = () => {
+      listFillObserver?.disconnect();
       resetDialogState();
       closeActiveSettingsDialog = null;
       dialog.remove();
@@ -501,10 +507,11 @@ export function createSettingsController(ctx) {
     const modalSectionTitle = el("div", { class: "settings-modal-section-title" });
     const modalAppIcon = svgIcon("settings");
     modalAppIcon.classList.add("settings-modal-app-icon");
+    const modalAppTitleText = el("span", {}, t("settings.appTitle"));
     modalTitle?.replaceWith(el("div", { class: "settings-modal-titlebar" },
       el("div", { class: "settings-modal-app-title" },
         modalAppIcon,
-        el("span", {}, t("settings.appTitle"))
+        modalAppTitleText
       ),
       modalSectionTitle
     ));
@@ -527,12 +534,15 @@ export function createSettingsController(ctx) {
       return { id, labelKey, descriptionKey, label, description, tab };
     });
     const settingsNav = el("nav", { class: "settings-tabs", "aria-label": t("settings.sections") },
-      settingsTabEntries.map(({ tab }) => tab)
+      settingsTabEntries.flatMap(({ id, tab }) => SETTINGS_SECTION_GROUP_STARTS.includes(id)
+        ? [el("div", { class: "settings-tabs-divider", "aria-hidden": "true" }), tab]
+        : [tab])
     );
     host.append(el("aside", { class: "settings-sidebar" }, settingsNav), settingsMain);
 
     function redraw() {
       const mainScrollTop = settingsMainScrollTopForRedraw(renderedSection, active, settingsMain.scrollTop);
+      const listScroll = renderedSection === active ? captureSettingsListScroll(settingsMain) : [];
       appearanceSection.cleanupPane();
       const section = settingsSectionMeta(active);
       clear(modalSectionTitle);
@@ -540,6 +550,7 @@ export function createSettingsController(ctx) {
       if (active === "shortcuts") sectionTools.append(shortcutsHeaderSearch(redraw));
       else if (active === "promptHistory") sectionTools.append(promptHistorySection.headerSearch(redraw));
       modalSectionTitle.append(el("h3", {}, section.label), el("p", {}, section.description), sectionTools);
+      modalAppTitleText.textContent = t("settings.appTitle");
       settingsNav.setAttribute("aria-label", t("settings.sections"));
       syncFullscreenButton();
       settingsMain.dataset.settingsSectionId = active;
@@ -549,10 +560,16 @@ export function createSettingsController(ctx) {
         entry.description.textContent = t(entry.descriptionKey);
       }
       settingsMain.replaceChildren(settingsPane(active, redraw, selectSection));
+      syncSettingsListFill(settingsMain);
       settingsMain.scrollTop = mainScrollTop;
+      restoreSettingsListScroll(settingsMain, listScroll);
       renderedSection = active;
     }
     redraw();
+    if (typeof ResizeObserver === "function") {
+      listFillObserver = new ResizeObserver(() => syncSettingsListFill(settingsMain));
+      listFillObserver.observe(settingsMain);
+    }
   }
 
   return Object.freeze({

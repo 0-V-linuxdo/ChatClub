@@ -91,4 +91,106 @@ assert.doesNotMatch(openSettingsSource, /createViewerWindowChrome/, "Settings fu
 assert.match(constantsSource, /id: "settings\.modal\.fullscreen", labelKey: "chat\.fullscreen"/);
 assert.match(appearanceSource, /"settings\.modal\.fullscreen": "maximize"/);
 
+// Table panes scroll their table, not .settings-main (2026-09-28 Arc report:
+// the whole Functional Anomalies page scrolled away its header and toolbar).
+const kitSource = fs.readFileSync(path.join(root, "app/settings/kit.js"), "utf8");
+const fillContext = vm.createContext({});
+vm.runInContext(
+  `${functionSource(kitSource, "syncSettingsListFill")}\n` +
+  `${functionSource(kitSource, "captureSettingsListScroll")}\n` +
+  `${functionSource(kitSource, "restoreSettingsListScroll")}\n` +
+  "globalThis.__fill = { syncSettingsListFill, captureSettingsListScroll, restoreSettingsListScroll };",
+  fillContext,
+  { filename: "app/settings/kit.js" }
+);
+const fill = fillContext.__fill;
+const fakeList = (clientHeight, scrollHeight, childHeights) => ({
+  clientHeight,
+  scrollHeight,
+  scrollTop: 0,
+  scrollLeft: 0,
+  children: childHeights.map((offsetHeight) => ({ offsetHeight }))
+});
+const fakeMain = (lists) => {
+  const classes = new Set(["settings-list-fill-off"]);
+  return {
+    classList: {
+      remove: (name) => classes.delete(name),
+      toggle: (name, force) => (force ? classes.add(name) : classes.delete(name)),
+      contains: (name) => classes.has(name)
+    },
+    querySelectorAll: (selector) => (selector === ".settings-list-fill" ? lists : [])
+  };
+};
+const roomy = fakeMain([fakeList(400, 1000, [36, 56, 56, 56, 56])]);
+fill.syncSettingsListFill(roomy);
+assert.equal(roomy.classList.contains("settings-list-fill-off"), false, "a table with room for its header and two rows fills");
+const squeezed = fakeMain([fakeList(120, 1000, [36, 56, 56, 56])]);
+fill.syncSettingsListFill(squeezed);
+assert.equal(squeezed.classList.contains("settings-list-fill-off"), true, "below header plus two rows the pane scrolls whole again");
+const shortSqueezed = fakeMain([fakeList(42, 92, [36, 56])]);
+fill.syncSettingsListFill(shortSqueezed);
+assert.equal(shortSqueezed.classList.contains("settings-list-fill-off"), true, "a short table is never squeezed below itself");
+const shortWhole = fakeMain([fakeList(92, 92, [36, 56])]);
+fill.syncSettingsListFill(shortWhole);
+assert.equal(shortWhole.classList.contains("settings-list-fill-off"), false, "a short table that fits keeps fill mode");
+const scrolled = fakeList(300, 1000, [36, 56]);
+scrolled.scrollTop = 240;
+scrolled.scrollLeft = 30;
+const offsets = fill.captureSettingsListScroll(fakeMain([scrolled]));
+const replacement = fakeList(300, 1000, [36, 56]);
+fill.restoreSettingsListScroll(fakeMain([replacement]), offsets);
+assert.deepEqual([replacement.scrollTop, replacement.scrollLeft], [240, 30], "a redraw carries the table offsets across the replaced pane");
+
+assert.match(
+  redrawSource,
+  /const listScroll = renderedSection === active \? captureSettingsListScroll\(settingsMain\) : \[\];[\s\S]*?settingsMain\.replaceChildren\([\s\S]*?syncSettingsListFill\(settingsMain\);[\s\S]*?settingsMain\.scrollTop = mainScrollTop;[\s\S]*?restoreSettingsListScroll\(settingsMain, listScroll\);/,
+  "same-section redraws must decide fill mode and then restore table offsets"
+);
+assert.match(openSettingsSource, /new ResizeObserver\(\(\) => syncSettingsListFill\(settingsMain\)\)[\s\S]*?listFillObserver\.observe\(settingsMain\)/);
+assert.match(openSettingsSource, /const close = \(\) => \{\s*listFillObserver\?\.disconnect\(\);/);
+for (const [file, list] of [
+  ["app/settings/functional-anomalies.js", "functional-anomaly-list settings-list-fill"],
+  ["app/settings/history.js", "prompt-history-list settings-list-fill"],
+  ["app/settings/profiles.js", "api-profile-list settings-list-fill"],
+  ["app/settings/apps.js", "built-in-config-list settings-list-fill"],
+  ["app/settings/apps.js", "custom-config-list settings-list-fill"],
+  ["app/settings/summary.js", "summary-collector-list settings-list-fill"],
+  ["app/settings/prompt-templates.js", "prompt-template-list settings-list-fill"],
+  ["app/settings/message-navigation.js", "message-navigator-list settings-list-fill"],
+  ["app/settings/topic-deletion.js", "topic-delete-list settings-list-fill"],
+  ["app/settings/shortcuts.js", "shortcut-list settings-list-fill"],
+  ["app/settings/appearance-topbar.js", "topbar-placeholder-list settings-list-fill"],
+  ["app/settings/controller.js", "prompt-library-list settings-list-fill"]
+]) {
+  assert.ok(fs.readFileSync(path.join(root, file), "utf8").includes(list), `${file} must let its table scroll instead of the page (${list})`);
+}
+const anomaliesSource = fs.readFileSync(path.join(root, "app/settings/functional-anomalies.js"), "utf8");
+assert.match(
+  anomaliesSource,
+  /const listScroll = captureSettingsListScroll\(host\);\s*host\.replaceChildren\([\s\S]*?syncSettingsListFill\(host\.closest\?\.\("\.settings-main"\)\);\s*restoreSettingsListScroll\(host, listScroll\);/,
+  "the live anomaly re-render must keep its table offsets and fill mode"
+);
+assert.match(stylesSource, /\.settings-main:not\(\.settings-list-fill-off\):has\(\.settings-list-fill\),\s*\n\.settings-main:not\(\.settings-list-fill-off\) :has\(\.settings-list-fill\) \{\s*display: flex;\s*flex-direction: column;/);
+assert.match(stylesSource, /\.settings-main:not\(\.settings-list-fill-off\) :has\(\.settings-list-fill\),\s*\n\.settings-main:not\(\.settings-list-fill-off\) \.settings-list-fill \{\s*flex: 0 1 auto;\s*min-height: 0;/);
+assert.match(stylesSource, /\.settings-main:not\(\.settings-list-fill-off\) :has\(\.settings-list-fill\) > :not\(:has\(\.settings-list-fill\), \.settings-list-fill\) \{\s*flex-shrink: 0;/);
+assert.match(stylesSource, /\.settings-main \.settings-list-fill > \.settings-list-header \{\s*position: sticky;\s*top: 0;/);
+for (const [, selector, body] of stylesSource.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+  if (!selector.replace(/\/\*[\s\S]*?\*\//g, "").includes("settings-list-fill")) continue;
+  assert.doesNotMatch(body, /min-height:(?!\s*0;)/, "a CSS floor would inflate a short table or push rows past a card border");
+}
+
+// The anomaly table fits the windowed dialog: the time is a two-line clock/day
+// stack in a narrow fixed track, Feature hugs its content so no blank strip opens
+// before Problem, and Problem lost the 300px floor and 1.2fr share that forced an
+// 860px table and cut off the row actions.
+assert.match(anomaliesSource, /dateTimeLines\(record\.updatedAt \|\| record\.createdAt\)\.map\(\(line\) => el\("span", \{\}, line\)\)/);
+assert.match(anomaliesSource, /timeStyle: "short" \}\)\.format\(date\),\s*new Intl\.DateTimeFormat\(undefined, \{ dateStyle: "medium" \}\)\.format\(date\)/, "the clock sits above the day");
+assert.match(anomaliesSource, /if \(key === "createdAt" \|\| key === "updatedAt"\) return dateLabel\(value\);/, "the details viewer keeps the one-line date");
+assert.match(
+  stylesSource,
+  /\.functional-anomaly-list \.settings-list-header,\s*\n\.functional-anomaly-row \{\s*min-width: 620px;\s*grid-template-columns: 112px 176px minmax\(200px, 1fr\) 132px;/
+);
+assert.match(stylesSource, /\.functional-anomaly-time \{\s*display: grid;\s*gap: 2px;/);
+
 console.log("settings scroll retention regression: ok");

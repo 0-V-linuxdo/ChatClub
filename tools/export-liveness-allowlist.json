@@ -115,6 +115,30 @@
     "kind": "test-only",
     "reason": "Detached-signature envelope regressions inspect exact unknown-field, algorithm, size and encoding rejection codes."
   },
+  "content-src/shared/summary-collection-guard.js#SUMMARY_COLLECTION_ABORTED": {
+    "kind": "test-only",
+    "reason": "Idle cancel regressions assert the abort error code the parent cancelSummaryCollection command maps onto, without exposing that token as a frame-command result."
+  },
+  "content-src/shared/summary-collection-guard.js#SummaryCollectionAbortedError": {
+    "kind": "test-only",
+    "reason": "Idle cancel regressions construct and match the document-local abort error so Copy loops stop on parent cancel instead of finishing the current timeout."
+  },
+  "shared/workspace-tab-fulltext-storage.js#WORKSPACE_TAB_FULLTEXT_LEGACY_KEY": {
+    "kind": "test-only",
+    "reason": "Per-workspace full-text storage regressions assert the legacy aggregate key is migrated and removed on the next write without exposing that name as a runtime API."
+  },
+  "shared/workspace-tab-fulltext-storage.js#workspaceIdFromFullTextRecordKey": {
+    "kind": "test-only",
+    "reason": "Per-workspace full-text storage regressions parse record keys back to workspace ids so a forget path cannot drop the wrong desk."
+  },
+  "shared/workspace-tab-fulltext.js#removeWorkspaceTabFullText": {
+    "kind": "test-only",
+    "reason": "In-memory full-text store regressions still delete a desk by workspace id after the page persist path moved onto the per-record storage plan."
+  },
+  "shared/workspace-tab-fulltext.js#upsertWorkspaceTabFullText": {
+    "kind": "test-only",
+    "reason": "In-memory full-text store regressions still merge a desk after the page persist path moved onto the per-record storage plan."
+  },
   "app/summary/idle-capture.js#conversationFingerprintSignature": {
     "kind": "test-only",
     "reason": "Idle full-text capture regressions assert the content-only fingerprint signature ignores clocks, href, generating, and other extra fields so existing scans can skip Copy when the conversation is unchanged."

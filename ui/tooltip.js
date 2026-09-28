@@ -10,7 +10,9 @@ const TOOLTIP_ID_ALIASES = Object.freeze({
   "pocket.exitFocusMode": "pocket.focusMode",
   "pocket.fullscreen": "viewer.fullscreen",
   "workspace.tabs.unpin": "workspace.tabs.pin",
-  "workspace.tabs.sortTime": "workspace.tabs.sortViewed"
+  "workspace.tabs.sortTime": "workspace.tabs.sortActivity",
+  "workspace.tabs.sortViewed": "workspace.tabs.sortActivity",
+  "workspace.tabs.sortEdited": "workspace.tabs.sortActivity"
 });
 
 let tooltipHost = null;

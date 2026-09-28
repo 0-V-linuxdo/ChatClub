@@ -523,7 +523,7 @@ export function createShortcutSettings(ctx) {
       t(group.descriptionKey),
       settingsList([t("shortcuts.action"), t("shortcuts.preview"), t("shortcuts.shortcut"), t("common.enabled"), ""],
         group.actions.map((action) => shortcutRow(action, conflicts, redraw)),
-        "shortcut-list"
+        "shortcut-list settings-list-fill"
       )
     );
   }

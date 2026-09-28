@@ -1,4 +1,23 @@
 import { officialRuleConfigMatchesHref } from "../../shared/url-match.js";
+import {
+  abortableSleep,
+  beginSummaryCollectionRun,
+  cancelSummaryCollectionRuns,
+  endSummaryCollectionRun,
+  isSummaryCollectionAborted
+} from "../shared/summary-collection-guard.js";
+
+function abortedSummaryResult(run) {
+  return {
+    messages: [],
+    rawMessageCount: 0,
+    stage: "aborted",
+    aborted: true,
+    abortReason: String(run?.reason || "cancelled"),
+    officialHits: null,
+    waitMsApplied: 0
+  };
+}
 
 export function createSummaryCapability(deps = {}) {
   const {
@@ -115,7 +134,9 @@ export function createSummaryCapability(deps = {}) {
     return {
       config,
       collectOfficialCandidate: async () => (await collectOfficialStage(config, data, { wait: false })).messages,
-      sleep,
+      // Rejects once the run is aborted so a runner parked between turns
+      // stops at its next await instead of at its next Copy.
+      sleep: (ms) => abortableSleep(ms, sleep),
       normalize,
       qsa,
       qs,
@@ -137,9 +158,35 @@ export function createSummaryCapability(deps = {}) {
     };
   }
 
+  // Idle full-text runs abort on the first trusted pointer, wheel, or key in
+  // this frame and on a cancelSummaryCollection naming their runId; the parent
+  // sees `aborted: true` instead of an error so it can wait for the user
+  // instead of burning an attempt.
   async function collectSummary(data) {
     assertSummaryTargetCurrent(data);
     const config = data?.config || {};
+    const idleFullText = config.idleFullText === true;
+    const run = beginSummaryCollectionRun({
+      runId: data?.runId,
+      idle: idleFullText,
+      abortOnUserInput: idleFullText
+    });
+    try {
+      const result = await collectSummaryRun(data, config, run);
+      return run.aborted ? finishSummaryCollection(data, abortedSummaryResult(run)) : result;
+    } catch (error) {
+      if (run.aborted || isSummaryCollectionAborted(error)) return abortedSummaryResult(run);
+      throw error;
+    } finally {
+      endSummaryCollectionRun(run);
+    }
+  }
+
+  function cancelSummaryCollection(data) {
+    return { cancelled: cancelSummaryCollectionRuns(data?.runId, "cancelled") };
+  }
+
+  async function collectSummaryRun(data, config, run) {
     if (shouldUseCustomSummaryUserscript(config)) {
       const customResult = await executeCustomSummaryUserscript(config);
       const customMessages = merge(Array.isArray(customResult?.messages) ? customResult.messages : []);
@@ -160,7 +207,7 @@ export function createSummaryCapability(deps = {}) {
         waitMsApplied: 0
       });
     }
-    const idleFullText = config.idleFullText === true;
+    const idleFullText = run.idle === true;
     const official = await collectOfficialStage(config, data, { wait: !idleFullText });
     if (official.messages) {
       return finishSummaryCollection(data, {
@@ -239,6 +286,7 @@ export function createSummaryCapability(deps = {}) {
   }
   return Object.freeze({
     collectSummary,
+    cancelSummaryCollection,
     getSummaryRuntimeState
   });
 }

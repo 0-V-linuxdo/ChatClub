@@ -105,7 +105,7 @@ export function createSummarySettingsSection(ctx) {
       settingsPaneToolbar(t("summary.collectors.manage"),
         settingsPrimaryAction(t("summary.collector.add"), "plus", () => openSummaryCollectorEditor(null, redraw))
       ),
-      settingsList(["", t("summary.collector.name"), t("summary.collector.fallback"), t("summary.collector.enabled"), t("summary.collector.actions")], summaryCollectorRows(redraw), "summary-collector-list")
+      settingsList(["", t("summary.collector.name"), t("summary.collector.fallback"), t("summary.collector.enabled"), t("summary.collector.actions")], summaryCollectorRows(redraw), "summary-collector-list settings-list-fill")
     );
   }
 

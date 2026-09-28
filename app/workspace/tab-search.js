@@ -8,14 +8,24 @@ import {
   matchesFullTextQuery,
   mergeWorkspaceTabFullTextFrames,
   normalizeWorkspaceTabFullTextStore,
-  pruneWorkspaceTabFullTextStore,
-  removeWorkspaceTabFullText,
   searchWorkspaceTabFullTextHits,
-  upsertWorkspaceTabFullText,
   workspaceTabFullTextFramesEqual
 } from "../../shared/workspace-tab-fulltext.js";
+import {
+  evictOldestFromWorkspaceTabFullTextPlan,
+  planWorkspaceTabFullTextForget,
+  planWorkspaceTabFullTextRecordWrite,
+  workspaceTabFullTextIndexKeys,
+  workspaceTabFullTextRecordFromSnapshot,
+  workspaceTabFullTextRecordKey,
+  workspaceTabFullTextRecordKeysFromIndex,
+  workspaceTabFullTextRecordReadKeys,
+  workspaceTabFullTextStoreFromSnapshot,
+  WORKSPACE_TAB_FULLTEXT_INDEX_KEY
+} from "../../shared/workspace-tab-fulltext-storage.js";
 import { isStorageQuotaError } from "../../shared/storage-schema.js";
-import { storageGet, storageSet } from "../../shared/storage-adapter.js";
+import { storageGet } from "../../shared/storage-adapter.js";
+import { storageLocalGet, storageLocalRemove, storageLocalSet } from "../../shared/extension-api.js";
 import { el } from "../../ui/dom.js";
 
 const SEARCH_TIME_FORMAT = Object.freeze({ month: "short", day: "numeric" });
@@ -26,24 +36,48 @@ export async function loadRecordFullTextEnabled() {
   return options?.recordFullText === true;
 }
 
-export async function loadWorkspaceTabFullTextStore() {
-  return normalizeWorkspaceTabFullTextStore(await storageGet(STORAGE_KEYS.workspaceTabFullText));
+async function readSnapshot(keys) {
+  const snapshot = await storageLocalGet(keys);
+  return snapshot && typeof snapshot === "object" ? snapshot : {};
 }
 
-async function saveWorkspaceTabFullTextStore(store) {
-  let normalized = pruneWorkspaceTabFullTextStore(store);
+// Set before remove: a quota failure then leaves the legacy aggregate and the
+// pruned records in place for the retry instead of dropping them first.
+async function applyFullTextPlan(plan) {
+  if (plan?.set && Object.keys(plan.set).length) await storageLocalSet(plan.set);
+  if (plan?.remove?.length) await storageLocalRemove(plan.remove);
+}
+
+// Whole-store read for search and labels: the index names the record keys,
+// so this is two bounded reads instead of the aggregate blob or get(null).
+export async function loadWorkspaceTabFullTextStore() {
+  const head = await readSnapshot(workspaceTabFullTextIndexKeys());
+  const recordKeys = workspaceTabFullTextRecordKeysFromIndex(head[WORKSPACE_TAB_FULLTEXT_INDEX_KEY]);
+  const records = recordKeys.length ? await readSnapshot(recordKeys) : {};
+  return workspaceTabFullTextStoreFromSnapshot({ ...head, ...records });
+}
+
+// One-desk read for the idle capture hydrate and Pocket: never deserialises
+// the other desks.
+export async function loadWorkspaceTabFullTextRecord(workspaceId) {
+  const snapshot = await readSnapshot(workspaceTabFullTextRecordReadKeys(workspaceId));
+  return workspaceTabFullTextRecordFromSnapshot(snapshot, workspaceId);
+}
+
+async function writeWorkspaceTabFullTextRecord(snapshot, record) {
+  let plan = planWorkspaceTabFullTextRecordWrite(snapshot, record);
+  if (!plan) return { saved: false };
   while (true) {
     try {
-      await storageSet(STORAGE_KEYS.workspaceTabFullText, normalized);
-      return normalized;
+      await applyFullTextPlan(plan);
+      return { saved: true, workspaceId: plan.workspaceId, migratedLegacy: plan.migratedLegacy === true };
     } catch (error) {
-      const ids = Object.keys(normalized);
-      if (!isStorageQuotaError(error) || ids.length <= 1) throw error;
-      const oldest = ids.sort((left, right) => (
-        String(normalized[left]?.updatedAt || "").localeCompare(String(normalized[right]?.updatedAt || ""))
-      ))[0];
-      delete normalized[oldest];
-      normalized = pruneWorkspaceTabFullTextStore(normalized);
+      const smaller = isStorageQuotaError(error) ? evictOldestFromWorkspaceTabFullTextPlan(plan, plan.workspaceId) : null;
+      if (!smaller) throw error;
+      // Free the evicted desk before retrying; the legacy aggregate, if any,
+      // still waits until its records are written.
+      await storageLocalRemove([workspaceTabFullTextRecordKey(smaller.evicted)]).catch(() => {});
+      plan = smaller;
     }
   }
 }
@@ -53,8 +87,8 @@ export async function persistWorkspaceTabFullTextFromPreview({ workspaceId, topi
     .filter((frame) => fullTextMessagesHavePair(frame.messages));
   const id = String(workspaceId || "").trim();
   if (!id || !incoming.length) return { saved: false };
-  const store = await loadWorkspaceTabFullTextStore();
-  const current = store[id];
+  const snapshot = await readSnapshot(workspaceTabFullTextRecordReadKeys(id));
+  const current = workspaceTabFullTextRecordFromSnapshot(snapshot, id);
   const frames = mergeWorkspaceTabFullTextFrames(current?.frames, incoming);
   const nextTitle = String(topicTitle || current?.topicTitle || "").trim();
   if (
@@ -64,21 +98,19 @@ export async function persistWorkspaceTabFullTextFromPreview({ workspaceId, topi
   ) {
     return { saved: true, unchanged: true, workspaceId: id };
   }
-  const next = upsertWorkspaceTabFullText(store, {
+  return writeWorkspaceTabFullTextRecord(snapshot, {
     workspaceId: id,
     topicTitle: nextTitle,
     frames,
     updatedAt: new Date().toISOString()
   });
-  await saveWorkspaceTabFullTextStore(next);
-  return { saved: true, workspaceId: id };
 }
 
 export async function forgetWorkspaceTabFullText(workspaceId) {
-  const store = await loadWorkspaceTabFullTextStore();
-  const next = removeWorkspaceTabFullText(store, workspaceId);
-  if (next === store || Object.keys(next).length === Object.keys(store).length) return store;
-  return saveWorkspaceTabFullTextStore(next);
+  const snapshot = await readSnapshot(workspaceTabFullTextRecordReadKeys(workspaceId));
+  const plan = planWorkspaceTabFullTextForget(snapshot, workspaceId);
+  if (plan.changed) await applyFullTextPlan(plan);
+  return { forgotten: plan.changed, workspaceId: String(workspaceId || "").trim() };
 }
 
 function tabTitleSearchValues(item = {}, label = "") {

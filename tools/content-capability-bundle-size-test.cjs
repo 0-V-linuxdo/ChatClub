@@ -19,39 +19,36 @@ const coreCapabilityOutputs = [
 ];
 const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
-  // Exact base cost after preparePageCaretLease joined the isolated
-  // content contract with adoptPageCaretLease / releasePageCaretLease, then
-  // the toggleTopbar action and its two default keymaps joined the shared
-  // shortcut table this bundle matches in-frame keystrokes against.
-  "content/content.js": 111_430,
+  // Exact base cost after cancelSummaryCollection and collectSummary runId
+  // joined the isolated content contract so idle Record Full Text can abort
+  // an in-iframe Copy scan instead of waiting out the parent timeout.
+  "content/content.js": 117_139,
   "content/send.js": 85_000,
   // Bundles that embed the shared frame-command contract each carry the
-  // page-caret lease spec entries (about one hundred bytes more).
-  "content/summary-bridge.js": 100_125,
+  // cancelSummaryCollection command plus collectSummary runId.
+  "content/summary-bridge.js": 107_208,
   // Shared Notion catalog plus exact custom picker-name apply stay inside the
   // preferred-model content boundary instead of a second selector dialect.
-  "content/preferred-model.js": 243_861,
+  "content/preferred-model.js": 245_360,
   // Exact post-generation cost of signed selector hints plus attempt/route-bound
   // confirmation ownership; keep destructive-action safety in one bundle.
-  "content/delete.js": 266_711,
+  "content/delete.js": 268_210,
   "content/grok-cookie-bridge.js": 50_000,
   "content/message-navigator.js": 140_000,
   // Exact cost after the document_start shield reports trusted pointerdown to the
   // parent, re-focuses the clicked element on a late handback, relays a nested-iframe
   // pointer report upward, and removes its focus/message listeners on dispose.
   "content/preload.js": 226_568,
-  "content/summary-userscripts-main.js": 230_908,
+  "content/summary-userscripts-main.js": 235_349,
   "content/summary-userscripts.js": 161_122
 });
-// Exact base-plus-capabilities closure after preparePageCaretLease joined
-// the isolated content contract, then the toggleTopbar shortcut action joined
-// the shared table.
-const aggregateByteBudget = 802_189;
+// Exact base-plus-capabilities closure after cancelSummaryCollection and
+// collectSummary runId joined the isolated content contract.
+const aggregateByteBudget = 818_630;
 // Exact all-bundle closure after MAIN-world page-caret document_start
-// bootstrap plus the isolated command-contract growth, then the shield's
-// trusted-pointer report, late-handback refocus, and nested-frame pointer relay,
-// then the toggleTopbar shortcut action and its default keymaps.
-const allBundlesByteBudget = 1_592_786;
+// bootstrap plus the isolated command-contract growth for
+// cancelSummaryCollection and collectSummary runId.
+const allBundlesByteBudget = 1_613_794;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

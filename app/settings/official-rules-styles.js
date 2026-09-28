@@ -91,10 +91,10 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   gap: var(--space-1);
   width: 100%;
   box-sizing: border-box;
-  padding: var(--space-1);
-  border: 1px solid var(--line);
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: calc(var(--ui-radius) + 2px);
-  background: color-mix(in srgb, var(--panel-2) 60%, transparent);
+  background: color-mix(in srgb, var(--line) 30%, var(--panel));
 }
 
 .official-rules-tab {
@@ -248,6 +248,12 @@ const OFFICIAL_RULES_SETTINGS_CSS = `
   gap: var(--space-1);
   padding: 11px var(--space-3);
   background: var(--panel);
+}
+
+/* The 1px gaps paint the grid's --line background, so an odd last cell
+   spans the row instead of leaving a line-coloured hole beside it. */
+.official-rules-detail:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .official-rules-detail dt {

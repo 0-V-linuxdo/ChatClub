@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "f52a9ec8a6285e97bfbf1bf19145ee52ea482d0bc59305b38edf07961bde3016";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "9561720ae37ceefcc02971ea91edad45ff40bdba2ea650d78a8aab5d708f84da", "implementationSha256": "56362fcfbc5b48c776a0f2d865601ff2b36e426f22622ed355d8e7fcba52e676", "implementationVersion": "2026.07.16.2+bundle.56362fcfbc5b48c776a0f2d865601ff2b36e426f22622ed355d8e7fcba52e676" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "54728fba3d79176272c6425e55c75d63fff8f717f0f513a9d4a683dfc9ecf023", "implementationSha256": "729eb76da28c30ffe480dfac99674c5a48010d4d353841db2e872761d356c7cc", "implementationVersion": "2026.07.16.2+bundle.729eb76da28c30ffe480dfac99674c5a48010d4d353841db2e872761d356c7cc" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -109,6 +109,10 @@
     return Object.freeze({ ...CONTENT_RUNTIME_IDENTITY, bundle: normalized });
   }
 
+  // content-src/shared/summary-collection-guard.js
+  var USER_INPUT_EVENTS = Object.freeze(["pointerdown", "wheel", "keydown", "touchstart"]);
+  var USER_ACTIVITY_EVENTS = Object.freeze([...USER_INPUT_EVENTS, "pointermove"]);
+
   // content-src/shared/summary-runtime.js
   var sleep = (ms) => new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -134,6 +138,17 @@
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.value || "";
     return el.innerText || el.textContent || "";
   }
+  var TURN_FINGERPRINT_SKIP_SELECTOR = [
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons"
+  ].join(",");
   function buttonText(el) {
     if (!el) return "";
     const labelledBy = String(el.getAttribute?.("aria-labelledby") || "").split(/\s+/).map((id) => id && document.getElementById(id)).filter(Boolean).map((node) => node.innerText || node.textContent || "").join(" ");
@@ -311,6 +326,7 @@
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),
     getSummaryRuntimeState: command({ timeoutMs: 1800, features: Object.freeze(["summary"]) }),
     collectSummary: command({ timeoutMs: 36e3, mutating: true, features: Object.freeze(["summary"]) }),
+    cancelSummaryCollection: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["summary"]) }),
     sendText: command({ timeoutMs: 12e3, mutating: true, features: Object.freeze(["send"]) }),
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),

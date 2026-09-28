@@ -223,7 +223,7 @@ globalThis.document = {
   assert.match(source, /workspace-tabs-sidebar-hover-menu/, "folded buttons must land in a popover");
   assert.match(source, /getOptions/, "hover-button placement must read appearance options");
   assert.match(css, /\.workspace-tabs-sidebar-item-actions\s*\{[^}]*position:\s*absolute/, "rename and delete must overlay the row instead of shrinking the title");
-  assert.match(css, /\.workspace-tabs-sidebar-divider/, "closed tabs must be separated by a divider");
+  assert.doesNotMatch(css, /\.workspace-tabs-sidebar-divider/, "the open/closed divider retired with the Open first sort");
   assert.match(css, /\.workspace-tabs-sidebar-item\.is-editing/, "rename must edit the title on the row");
   assert.match(css, /\.workspace-tabs-sidebar-item\.dragging/, "sidebar tabs must show a dragging state");
   assert.match(css, /\.workspace-tabs-sidebar-item\.drop-before::before/, "sidebar tabs must show a drop-before line");
@@ -254,7 +254,6 @@ globalThis.document = {
   assert.match(icons, /d: "M12 17v5"/, "the pin glyph must include the Lucide pin needle");
   assert.match(source, /createIcon\("pin"\)/, "each tab row must expose a pin control");
   assert.match(source, /WORKSPACE_TABS_SIDEBAR_PINNED_KEY/, "pinned tabs must persist independently of live order");
-  assert.match(source, /Boolean\(item\.pinned\) !== Boolean\(target\.pinned\)/, "pinned and unpinned tabs must not mix while dragging");
   assert.doesNotMatch(source, /workspace-tabs-sidebar-search/, "ChatClub Tabs must not keep a sidebar search field");
   assert.doesNotMatch(source, /function openSearch\(/, "the sidebar must not expose a leftover Search focus API");
   assert.doesNotMatch(source, /setSearchQuery/, "the sidebar must not filter tabs locally");
@@ -465,7 +464,6 @@ globalThis.document = {
   {
     const fixture = controller();
     await fixture.api.refresh();
-    fixture.api.setSortMode("open");
     fixture.api.setOpen(true);
     const sidebar = fixture.api.renderSidebar();
     const current = descendants(sidebar).find((node) => node.classList.contains("is-current"));
@@ -495,7 +493,7 @@ globalThis.document = {
       "cleanup from the header must not delete Tabs memory"
     );
     const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
-    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1"], "live and closed tabs must number separately");
+    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "1", "1"], "each date group must number its own tabs");
     const pinButtons = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-pin"));
     assert.equal(pinButtons.length, 3, "every ChatClub tab row must expose a pin control");
     const pocketButtons = descendants(sidebar).filter((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-pocket"));
@@ -577,14 +575,14 @@ globalThis.document = {
       false,
       "closed rows must not keep a Closed badge on the title"
     );
-    const divider = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-divider"));
-    assert.ok(divider, "closed tabs must sit below a divider");
-    assert.match(nodeText(divider), /Closed|已关闭/);
+    assert.equal(
+      descendants(sidebar).some((node) => node.classList.contains("workspace-tabs-sidebar-divider")),
+      false,
+      "live and closed tabs share the date groups instead of an open/closed divider"
+    );
     const list = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-list"));
     const rowItems = (list?.children || []).filter((node) => node.classList.contains("workspace-tabs-sidebar-item"));
-    assert.equal(rowItems.at(-1), closed, "closed tabs must render after live tabs");
-    const dividerIndex = (list?.children || []).findIndex((node) => node.classList.contains("workspace-tabs-sidebar-divider"));
-    assert.equal(dividerIndex, 2, "the closed-tab divider must sit between live and closed rows");
+    assert.equal(rowItems.at(-1), closed, "the least recently active tab must render last");
     const focus = descendants(current).find((node) => node.classList.contains("workspace-tabs-sidebar-item-focus"));
     assert.ok(focus, "the row label must stay a separate focus control");
   }
@@ -831,18 +829,12 @@ globalThis.document = {
   }
 
   {
+    const now = Date.now();
     const fixture = controller({
       requestBackground: async (action) => {
         if (action === "listLiveWorkspaceTabs") {
           return {
             tabs: [
-              {
-                workspaceId: "page-closedclosedc",
-                current: false,
-                live: false,
-                topicTitle: "Archived notes",
-                appIds: ["Grok"]
-              },
               {
                 tabId: 21,
                 windowId: 1,
@@ -851,7 +843,21 @@ globalThis.document = {
                 current: true,
                 live: true,
                 layoutName: "Live workspace",
-                appIds: ["ChatGPT"]
+                appIds: ["ChatGPT"],
+                createdAt: now - (3 * 24 * 60 * 60 * 1000),
+                viewedAt: now - (2 * 24 * 60 * 60 * 1000),
+                editedAt: now - (3 * 24 * 60 * 60 * 1000)
+              },
+              {
+                workspaceId: "page-closedclosedc",
+                current: false,
+                live: false,
+                topicTitle: "Archived notes",
+                appIds: ["Grok"],
+                createdAt: now - (40 * 24 * 60 * 60 * 1000),
+                viewedAt: now - (5 * 24 * 60 * 60 * 1000),
+                editedAt: now - (60 * 1000),
+                detachedAt: now - (30 * 1000)
               }
             ]
           };
@@ -860,122 +866,43 @@ globalThis.document = {
       }
     });
     await fixture.api.refresh();
-    fixture.api.setSortMode("open");
-    fixture.api.setOpen(true);
-    const sidebar = fixture.api.renderSidebar();
-    const list = descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-list"));
-    const children = list?.children || [];
-    assert.equal(children[0]?.classList.contains("workspace-tabs-sidebar-item"), true);
-    assert.equal(children[0]?.classList.contains("is-closed"), false, "live tabs must stay above the divider");
-    assert.equal(children[1]?.classList.contains("workspace-tabs-sidebar-divider"), true);
-    assert.equal(children[2]?.classList.contains("is-closed"), true, "closed tabs must move below the divider even when remembered first");
-    assert.match(nodeText(children[2]), /Archived notes/);
-    const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
-    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "1"], "the closed section must restart at 1");
+    assert.deepEqual(
+      fixture.api.currentItems().map((item) => item.workspaceId),
+      ["page-closedclosedc", "page-livelivelivel"],
+      "Last activity must rank a closed tab edited a minute ago above a live tab instead of putting open tabs first"
+    );
+    fixture.api.setSortMode("created");
+    assert.deepEqual(
+      fixture.api.currentItems().map((item) => item.workspaceId),
+      ["page-livelivelivel", "page-closedclosedc"],
+      "Date created must rank by creation time alone"
+    );
+    fixture.api.setSortMode("activity");
   }
 
   {
     const fixture = controller();
     await fixture.api.refresh();
-    fixture.api.setSortMode("open");
     const listed = fixture.api.currentItems();
     const reordered = fixture.api.moveTab(listed[1], listed[0], "before");
-    assert.equal(reordered[0].workspaceId, "page-bbbbbbbbbbbb");
-    assert.equal(reordered[1].workspaceId, "page-aaaaaaaaaaaa");
-    assert.equal(reordered[2].workspaceId, "page-cccccccccccc", "closed tabs must stay below live tabs after a live reorder");
-    await Promise.resolve();
-    await Promise.resolve();
-    assert.ok(
-      fixture.calls.some((call) => call.action === "moveLiveWorkspaceTabs" && call.payload.tabIds[0] === 12),
-      "reordering live ChatClub tabs must move the matching browser tabs"
+    assert.deepEqual(
+      reordered.map((item) => item.workspaceId),
+      listed.map((item) => item.workspaceId),
+      "every sort is automatic, so dropping one loose tab on another must not reorder them"
     );
-  }
-
-  {
-    const fixture = controller({
-      requestBackground: async (action) => {
-        if (action === "listLiveWorkspaceTabs") {
-          return {
-            tabs: [
-              {
-                workspaceId: "page-closed-one",
-                current: false,
-                live: false,
-                topicTitle: "Old notes"
-              },
-              {
-                workspaceId: "page-closed-two",
-                current: false,
-                live: false,
-                topicTitle: "Older notes"
-              },
-              {
-                tabId: 11,
-                windowId: 1,
-                index: 0,
-                workspaceId: "page-live-one",
-                current: true,
-                live: true,
-                layoutName: "Pocket batch"
-              }
-            ]
-          };
-        }
-        if (action === "moveLiveWorkspaceTabs") {
-          throw new Error("closed tabs must not move browser tabs");
-        }
-        return {};
-      }
-    });
-    await fixture.api.refresh();
-    fixture.api.setSortMode("open");
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(
+      fixture.calls.some((call) => call.action === "moveLiveWorkspaceTabs"),
+      false,
+      "a drop that changes nothing must not move browser tabs"
+    );
     fixture.api.setOpen(true);
-    const listed = fixture.api.currentItems();
-    const closedA = listed.find((item) => item.workspaceId === "page-closed-one");
-    const closedB = listed.find((item) => item.workspaceId === "page-closed-two");
-    const after = fixture.api.moveTab(closedB, closedA, "before");
-    assert.deepEqual(after.filter((item) => !item.live).map((item) => item.workspaceId), [
-      "page-closed-two",
-      "page-closed-one"
-    ]);
-    assert.equal(after[0].live, true, "live tabs must stay above closed tabs");
-    assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsClosedOrderV1"), JSON.stringify([
-      "page-closed-two",
-      "page-closed-one"
-    ]));
-    const again = controller({
-      localStorage: {
-        getItem: (key) => fixture.widthMemory.get(key) || null,
-        setItem: (key, value) => { fixture.widthMemory.set(key, String(value)); },
-        removeItem: (key) => { fixture.widthMemory.delete(key); }
-      },
-      requestBackground: async (action) => {
-        if (action === "listLiveWorkspaceTabs") {
-          return {
-            tabs: [
-              {
-                workspaceId: "page-closed-one",
-                current: false,
-                live: false,
-                topicTitle: "Old notes"
-              },
-              {
-                workspaceId: "page-closed-two",
-                current: false,
-                live: false,
-                topicTitle: "Older notes"
-              }
-            ]
-          };
-        }
-        return {};
-      }
-    });
-    await again.api.refresh();
-    assert.deepEqual(again.api.currentItems().map((item) => item.workspaceId), [
-      "page-closed-two",
-      "page-closed-one"
-    ], "closed tab order must survive a later list refresh");
+    assert.equal(
+      descendants(fixture.api.renderSidebar()).some((node) => String(node.className || "").includes("workspace-tabs-sidebar-item-move-up")),
+      false,
+      "loose tabs have no manual order, so they must not expose Move up / Move down"
+    );
   }
 
   {
@@ -1016,17 +943,16 @@ globalThis.document = {
     const fixture = controller();
     fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
     await fixture.api.refresh();
-    fixture.api.setSortMode("open");
     fixture.api.setOpen(true);
     const listed = fixture.api.currentItems();
     const liveSecond = listed.find((item) => item.workspaceId === "page-bbbbbbbbbbbb");
     const closed = listed.find((item) => item.workspaceId === "page-cccccccccccc");
     const pinned = fixture.api.togglePin(liveSecond);
-    assert.equal(pinned[0].workspaceId, "page-bbbbbbbbbbbb", "pinning must move the tab to the top of its section");
+    assert.equal(pinned[0].workspaceId, "page-bbbbbbbbbbbb", "pinning must move the tab to the top of the list");
     assert.equal(pinned[0].pinned, true);
     assert.equal(pinned[1].workspaceId, "page-aaaaaaaaaaaa");
     assert.equal(pinned[1].pinned, false);
-    assert.equal(pinned[2].workspaceId, "page-cccccccccccc", "pinning a live tab must not jump the closed section");
+    assert.equal(pinned[2].workspaceId, "page-cccccccccccc", "unpinned tabs must keep their Last activity order");
     assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsPinnedV1"), JSON.stringify(["page-bbbbbbbbbbbb"]));
     const sidebar = fixture.api.renderSidebar();
     const rows = (descendants(sidebar).find((node) => node.classList.contains("workspace-tabs-sidebar-list"))?.children || [])
@@ -1038,17 +964,17 @@ globalThis.document = {
       "pinned rows must keep a visible pin mark"
     );
     const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
-    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1"]);
+    assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "1", "1"], "the Pinned group and each date group number separately");
     const pinnedClosed = fixture.api.togglePin(closed);
-    assert.equal(pinnedClosed[2].workspaceId, "page-cccccccccccc");
-    assert.equal(pinnedClosed[2].pinned, true);
+    assert.equal(pinnedClosed[0].workspaceId, "page-cccccccccccc", "a pinned closed tab joins the Pinned group at the top");
+    assert.equal(pinnedClosed[0].pinned, true);
     assert.deepEqual(JSON.parse(fixture.widthMemory.get("chatclubWorkspaceTabsPinnedV1")), [
       "page-cccccccccccc",
       "page-bbbbbbbbbbbb"
     ], "the newest pin must sit first in the pin list");
     const unpinned = fixture.api.togglePin(liveSecond);
-    assert.equal(unpinned[0].workspaceId, "page-bbbbbbbbbbbb");
-    assert.equal(unpinned[0].pinned, false, "unpinning must keep the tab in its section without a pin");
+    assert.equal(unpinned[2].workspaceId, "page-bbbbbbbbbbbb");
+    assert.equal(unpinned[2].pinned, false, "unpinning must return the tab to its Last activity position");
     assert.equal(unpinned.some((item) => item.workspaceId === "page-bbbbbbbbbbbb" && item.pinned), false);
     assert.deepEqual(JSON.parse(fixture.widthMemory.get("chatclubWorkspaceTabsPinnedV1")), ["page-cccccccccccc"]);
   }
@@ -1057,7 +983,6 @@ globalThis.document = {
     const fixture = controller();
     fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
     await fixture.api.refresh();
-    fixture.api.setSortMode("open");
     const listed = fixture.api.currentItems();
     fixture.api.togglePin(listed[1]);
     const after = fixture.api.currentItems();
@@ -1116,7 +1041,6 @@ globalThis.document = {
     });
     fixture.widthMemory.delete("chatclubWorkspaceTabsPinnedV1");
     await fixture.api.refresh();
-    fixture.api.setSortMode("open");
     const listed = fixture.api.currentItems();
     fixture.api.togglePin(listed.find((item) => item.workspaceId === "page-live-two"));
     fixture.api.togglePin(listed.find((item) => item.workspaceId === "page-closed-two"));
@@ -1170,11 +1094,11 @@ globalThis.document = {
     again.api.setOpen(true);
     const restored = again.api.currentItems();
     assert.deepEqual(restored.map((item) => item.workspaceId), [
-      "page-live-two",
-      "page-live-one",
       "page-closed-two",
-      "page-closed-one"
-    ], "pinned tabs must stay at the top of their own section after a later list refresh");
+      "page-live-two",
+      "page-closed-one",
+      "page-live-one"
+    ], "pinned tabs must stay on top in pin order after a later list refresh");
     const sidebar = again.api.renderSidebar();
     const indexes = descendants(sidebar).filter((node) => node.classList.contains("workspace-tabs-sidebar-item-index"));
     assert.deepEqual(indexes.map((node) => nodeText(node)), ["1", "2", "1", "2"]);
@@ -1315,29 +1239,42 @@ globalThis.document = {
     widthMemory.delete("chatclubWorkspaceTabsSidebarSortV1");
     const fixture = controller();
     await fixture.api.refresh();
-    assert.equal(fixture.api.currentSortMode(), "viewed", "ChatClub Tabs must default to last-viewed sort");
+    assert.equal(fixture.api.currentSortMode(), "activity", "ChatClub Tabs must default to Last activity sort");
     fixture.api.setOpen(true);
     const byTime = fixture.api.renderSidebar();
-    assert.match(nodeText(byTime), /Today|今天/, "last-viewed sort must group recent tabs like prompt history");
-    assert.match(nodeText(byTime), /Older|更早/, "last-viewed sort must group older tabs like prompt history");
+    assert.match(nodeText(byTime), /Today|今天/, "Last activity sort must group recent tabs like prompt history");
+    assert.match(nodeText(byTime), /Older|更早/, "Last activity sort must group older tabs like prompt history");
     assert.ok(
       descendants(byTime).some((node) => node.classList.contains("workspace-tabs-sidebar-group")),
-      "last-viewed sort must render date group headings"
+      "Last activity sort must render date group headings"
     );
     assert.equal(
       descendants(byTime).some((node) => node.classList.contains("workspace-tabs-sidebar-divider")),
       false,
-      "last-viewed sort must not use the open/closed divider"
+      "Last activity sort must not use the retired open/closed divider"
     );
-    fixture.api.setSortMode("edited");
-    assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsSidebarSortV1"), "edited");
-    assert.ok(descendants(fixture.api.renderSidebar()).some((node) => node.classList.contains("workspace-tabs-sidebar-group")));
-    fixture.api.setSortMode("created");
+    documentBody.children = [];
+    const sortButton = descendants(byTime).find((node) => String(node.className || "").includes("workspace-tabs-sidebar-sort"));
+    sortButton.click({ currentTarget: sortButton });
+    const sortMenu = descendants(documentBody).find((node) => node.classList.contains("workspace-tabs-sidebar-sort-menu"));
+    assert.ok(sortMenu, "the sort control must open a menu");
+    const sortItems = sortMenu.children;
+    assert.deepEqual(
+      sortItems.map((node) => nodeText(node).trim()),
+      ["Name", "Date created", "Last activity"],
+      "the sort menu must offer exactly Name, Date created, Last activity"
+    );
+    sortItems[1].click();
     assert.equal(fixture.api.currentSortMode(), "created");
-    fixture.api.setSortMode("open");
-    assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsSidebarSortV1"), "open");
-    const byOpen = fixture.api.renderSidebar();
-    assert.ok(descendants(byOpen).some((node) => node.classList.contains("workspace-tabs-sidebar-divider")));
+    assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsSidebarSortV1"), "created");
+    assert.ok(descendants(fixture.api.renderSidebar()).some((node) => node.classList.contains("workspace-tabs-sidebar-group")));
+    for (const retired of ["viewed", "edited", "open"]) {
+      fixture.api.setSortMode(retired);
+      assert.equal(fixture.api.currentSortMode(), "activity", `the retired ${retired} sort must land on Last activity`);
+      assert.equal(fixture.widthMemory.get("chatclubWorkspaceTabsSidebarSortV1"), "activity");
+    }
+    fixture.widthMemory.set("chatclubWorkspaceTabsSidebarSortV1", "open");
+    assert.equal(controller().api.currentSortMode(), "activity", "a saved Open first sort must reopen as Last activity");
     fixture.api.setSortMode("name");
     const byName = fixture.api.renderSidebar();
     const nameLabels = descendants(byName)

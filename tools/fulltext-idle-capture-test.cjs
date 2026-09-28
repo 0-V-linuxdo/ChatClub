@@ -98,6 +98,10 @@ function previewItem(instanceId, prompt, assistant) {
   assert.equal(spec.capability, "base");
   assert.equal(spec.mutating, false);
   assert.ok(spec.timeoutMs <= 1800);
+  const cancelSpec = frameCommands.FRAME_COMMAND_SPECS.cancelSummaryCollection;
+  assert.deepEqual([...cancelSpec.features], ["summary"]);
+  assert.equal(cancelSpec.mutating, true);
+  assert.ok(cancelSpec.timeoutMs <= 2000);
 
   const runtime = read("app/runtime.js");
   assert.match(runtime, /scheduleIdleFullTextCapture\?\.\(text\)/);
@@ -116,7 +120,10 @@ function previewItem(instanceId, prompt, assistant) {
   assert.match(summary, /scheduleExistingIdleFullTextCapture/);
   assert.doesNotMatch(summary, /state\.options\?\.topicTitle/);
   const content = read("content-src/content.js");
-  assert.match(content, /getConversationFingerprint:\s*\(data\)\s*=>\s*conversationFingerprint\(contentDocumentId,\s*data\)/);
+  // The fingerprint command long-polls: the content side holds the reply on a
+  // MutationObserver until the conversation changes or `waitMs` elapses.
+  assert.match(content, /getConversationFingerprint:\s*\(data\)\s*=>\s*conversationFingerprintWhenChanged\(contentDocumentId,\s*data\)/);
+  assert.match(content, /from "\.\/shared\/conversation-observer\.js"/);
 
   const {
     conversationFingerprintSignature,
@@ -1185,12 +1192,152 @@ function previewItem(instanceId, prompt, assistant) {
     assert.equal(collects.length, 1, "a later send of the same idle snapshot must not click Copy again");
   }
 
+  {
+    const clock = createFakeClock();
+    const cancels = [];
+    let releaseCollect;
+    const hanging = new Promise((resolve) => { releaseCollect = resolve; });
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 1_000,
+      pollMs: 500,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({ containsPrompt: true }),
+      collectFrame: async (_frame, _text, { isCancelled } = {}) => {
+        await hanging;
+        return isCancelled?.() ? { aborted: true } : previewItem("one", prompt, "late");
+      },
+      cancelCollect: (frame, runId) => {
+        cancels.push({ key: frame.key, runId });
+        releaseCollect();
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => { throw new Error("cancelled collect must not persist"); }
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await clock.advance(1_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    scheduler.cancel();
+    await done;
+    assert.equal(cancels.length, 1, "parent cancel must tell the iframe to stop the in-flight Copy run");
+    assert.equal(cancels[0].runId, "1:one:1");
+  }
+
+  {
+    const clock = createFakeClock();
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 30_000,
+      pollMs: 30_000,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({ containsPrompt: true }),
+      collectFrame: async () => { throw new Error("cancelled poll must not collect"); },
+      cancelCollect: () => {},
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    scheduler.cancel();
+    await done;
+    assert.equal(clock.pendingCount >= 0, true, "parent cancel must wake a parked poll sleep without waiting out idleMs");
+  }
+
+  {
+    const clock = createFakeClock();
+    const cancels = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 1_000,
+      pollMs: 500,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({ containsPrompt: true }),
+      collectFrame: async () => {
+        throw Object.assign(new Error("TIMEOUT"), { code: "TIMEOUT" });
+      },
+      cancelCollect: (_frame, runId) => { cancels.push(runId); },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const done = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await settleCapture(clock, done);
+    assert.deepEqual(cancels, ["1:one:1", "1:one:2", "1:one:3"], "each parent collect timeout must cancel that iframe scan");
+  }
+
+  {
+    const clock = createFakeClock();
+    const cancels = [];
+    let releaseCollect;
+    const hanging = new Promise((resolve) => { releaseCollect = resolve; });
+    const collected = [];
+    const scheduler = createIdleFullTextCaptureScheduler({
+      now: clock.now,
+      sleep: clock.sleep,
+      idleMs: 1_000,
+      pollMs: 500,
+      maxAttempts: 3,
+      wallMs: 60_000,
+      listFrames: () => [{ key: "one" }],
+      getFingerprint: async () => fingerprintOf({ containsPrompt: true }),
+      collectFrame: async (_frame, text, { isCancelled } = {}) => {
+        collected.push(text);
+        if (collected.length === 1) {
+          await hanging;
+          return isCancelled?.() ? { aborted: true } : previewItem("one", text, "stale");
+        }
+        return previewItem("one", text, "fresh");
+      },
+      cancelCollect: (_frame, runId) => {
+        cancels.push(runId);
+        releaseCollect();
+      },
+      itemMatchesPrompt: (item, text) => fullTextMessagesMatchPrompt(item?.page?.messages, text),
+      persistItem: async () => {}
+    });
+    const first = scheduler.schedule(prompt);
+    await waitForSleep(clock);
+    await clock.advance(1_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    const second = scheduler.schedule("a newer prompt");
+    await waitForSleep(clock);
+    await clock.advance(1_000);
+    await Promise.all([first, second]);
+    assert.deepEqual(cancels, ["1:one:1"], "a newer send must cancel the previous iframe Copy run");
+    assert.equal(collected.includes(prompt), true);
+    assert.equal(collected.at(-1), "a newer prompt");
+  }
+
   const idleSource = read("app/summary/idle-capture.js");
   assert.match(idleSource, /persisted === false \|\| persisted\?\.saved === false/);
   assert.match(idleSource, /status: "unchanged"/);
   assert.match(idleSource, /savedSignatures/);
   assert.match(idleSource, /alreadySavedIdleSnapshot/);
   assert.match(idleSource, /lastKnownGenerating/);
+  assert.match(idleSource, /cancelInFlightCollects/);
+  assert.match(idleSource, /interruptSleeps/);
+  assert.match(idleSource, /cancelledCollectIds/);
+  assert.match(idleSource, /requestCollectCancel/);
+  assert.match(idleSource, /isCancelled:\s*\(\) => collectIsCancelled/);
+  assert.match(summary, /cancelSummaryCollection/);
+  assert.match(summary, /cancelCollect:/);
+  assert.match(summary, /isCancelled/);
+  assert.match(summary, /abortIdleCollect/);
+  assert.match(summary, /options\.isCancelled\(\)/);
   assert.match(idleSource, /hydrateFromStore/);
   assert.match(idleSource, /loadStoredSnapshots/);
   assert.match(idleSource, /fullTextExistingNeedsCollect/);
@@ -1202,7 +1349,7 @@ function previewItem(instanceId, prompt, assistant) {
   assert.match(idleSource, /representation:\s*"store"/);
   assert.match(runtime, /result\?\.saved && result\.unchanged !== true/);
   assert.match(runtime, /historyController\?\.notifyFullTextChanged/);
-  assert.match(runtime, /loadWorkspaceTabFullText:\s*loadWorkspaceTabFullTextStore/);
+  assert.match(runtime, /loadWorkspaceTabFullText:\s*loadWorkspaceTabFullTextRecord/);
   assert.match(summary, /loadStoredSnapshots/);
   assert.match(summary, /fullTextContentMetricsFromMessages/);
   assert.match(summary, /workspaceTabFullTextFrameIdentityKey/);
@@ -1247,7 +1394,10 @@ function previewItem(instanceId, prompt, assistant) {
   assert.equal(IDLE_FULLTEXT_CAPTURE_DEFAULTS.generatingWallMs, 45 * 60 * 1000);
   assert.match(summary, /generatingWallMs:\s*IDLE_FULLTEXT_CAPTURE_DEFAULTS\.generatingWallMs/);
   assert.match(read("userscripts/notion.js"), /copyLimit = idleFullText \? 2 : 8/);
-  assert.match(summary, /timeoutMs:\s*8000,\s*skipEnsure:\s*false/);
+  // The fingerprint request timeout covers the long poll plus the old 8s
+  // headroom; the scheduler decides `waitMs`, the controller only forwards it.
+  assert.match(summary, /timeoutMs:\s*waitMs \+ 8000,\s*skipEnsure:\s*false/);
+  assert.match(summary, /\{ prompt, waitMs, since: poll\?\.since \|\| null \}/);
   assert.doesNotMatch(summaryRuntime, /function conversationRoot/);
   assert.doesNotMatch(summaryRuntime, /childCount:/);
   const historySource = read("app/history/controller.js");

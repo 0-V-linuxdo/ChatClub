@@ -321,7 +321,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
       settingsPaneToolbar(t("topbar.placeholder.help", { maxCount: TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT })),
       topbarPromptPlaceholderEditor(config, redraw),
       topbarPromptPlaceholderSettingsControls(config, redraw),
-      settingsList(["", t("topbar.placeholder.text"), t("profiles.actions")], rows, "settings-manager-list topbar-placeholder-list")
+      settingsList(["", t("topbar.placeholder.text"), t("profiles.actions")], rows, "settings-manager-list topbar-placeholder-list settings-list-fill")
     );
   }
 

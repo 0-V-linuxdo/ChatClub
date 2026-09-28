@@ -40,7 +40,9 @@ function assertSettingsFullscreenProbe(probe, browserTarget, assert) {
 function settingsFullscreenProbe() {
   const panel = document.querySelector(".settings-modal");
   const button = document.querySelector('[data-tooltip-id="settings.modal.fullscreen"]');
-  document.querySelector('[data-settings-section-id="shortcuts"]')?.click();
+  // Import / Export still scrolls .settings-main; table panes such as Shortcuts
+  // scroll their own .settings-list-fill and can switch owner with the size.
+  document.querySelector('[data-settings-section-id="io"]')?.click();
   const settingsMain = document.querySelector(".settings-main");
   const settingsPane = settingsMain?.firstElementChild || null;
   const draftProbe = document.createElement("input");

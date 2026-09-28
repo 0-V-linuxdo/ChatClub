@@ -176,8 +176,10 @@ const dataModule = (source) => import(`data:text/javascript;base64,${Buffer.from
   assert.match(preloadEntry, /addEventListener\("focusin", onPageCaretFocusIn, true\)/);
   assert.match(summary, /delete runtimeConfig\.userscript/);
   assert.match(summary, /sendToContentFrame\(iframe, "collectSummary"/);
+  assert.match(summary, /sendToContentFrame\(iframe, "cancelSummaryCollection"/);
   assert.match(summary, /expectedDocumentId: summaryReady\.registration\.documentId/);
   assert.match(summary, /expectedHref: base\.href/);
+  assert.match(summary, /runId: runId \|\| undefined/);
   const share = read("app/share/controller.js");
   assert.match(share, /sendToContentFrame\(iframe, "collectSummary"/);
   assert.match(share, /delete runtimeConfig\.userscript/);

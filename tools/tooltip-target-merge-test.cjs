@@ -24,9 +24,12 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     "pocket.expandSidebar",
     "pocket.exitFocusMode",
     "workspace.tabs.unpin",
-    "workspace.tabs.sortTime"
+    "workspace.tabs.sortTime",
+    "workspace.tabs.sortViewed",
+    "workspace.tabs.sortEdited",
+    "workspace.tabs.sortOpen"
   ];
-  const mergedIds = ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin", "workspace.tabs.sortViewed"];
+  const mergedIds = ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin", "workspace.tabs.sortActivity"];
   for (const id of retiredIds) {
     assert.equal(TOOLTIP_TARGET_IDS.includes(id), false, `${id} must not remain a settings tooltip target`);
   }
@@ -40,7 +43,9 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
     "pocket.exitFocusMode": "pocket.focusMode",
     "pocket.fullscreen": "viewer.fullscreen",
     "workspace.tabs.unpin": "workspace.tabs.pin",
-    "workspace.tabs.sortTime": "workspace.tabs.sortViewed"
+    "workspace.tabs.sortTime": "workspace.tabs.sortActivity",
+    "workspace.tabs.sortViewed": "workspace.tabs.sortActivity",
+    "workspace.tabs.sortEdited": "workspace.tabs.sortActivity"
   });
 
   assert.deepEqual(
@@ -54,8 +59,21 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
         "pocket.actions"
       ]
     }).tooltipDisabledIds,
-    ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin", "workspace.tabs.sortViewed", "pocket.actions"],
+    ["pocket.sidebar", "pocket.focusMode", "workspace.tabs.pin", "workspace.tabs.sortActivity", "pocket.actions"],
     "retired two-state tooltip ids must collapse onto the surviving control ids"
+  );
+  assert.deepEqual(
+    normalizeOptions({
+      tooltipDisabledIds: [
+        "workspace.tabs.sortViewed",
+        "workspace.tabs.sortEdited",
+        "workspace.tabs.sortOpen",
+        "workspace.tabs.sortCreated",
+        "workspace.tabs.sortName"
+      ]
+    }).tooltipDisabledIds,
+    ["workspace.tabs.sortActivity", "workspace.tabs.sortCreated", "workspace.tabs.sortName"],
+    "Last viewed / Last edited disables must carry over to Last activity, and the removed Open first entry must drop"
   );
   assert.deepEqual(
     normalizeOptions({
@@ -185,6 +203,8 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(tooltipSource, /"pocket\.collapseSidebar": "pocket\.sidebar"/);
   assert.match(tooltipSource, /"pocket\.expandSidebar": "pocket\.sidebar"/);
   assert.match(tooltipSource, /"pocket\.fullscreen": "viewer\.fullscreen"/);
+  assert.match(tooltipSource, /"workspace\.tabs\.sortViewed": "workspace\.tabs\.sortActivity"/);
+  assert.match(tooltipSource, /"workspace\.tabs\.sortEdited": "workspace\.tabs\.sortActivity"/);
   assert.match(
     tooltipSource,
     /disabled\.has\(normalized\) \|\| disabled\.has\(canonicalTooltipId\(normalized\)\)/,

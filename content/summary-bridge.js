@@ -68,13 +68,13 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "f52a9ec8a6285e97bfbf1bf19145ee52ea482d0bc59305b38edf07961bde3016";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.dae9fc56d1114690e063d92424cd9f3733aafe5ddd37fb041ede0bc08669d27f";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "fb44c066b93ae83475ccf1749bd2437411c3975737382b517b2553420914bddd", "implementationSha256": "fe503c61b7089df3c69caf10d2409ab0fdbf67c1e2464c50faf595c04f9340d0", "implementationVersion": "2026.07.16.2+bundle.fe503c61b7089df3c69caf10d2409ab0fdbf67c1e2464c50faf595c04f9340d0" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "8a868747c0e99158cd9604a1910ffc0a1d84095649e47daaa2615440aa458c7c", "implementationSha256": "11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9", "implementationVersion": "2026.07.16.2+bundle.11bdaa51077abb356781a2dcf0e65f3c314b31790d005257d038f2e3a2c767c9" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "909c49d019310a4ce965e6472a9bbee161bb73c9e07ae042ddce328c45f97885", "implementationSha256": "4f3b66a0a142c21f2b2e64b5ce356faf97ffcaa3d058d8f6e103ad30aa10b58d", "implementationVersion": "2026.07.16.2+bundle.4f3b66a0a142c21f2b2e64b5ce356faf97ffcaa3d058d8f6e103ad30aa10b58d" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "7395a4a5b8ac71366f802862bf00119acffeebcf5348e1139b085effa8d6fb40", "implementationSha256": "01f1727364aa5b473a14f00ed73cb81463b03e769ea0e43c345b8d3fa2bc66e3", "implementationVersion": "2026.07.16.2+bundle.01f1727364aa5b473a14f00ed73cb81463b03e769ea0e43c345b8d3fa2bc66e3" });
   var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "ff2ac89dfde2b3f166263b3cabe8c0431cdab734fbecd1a415e4b206a3979999", "implementationSha256": "631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04", "implementationVersion": "2026.07.16.2+bundle.631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04" });
 
   // shared/background-request-core.js
@@ -417,6 +417,146 @@
     return BUNDLE_IDENTITY_FIELDS.every((field) => candidate.bundle[field] && candidate.bundle[field] === expected.bundle[field]);
   }
 
+  // content-src/shared/summary-collection-guard.js
+  var SUMMARY_COLLECTION_ABORTED = "SUMMARY_COLLECTION_ABORTED";
+  var USER_INPUT_EVENTS = Object.freeze(["pointerdown", "wheel", "keydown", "touchstart"]);
+  var USER_ACTIVITY_EVENTS = Object.freeze([...USER_INPUT_EVENTS, "pointermove"]);
+  var runs = /* @__PURE__ */ new Map();
+  var activeRun = null;
+  var lastTrustedInputAt = 0;
+  var runnerOpenedMenus = 0;
+  var SummaryCollectionAbortedError = class extends Error {
+    constructor(reason = "cancelled") {
+      super(`Summary collection aborted: ${reason}`);
+      this.name = "SummaryCollectionAbortedError";
+      this.code = SUMMARY_COLLECTION_ABORTED;
+      this.reason = String(reason || "cancelled");
+    }
+  };
+  function isSummaryCollectionAborted(error) {
+    return Boolean(error) && (error.code === SUMMARY_COLLECTION_ABORTED || error.name === "SummaryCollectionAbortedError");
+  }
+  function trackTrustedActivity(event) {
+    if (event?.isTrusted) lastTrustedInputAt = Date.now();
+  }
+  function beginSummaryCollectionRun(options = {}) {
+    const runId = String(options.runId || "").trim() || `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const run = {
+      runId,
+      idle: options.idle === true,
+      aborted: false,
+      reason: "",
+      listeners: [],
+      waiters: []
+    };
+    run.abort = (reason = "cancelled") => {
+      if (run.aborted) return;
+      run.aborted = true;
+      run.reason = String(reason || "cancelled");
+      const waiters = run.waiters.splice(0);
+      detach(run);
+      for (const waiter of waiters) {
+        try {
+          waiter();
+        } catch {
+        }
+      }
+    };
+    if (options.abortOnUserInput === true && typeof window !== "undefined") {
+      const onInput = (event) => {
+        if (!event?.isTrusted) return;
+        trackTrustedActivity(event);
+        run.abort("user-input");
+      };
+      for (const type of USER_INPUT_EVENTS) {
+        try {
+          window.addEventListener(type, onInput, { capture: true, passive: true });
+          run.listeners.push([type, onInput]);
+        } catch {
+        }
+      }
+    }
+    runs.set(runId, run);
+    activeRun = run;
+    return run;
+  }
+  function detach(run) {
+    for (const [type, handler] of run.listeners.splice(0)) {
+      try {
+        window.removeEventListener(type, handler, { capture: true });
+      } catch {
+      }
+    }
+  }
+  function endSummaryCollectionRun(run) {
+    if (!run) return;
+    detach(run);
+    runs.delete(run.runId);
+    if (activeRun === run) {
+      activeRun = null;
+      for (const other of runs.values()) activeRun = other;
+    }
+  }
+  function cancelSummaryCollectionRuns(runId = "", reason = "cancelled") {
+    const id = String(runId || "").trim();
+    let cancelled = 0;
+    for (const run of runs.values()) {
+      if (id ? run.runId !== id : !run.idle) continue;
+      if (!run.aborted) cancelled += 1;
+      run.abort(reason);
+    }
+    return cancelled;
+  }
+  function summaryCollectionAborted() {
+    return Boolean(activeRun?.aborted);
+  }
+  function throwIfSummaryCollectionAborted() {
+    if (activeRun?.aborted) throw new SummaryCollectionAbortedError(activeRun.reason);
+  }
+  function abortableSleep(ms, sleep2) {
+    throwIfSummaryCollectionAborted();
+    const run = activeRun;
+    const wait = typeof sleep2 === "function" ? sleep2(ms) : new Promise((resolve) => {
+      setTimeout(resolve, Math.max(0, Number(ms) || 0));
+    });
+    if (!run) {
+      return Promise.resolve(wait).then(() => {
+        throwIfSummaryCollectionAborted();
+      });
+    }
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (next) => {
+        if (settled) return;
+        settled = true;
+        const index = run.waiters.indexOf(onAbort);
+        if (index >= 0) run.waiters.splice(index, 1);
+        next();
+      };
+      const onAbort = () => finish(() => reject(new SummaryCollectionAbortedError(run.reason)));
+      run.waiters.push(onAbort);
+      Promise.resolve(wait).then(
+        () => finish(() => {
+          if (run.aborted) reject(new SummaryCollectionAbortedError(run.reason));
+          else resolve();
+        }),
+        (error) => finish(() => reject(error))
+      );
+    });
+  }
+  function noteRunnerOpenedMenu() {
+    runnerOpenedMenus += 1;
+  }
+  function closeRunnerOpenedMenus(dispatchEscape) {
+    if (runnerOpenedMenus <= 0) return false;
+    runnerOpenedMenus = 0;
+    try {
+      dispatchEscape();
+    } catch {
+    }
+    return true;
+  }
+
   // content-src/shared/summary-runtime.js
   var COPY_SOURCE = NATIVE_COPY_SOURCE;
   var sleep = (ms) => new Promise((resolve) => {
@@ -458,7 +598,7 @@
     return el.innerText || el.textContent || "";
   }
   function reveal(el) {
-    if (!el) return;
+    if (!el || summaryCollectionAborted()) return;
     try {
       el.scrollIntoView({ block: "center", inline: "nearest" });
       for (const type of ["pointerover", "pointermove", "mouseover", "mousemove"]) {
@@ -545,12 +685,14 @@ ${value}`);
     }
     return nodes.sort(elementOrder);
   }
-  function lastAssistantTurnNode() {
-    const turns = conversationTurnNodes();
+  function lastAssistantTurnNodeFrom(turns) {
     for (let index = turns.length - 1; index >= 0; index -= 1) {
       if (conversationTurnRole(turns[index]) === "assistant") return turns[index];
     }
     return null;
+  }
+  function lastAssistantTurnNode() {
+    return lastAssistantTurnNodeFrom(conversationTurnNodes());
   }
   function controlLayoutVisible(el) {
     if (!el?.getBoundingClientRect) return false;
@@ -592,13 +734,14 @@ ${value}`);
   function conversationSampleRoot() {
     return qs("#notion-app") || qs("main,[role=main]") || document.body;
   }
-  function conversationLineSample() {
+  function conversationLineSample(options = {}) {
     let raw = "";
     try {
       raw = String(conversationSampleRoot()?.textContent || "");
     } catch {
     }
-    if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
+    if (options.tailOnly === true) raw = raw.slice(-36e3);
+    else if (raw.length > 96e3) raw = `${raw.slice(0, 12e3)}
 ${raw.slice(-36e3)}`;
     const lines = [];
     for (const part of raw.split(/\n+/)) {
@@ -620,7 +763,7 @@ ${raw.slice(-36e3)}`;
   }
   function conversationToolActivityIsActive() {
     try {
-      return conversationToolActivityFromLines(conversationLineSample());
+      return conversationToolActivityFromLines(conversationLineSample({ tailOnly: true }));
     } catch {
     }
     return false;
@@ -675,6 +818,17 @@ ${raw.slice(-36e3)}`;
     const article = closest(node, "article,[data-testid^='conversation-turn'],[data-testid*='conversation-turn']");
     return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
   }
+  var TURN_FINGERPRINT_SKIP_SELECTOR = [
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons"
+  ].join(",");
   function copyLooksUseful(value) {
     const next = cleanCaptured(value);
     return Boolean(next && next.length >= 2 && next.length <= 5e4 && !/^(copy|copied|复制|已复制|share|link)$/i.test(next) && !/^(https?:\/\/|mailto:|#)[^\s]{1,240}$/i.test(next));
@@ -947,6 +1101,8 @@ ${raw.slice(-36e3)}`;
     return /_?sch[\s_-]*copy[\s_-]*probe[\s_-]*[a-z0-9-]+_?/i.test(String(value || ""));
   }
   function activateElement(button) {
+    throwIfSummaryCollectionAborted();
+    if (button.hasAttribute?.("aria-haspopup") || button.hasAttribute?.("aria-expanded")) noteRunnerOpenedMenu();
     button.focus?.();
     reveal(button);
     const init = { bubbles: true, cancelable: true, view: window };
@@ -964,6 +1120,7 @@ ${raw.slice(-36e3)}`;
   }
   async function copy(button, options = {}) {
     if (!button) return "";
+    throwIfSummaryCollectionAborted();
     if (shouldRefuseLiveAssistantCopy(button)) return "";
     const copyTimeoutMs = Math.max(300, Math.min(1e4, Number(options.copyTimeoutMs || options.timeoutMs) || 2600));
     const copyPollMs = Math.max(20, Math.min(150, Number(options.copyPollMs) || 50));
@@ -996,16 +1153,18 @@ ${raw.slice(-36e3)}`;
     try {
       const bridge = await copyBridgeRequest("install", id, { timeoutMs: copyTimeoutMs }, 900);
       if (!bridge?.installed || !bridge?.hooks) return "";
+      throwIfSummaryCollectionAborted();
       try {
         activateElement(button);
-      } catch {
+      } catch (error) {
+        if (isSummaryCollectionAborted(error)) throw error;
         try {
           button.click?.();
         } catch {
         }
       }
       for (let index = 0, max = Math.ceil(copyTimeoutMs / copyPollMs); index < max; index += 1) {
-        await sleep(copyPollMs);
+        await abortableSleep(copyPollMs, sleep);
         if (captured && (capturedPriority >= 5 || Date.now() - capturedAt >= copyCaptureGraceMs)) break;
         try {
           const current = normalize(await navigator.clipboard.readText());
@@ -1038,15 +1197,17 @@ ${raw.slice(-36e3)}`;
     }
     if (details.scope && options.copyMenu !== false) {
       for (const menuButton of userscriptFindMenuButtons(details.scope, options).slice(0, 8)) {
-        userscriptCloseMenus();
+        throwIfSummaryCollectionAborted();
         reveal(menuButton);
+        noteRunnerOpenedMenu();
         try {
           activateElement(menuButton);
-        } catch {
+        } catch (error) {
+          if (isSummaryCollectionAborted(error)) throw error;
         }
-        await sleep(180);
+        await abortableSleep(180, sleep);
         const value = await copyFirst(userscriptOpenCopyButtons(options).filter((button) => button !== menuButton && !menuButton.contains(button)), details);
-        userscriptCloseMenus();
+        closeRunnerOpenedMenus(userscriptCloseMenus);
         if (value) return value;
       }
     }
@@ -1109,8 +1270,9 @@ ${raw.slice(-36e3)}`;
       let role = userscriptRole(turn, options) || fallbackRole(roleIndex, options);
       if (role !== "user" && role !== "assistant") continue;
       if (shouldRefuseLiveAssistantCopy(turn)) continue;
+      throwIfSummaryCollectionAborted();
       reveal(turn);
-      await sleep(80);
+      await abortableSleep(80, sleep);
       const expected = text(turn);
       const copied = await copyFirst(userscriptFindCopyButtons(turn, options), { expected, role, options, scope: turn });
       if (copied) {
@@ -1153,18 +1315,20 @@ ${raw.slice(-36e3)}`;
     if (out.length < 2 && options.copyMenu !== false) {
       for (const root of searchRoots) {
         for (const menuButton of userscriptFindMenuButtons(root, options).slice(0, Math.min(maxButtons, 16))) {
-          userscriptCloseMenus();
+          throwIfSummaryCollectionAborted();
           reveal(menuButton);
+          noteRunnerOpenedMenu();
           try {
             activateElement(menuButton);
-          } catch {
+          } catch (error) {
+            if (isSummaryCollectionAborted(error)) throw error;
           }
-          await sleep(180);
+          await abortableSleep(180, sleep);
           const roleHint = userscriptRole(menuButton, options) || fallbackRole(roleIndex, options);
           for (const button of userscriptOpenCopyButtons(options).filter((item) => item !== menuButton && !menuButton.contains(item)).slice(0, 8)) {
             if (await accept(button, roleHint)) break;
           }
-          userscriptCloseMenus();
+          closeRunnerOpenedMenus(userscriptCloseMenus);
           if (out.length >= 2) break;
         }
       }
@@ -1369,8 +1533,9 @@ ${raw.slice(-36e3)}`;
       const expected = nodeTextForCopy(anchor);
       if (role !== "user" && role !== "assistant") continue;
       if (shouldRefuseLiveAssistantCopy(anchor)) continue;
+      throwIfSummaryCollectionAborted();
       reveal(anchor);
-      await sleep(180);
+      await abortableSleep(180, sleep);
       for (const button of hoverCopyCandidateButtons(anchor, options).slice(0, 14)) {
         const copied = await copy(button, options);
         const value = userscriptCopyAccepted(copied, expected, options);
@@ -1379,8 +1544,8 @@ ${raw.slice(-36e3)}`;
           roleIndex += 1;
           break;
         }
-        userscriptCloseMenus();
-        await sleep(80);
+        closeRunnerOpenedMenus(userscriptCloseMenus);
+        await abortableSleep(80, sleep);
       }
       if (hasUserAndAssistant(out)) break;
     }
@@ -1589,6 +1754,7 @@ ${raw.slice(-36e3)}`;
     captureEnd: command({ timeoutMs: 5e3, mutating: true, capability: "base" }),
     getSummaryRuntimeState: command({ timeoutMs: 1800, features: Object.freeze(["summary"]) }),
     collectSummary: command({ timeoutMs: 36e3, mutating: true, features: Object.freeze(["summary"]) }),
+    cancelSummaryCollection: command({ timeoutMs: 2e3, mutating: true, features: Object.freeze(["summary"]) }),
     sendText: command({ timeoutMs: 12e3, mutating: true, features: Object.freeze(["send"]) }),
     newChatPreprocess: command({ timeoutMs: 1500, mutating: true, features: Object.freeze(["send"]) }),
     prepareNavigationFocusGuard: command({ timeoutMs: 1200, mutating: true, transport: "main-world", features: Object.freeze(["preferred-model"]) }),
@@ -1760,6 +1926,17 @@ ${raw.slice(-36e3)}`;
   }
 
   // content-src/capabilities/summary-runtime.js
+  function abortedSummaryResult(run) {
+    return {
+      messages: [],
+      rawMessageCount: 0,
+      stage: "aborted",
+      aborted: true,
+      abortReason: String(run?.reason || "cancelled"),
+      officialHits: null,
+      waitMsApplied: 0
+    };
+  }
   function createSummaryCapability(deps = {}) {
     const {
       requestBackground: requestBackground2,
@@ -1877,7 +2054,9 @@ ${raw.slice(-36e3)}`;
       return {
         config,
         collectOfficialCandidate: async () => (await collectOfficialStage(config, data, { wait: false })).messages,
-        sleep: sleep2,
+        // Rejects once the run is aborted so a runner parked between turns
+        // stops at its next await instead of at its next Copy.
+        sleep: (ms) => abortableSleep(ms, sleep2),
         normalize: normalize2,
         qsa: qsa2,
         qs: qs2,
@@ -1901,6 +2080,26 @@ ${raw.slice(-36e3)}`;
     async function collectSummary(data) {
       assertSummaryTargetCurrent(data);
       const config = data?.config || {};
+      const idleFullText = config.idleFullText === true;
+      const run = beginSummaryCollectionRun({
+        runId: data?.runId,
+        idle: idleFullText,
+        abortOnUserInput: idleFullText
+      });
+      try {
+        const result = await collectSummaryRun(data, config, run);
+        return run.aborted ? finishSummaryCollection(data, abortedSummaryResult(run)) : result;
+      } catch (error) {
+        if (run.aborted || isSummaryCollectionAborted(error)) return abortedSummaryResult(run);
+        throw error;
+      } finally {
+        endSummaryCollectionRun(run);
+      }
+    }
+    function cancelSummaryCollection(data) {
+      return { cancelled: cancelSummaryCollectionRuns(data?.runId, "cancelled") };
+    }
+    async function collectSummaryRun(data, config, run) {
       if (shouldUseCustomSummaryUserscript(config)) {
         const customResult = await executeCustomSummaryUserscript(config);
         const customMessages = merge2(Array.isArray(customResult?.messages) ? customResult.messages : []);
@@ -1921,7 +2120,7 @@ ${raw.slice(-36e3)}`;
           waitMsApplied: 0
         });
       }
-      const idleFullText = config.idleFullText === true;
+      const idleFullText = run.idle === true;
       const official = await collectOfficialStage(config, data, { wait: !idleFullText });
       if (official.messages) {
         return finishSummaryCollection(data, {
@@ -1995,6 +2194,7 @@ ${raw.slice(-36e3)}`;
     }
     return Object.freeze({
       collectSummary,
+      cancelSummaryCollection,
       getSummaryRuntimeState
     });
   }
