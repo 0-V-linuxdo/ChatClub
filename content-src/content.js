@@ -15,8 +15,17 @@ import {
   normalizeKeyboardPlatform,
   normalizeShortcutConfig
 } from "../shared/shortcuts.js";
-import { normalize, pageMeta } from "./shared/summary-runtime.js";
-import { conversationFingerprintWhenChanged } from "./shared/conversation-observer.js";
+import {
+  collectConversationTurns,
+  conversationLineSample,
+  conversationTurnRole,
+  conversationTurnsAreGenerating,
+  matches,
+  normalize,
+  pageMeta
+} from "./shared/summary-runtime.js";
+import { createConversationLedger } from "./shared/conversation-ledger.js";
+import { installUserActivityTracking, userInputIdleMs } from "./shared/summary-collection-guard.js";
 import { createCaptureRuntime } from "./shared/capture-runtime.js";
 import { createContentDocumentIdentity } from "./shared/content-document-identity.js";
 import { createSubmissionNavigationTracker } from "./shared/submission-navigation.js";
@@ -54,6 +63,16 @@ function installContentBridge() {
   const SUMMARY_POST_MESSAGE_SOURCE = PROTOCOL.SUMMARY_POST_MESSAGE_SOURCE;
   const { contentDocumentId, secureFrameToken, currentBrowserDocumentAttestationId, currentFrameBindingId } = createContentDocumentIdentity(window);
   const captureRuntime = createCaptureRuntime(window);
+  const previousConversationLedgerCleanup = window.__CHATCLUB_CONVERSATION_LEDGER_CLEANUP__;
+  const conversationLedger = createConversationLedger({
+    documentId: contentDocumentId,
+    listTurns: collectConversationTurns,
+    turnRole: conversationTurnRole,
+    isGenerating: conversationTurnsAreGenerating,
+    matches,
+    pageTextSample: () => conversationLineSample().join(" "),
+    inputIdleMs: () => userInputIdleMs()
+  });
   let contentLocationRevision = Math.max(0, Number(window.__CHATCLUB_CONTENT_LOCATION_REVISION__) || 0);
   const submissionNavigation = createSubmissionNavigationTracker(window);
   const markSubmissionNavigation = submissionNavigation.mark;
@@ -204,6 +223,10 @@ function installContentBridge() {
     if (contentGenerationActivated) return;
     try { previousLocationReportCleanup?.(); } catch {}
     try { previousShortcutBridgeCleanup?.(); } catch {}
+    try { previousConversationLedgerCleanup?.(); } catch {}
+    // Input idle time feeds the ledger from the first trusted event on, not
+    // from the first probe, so a frame the user never touched is not "busy".
+    installUserActivityTracking();
     try { document.documentElement?.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE); } catch {}
     installLocationReportResources();
     installShortcutBridgeResources();
@@ -213,6 +236,7 @@ function installContentBridge() {
     window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__ = true;
     if (locationReportCleanup) window.__CHATCLUB_LOCATION_REPORT_CLEANUP__ = locationReportCleanup;
     if (shortcutBridgeCleanup) window.__CHATCLUB_SHORTCUT_BRIDGE_CLEANUP__ = shortcutBridgeCleanup;
+    window.__CHATCLUB_CONVERSATION_LEDGER_CLEANUP__ = () => conversationLedger.dispose();
     contentGenerationActivated = true;
   }
 
@@ -354,7 +378,7 @@ function installContentBridge() {
         grokCookieRuntime: grokCookieRuntimeAttestation()
       }),
       getPageText: () => normalize(document.body?.innerText || ""),
-      getConversationFingerprint: (data) => conversationFingerprintWhenChanged(contentDocumentId, data),
+      getConversationFingerprint: (data) => conversationLedger.whenChanged(data),
       captureStart: () => captureRuntime.captureStart(),
       triggerScroll: () => captureRuntime.triggerScroll(),
       captureEnd: () => captureRuntime.captureEnd()

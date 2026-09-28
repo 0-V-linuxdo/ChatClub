@@ -74,12 +74,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "7395a4a5b8ac71366f802862bf00119acffeebcf5348e1139b085effa8d6fb40", "implementationSha256": "01f1727364aa5b473a14f00ed73cb81463b03e769ea0e43c345b8d3fa2bc66e3", "implementationVersion": "2026.07.16.2+bundle.01f1727364aa5b473a14f00ed73cb81463b03e769ea0e43c345b8d3fa2bc66e3" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "754c8788179daa57a717c9c9ae30a636d8a9b3b6ea5aedcbc3cb169837f1df84", "implementationSha256": "aef35a387843ba557819397ef9a23154938c526b7f99776c78b17d72a429d016", "implementationVersion": "2026.07.16.2+bundle.aef35a387843ba557819397ef9a23154938c526b7f99776c78b17d72a429d016" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -2944,7 +2944,7 @@
       return [];
     };
     scripts["qianwen.js"] = scripts["qianwen"];
-    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde" });
+    Object.defineProperty(scripts, "runtimeVersion", { value: "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e" });
     return scripts;
   }
 
@@ -3176,9 +3176,11 @@
     buttonText: () => buttonText,
     classText: () => classText,
     closest: () => closest,
-    conversationFingerprint: () => conversationFingerprint,
+    collectConversationTurns: () => collectConversationTurns,
     conversationIsGenerating: () => conversationIsGenerating,
-    conversationSampleRoot: () => conversationSampleRoot,
+    conversationLineSample: () => conversationLineSample,
+    conversationTurnRole: () => conversationTurnRole,
+    conversationTurnsAreGenerating: () => conversationTurnsAreGenerating,
     copy: () => copy,
     copyFirst: () => copyFirst,
     extractCopySequence: () => extractCopySequence,
@@ -3387,32 +3389,6 @@ ${value}`);
       logoUrl: pageLogoUrl()
     };
   }
-  function fingerprintHash(value) {
-    const text2 = String(value || "");
-    let hash = 2166136261;
-    for (let index = 0; index < text2.length; index += 1) {
-      hash ^= text2.charCodeAt(index);
-      hash = Math.imul(hash, 16777619);
-    }
-    return (hash >>> 0).toString(16).padStart(8, "0");
-  }
-  function conversationHref() {
-    try {
-      const url = new URL(location.href);
-      const path = `${url.origin}${url.pathname}`;
-      const host = url.hostname.toLowerCase();
-      if ((host === "app.notion.com" || host === "notion.so" || host.endsWith(".notion.so")) && /^\/chat\/?$/i.test(url.pathname) && url.searchParams.get("t")) {
-        return url.href;
-      }
-      const hash = String(url.hash || "").replace(/^#/, "");
-      if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
-        return `${path}#${hash}`;
-      }
-      return path;
-    } catch {
-      return String(location.href || "").replace(/[?#].*$/, "");
-    }
-  }
   function conversationTurnRole(el) {
     const attr = String(el?.getAttribute?.("data-message-author-role") || "").toLowerCase();
     if (attr === "user" || attr === "assistant") return attr;
@@ -3427,27 +3403,42 @@ ${value}`);
     if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
     return userscriptRole(el) || "";
   }
-  function conversationTurnNodes() {
-    const selectors = [
-      "[data-message-author-role]",
-      "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
-      "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
-      "user-query, model-response, .user-query, .model-response",
-      ".ds-message",
-      ".chat_bubble[role='article']",
-      "[data-testid='message']",
-      "article[data-testid*='conversation']"
-    ];
-    const nodes = [];
-    for (const selector of selectors) {
-      for (const node of qsa(selector).filter(visible)) {
-        if (internalTool(node)) continue;
-        if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
-        nodes.push(node);
-      }
-      if (nodes.length >= 2) break;
+  var CONVERSATION_TURN_SELECTORS = Object.freeze([
+    "[data-message-author-role]",
+    "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+    "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+    "user-query, model-response, .user-query, .model-response",
+    ".ds-message",
+    ".chat_bubble[role='article']",
+    "[data-testid='message']",
+    "article[data-testid*='conversation']"
+  ]);
+  function conversationTurnGroup(selector, nodes) {
+    for (const node of qsa(selector).filter(controlLayoutVisible)) {
+      if (internalTool(node)) continue;
+      if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
+      nodes.push(node);
     }
-    return nodes.sort(elementOrder);
+    return nodes;
+  }
+  function collectConversationTurns(preferredGroup = -1) {
+    const preferred = CONVERSATION_TURN_SELECTORS[preferredGroup];
+    if (preferred) {
+      const nodes2 = conversationTurnGroup(preferred, []);
+      if (nodes2.length) return { nodes: nodes2.sort(elementOrder), group: preferredGroup };
+    }
+    const nodes = [];
+    for (let index = 0; index < CONVERSATION_TURN_SELECTORS.length; index += 1) {
+      const before = nodes.length;
+      conversationTurnGroup(CONVERSATION_TURN_SELECTORS[index], nodes);
+      if (nodes.length >= 2) {
+        return { nodes: nodes.sort(elementOrder), group: before === 0 ? index : -1 };
+      }
+    }
+    return { nodes: nodes.sort(elementOrder), group: -1 };
+  }
+  function conversationTurnNodes() {
+    return collectConversationTurns().nodes;
   }
   function lastAssistantTurnNodeFrom(turns) {
     for (let index = turns.length - 1; index >= 0; index -= 1) {
@@ -3570,6 +3561,11 @@ ${raw.slice(-36e3)}`;
     if (conversationToolActivityIsActive()) return true;
     return lastAssistantTurnIsStreaming(lastAssistantTurnNode());
   }
+  function conversationTurnsAreGenerating(turns = []) {
+    if (conversationComposerIsGenerating()) return true;
+    if (conversationToolActivityIsActive()) return true;
+    return lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(Array.isArray(turns) ? turns : []));
+  }
   function nodeBelongsToTurn(node, turn) {
     if (!node || !turn) return false;
     return node === turn || Boolean(turn.contains?.(node) || node.contains?.(turn));
@@ -3581,95 +3577,6 @@ ${raw.slice(-36e3)}`;
     if (nodeBelongsToTurn(node, last)) return true;
     const article = closest(node, "article,[data-testid^='conversation-turn'],[data-testid*='conversation-turn']");
     return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
-  }
-  var TURN_FINGERPRINT_SKIP_SELECTOR = [
-    "button",
-    "[role='button']",
-    "[role='toolbar']",
-    "[role='menu']",
-    "[role='menuitem']",
-    "[aria-label*='copy' i]",
-    "[title*='copy' i]",
-    "[data-testid*='copy' i]",
-    ".code-buttons"
-  ].join(",");
-  function turnTextSkippingControls(turn) {
-    const doc = turn.ownerDocument || document;
-    if (typeof doc?.createTreeWalker !== "function" || typeof NodeFilter === "undefined") return null;
-    const walker = doc.createTreeWalker(turn, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (node.nodeType === 3) return NodeFilter.FILTER_ACCEPT;
-        if (node !== turn && matches(node, TURN_FINGERPRINT_SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_SKIP;
-      }
-    });
-    const parts = [];
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) parts.push(node.nodeValue || "");
-    return parts.join("");
-  }
-  function conversationTurnFingerprintText(turn) {
-    if (!turn) return "";
-    let value = null;
-    try {
-      value = turnTextSkippingControls(turn);
-    } catch {
-      value = null;
-    }
-    if (value === null) {
-      try {
-        const clone = turn.cloneNode(true);
-        for (const node of clone.querySelectorAll(TURN_FINGERPRINT_SKIP_SELECTOR)) node.remove();
-        value = clone.textContent || "";
-      } catch {
-        value = turn.textContent || turn.innerText || "";
-      }
-    }
-    const raw = normalize(value).replace(/\s+/g, " ");
-    try {
-      return raw.normalize("NFKC").replace(/\s+/g, " ").trim();
-    } catch {
-      return raw.trim();
-    }
-  }
-  function conversationFingerprint(documentId = "", data = {}) {
-    const turns = conversationTurnNodes();
-    const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-    let userChars = 0;
-    let assistantChars = 0;
-    let lastText = "";
-    let classified = 0;
-    const haystackParts = [];
-    for (const turn of turns) {
-      const role = conversationTurnRole(turn);
-      const value = conversationTurnFingerprintText(turn);
-      if (!value) continue;
-      haystackParts.push(value);
-      if (role === "user") {
-        userChars += value.length;
-        classified += 1;
-        lastText = value;
-      } else if (role === "assistant") {
-        assistantChars += value.length;
-        classified += 1;
-        lastText = value;
-      }
-    }
-    const haystack = haystackParts.join(" ");
-    let containsPrompt = Boolean(prompt && haystack && haystack.includes(prompt));
-    if (prompt && !haystack) {
-      const lines = conversationLineSample();
-      containsPrompt = [...lines.slice(0, 48), ...lines.slice(-80)].join(" ").includes(prompt);
-    }
-    return {
-      href: conversationHref(),
-      documentId: String(documentId || ""),
-      turnCount: classified,
-      userChars,
-      assistantChars,
-      tailHash: lastText ? fingerprintHash(lastText.slice(-500)) : "",
-      containsPrompt,
-      generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(conversationLineSample({ tailOnly: true })) || lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(turns))
-    };
   }
   function copyLooksUseful(value) {
     const next = cleanCaptured(value);

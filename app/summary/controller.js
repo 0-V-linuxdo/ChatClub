@@ -13,14 +13,9 @@ import { optionalControllerFunction, optionalControllerObject, requireController
 import { createFrameRequest } from "../frame-request.js";
 import { renderMarkdown } from "./markdown.js";
 import { workspaceSessionIdFromUrl } from "../../shared/workspace-session.js";
-import {
-  fullTextContentMetricsFromMessages,
-  fullTextContentSignature,
-  fullTextMessagesHavePair,
-  fullTextMessagesMatchPrompt,
-  workspaceTabFullTextFrameIdentityKey
-} from "../../shared/workspace-tab-fulltext.js";
-import { createIdleFullTextCaptureScheduler, IDLE_FULLTEXT_CAPTURE_DEFAULTS } from "./idle-capture.js";
+import { FULLTEXT_CAPTURE_STATE_SESSION_KEY } from "./fulltext-decision.js";
+import { storageSessionGet, storageSessionSet } from "../../shared/extension-api.js";
+import { createFullTextReconciler, FULLTEXT_RECONCILER_DEFAULTS } from "./fulltext-reconciler.js";
 import {
   buildSummaryPreviewItem,
   normalizeSummaryPanelSize as normalizeSummaryPanelSizeModel,
@@ -71,7 +66,8 @@ export function createSummaryController(ctx) {
     findFrameForSummarySource: "function", highlightFrameForSummarySource: "function?", inferAppName: "function",
     effectiveFaviconUrl: "function", discoverDeclaredFaviconUrl: "function", rememberFaviconUrl: "function",
     browserFaviconUrl: "function", formatShortcut: "function?", pocketPort: "object?", framePort: "object",
-    recordFunctionalAnomaly: "function", persistWorkspaceTabFullText: "function?", loadWorkspaceTabFullText: "function?"
+    recordFunctionalAnomaly: "function", persistWorkspaceTabFullText: "function?", loadWorkspaceTabFullText: "function?",
+    persistWorkspaceTabFullTextMarks: "function?"
   });
   const state = requireControllerContext(ctx, controllerName, "state");
   const svgIcon = requireControllerFunction(ctx, controllerName, "svgIcon");
@@ -96,6 +92,7 @@ export function createSummaryController(ctx) {
   const pocketEntriesFromSummaryPreview = typeof pocketPort.entries === "function" ? pocketPort.entries : () => [];
   const persistWorkspaceTabFullText = optionalControllerFunction(ctx, "persistWorkspaceTabFullText", async () => ({ saved: false }));
   const loadWorkspaceTabFullText = optionalControllerFunction(ctx, "loadWorkspaceTabFullText", async () => ({}));
+  const persistWorkspaceTabFullTextMarks = optionalControllerFunction(ctx, "persistWorkspaceTabFullTextMarks", async () => ({ saved: false }));
   let summaryCollectionQueue = Promise.resolve();
   const pocketDisplayIcon = () => normalizePocketIcon(state.options?.pocketIcon);
 
@@ -786,7 +783,7 @@ export function createSummaryController(ctx) {
     };
   }
   
-  async function collectFrameSummary(iframe, index = 0, { recordFailures = true, timeoutMs, idleFullText = false, runId = "", isCancelled } = {}) {
+  async function collectFrameSummary(iframe, index = 0, { recordFailures = true, timeoutMs, idleFullText = false, idleFullTextTurns = 0, runId = "", isCancelled } = {}) {
     const app = frameApp(iframe);
     // Probe the already-registered content bridge before deciding that a page
     // is blank. This both discovers Firefox-safe declared favicons for skipped
@@ -864,7 +861,7 @@ export function createSummaryController(ctx) {
         delete runtimeConfig.userscript;
         delete runtimeConfig.customUserscript;
         const result = await sendToContentFrame(iframe, "collectSummary", {
-          config: idleFullText ? { ...runtimeConfig, idleFullText: true } : runtimeConfig,
+          config: idleFullText ? { ...runtimeConfig, idleFullText: true, idleFullTextTurns } : runtimeConfig,
           expectedDocumentId: summaryReady.registration.documentId,
           expectedHref: base.href,
           runId: runId || undefined
@@ -927,6 +924,8 @@ export function createSummaryController(ctx) {
       });
     } catch {
       return { saved: false };
+    } finally {
+      fullTextReconciler.invalidateRecord();
     }
   }
 
@@ -975,126 +974,85 @@ export function createSummaryController(ctx) {
     return frames.includes(node) ? node : null;
   }
 
-  const idleFullTextCapture = createIdleFullTextCaptureScheduler({
-    idleMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.idleMs,
-    pollMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.pollMs,
-    maxAttempts: IDLE_FULLTEXT_CAPTURE_DEFAULTS.maxAttempts,
-    wallMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.wallMs,
-    generatingWallMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.generatingWallMs,
+  function waitUntilDocumentVisible() {
+    if (typeof document === "undefined" || document.visibilityState !== "hidden") return undefined;
+    return new Promise((resolve) => {
+      const onChange = () => {
+        if (document.visibilityState === "hidden") return;
+        document.removeEventListener("visibilitychange", onChange);
+        resolve();
+      };
+      document.addEventListener("visibilitychange", onChange);
+    });
+  }
+
+  // Record Full Text: Copy only when a frame's conversation ledger moved away
+  // from the one stored with its last Copy. Visibility, restores and sends
+  // are hints to the reconciler, never a reason to Copy by themselves.
+  const fullTextReconciler = createFullTextReconciler({
     isEnabled: () => state.options?.recordFullText === true,
-    listFrames: () => currentFrames().map((iframe) => ({
-      key: String(iframe.dataset.instanceId || ""),
-      instanceId: String(iframe.dataset.instanceId || ""),
-      href: String(iframe.getAttribute?.("src") || iframe.src || ""),
-      iframe
-    })),
-    frameExists: (frame) => Boolean(resolveIdleCaptureFrame(frame)),
-    getFingerprint: async (frame, prompt, poll = {}) => {
+    isVisible: () => typeof document === "undefined" || document.visibilityState !== "hidden",
+    waitUntilVisible: waitUntilDocumentVisible,
+    listFrames: () => currentFrames().map((iframe) => ({ key: String(iframe.dataset.instanceId || ""), iframe })),
+    frameCollectable: (frame) => {
+      const iframe = resolveIdleCaptureFrame(frame);
+      return Boolean(iframe) && summaryHrefIsCollectable(summaryLiveHref(iframe, frameApp(iframe)));
+    },
+    probe: async (frame, { waitMs = 0, since = null, prompt = "" } = {}) => {
       const iframe = resolveIdleCaptureFrame(frame);
       if (!iframe) return null;
-      const waitMs = Math.max(0, Number(poll?.waitMs) || 0);
-      return sendToContentFrame(
-        iframe,
-        "getConversationFingerprint",
-        { prompt, waitMs, since: poll?.since || null },
-        { timeoutMs: waitMs + 8000, skipEnsure: false }
-      );
+      return sendToContentFrame(iframe, "getConversationFingerprint", { prompt, waitMs, since }, { timeoutMs: waitMs + 8000, skipEnsure: false });
     },
-    collectFrame: async (frame, _prompt, { runId = "", isCancelled } = {}) => {
+    runExclusive: withSummaryCollectionLock,
+    collectFrame: async (frame, { turns = 0, runId = "", isCancelled } = {}) => {
       const iframe = resolveIdleCaptureFrame(frame);
       if (!iframe) return null;
       const index = Math.max(0, currentFrames().indexOf(iframe));
-      const result = await collectLockedFrameSummary(iframe, index, {
+      const result = await collectFrameSummary(iframe, index, {
         recordFailures: false,
-        timeoutMs: IDLE_FULLTEXT_CAPTURE_DEFAULTS.collectTimeoutMs,
+        timeoutMs: FULLTEXT_RECONCILER_DEFAULTS.collectTimeoutMs,
         idleFullText: true,
+        idleFullTextTurns: turns,
         runId,
         isCancelled
       });
       if (result?.diagnostic?.aborted) return { aborted: true, diagnostic: result.diagnostic };
-      return summaryPreviewItemFromResult(result, {
-        index,
-        order: index,
-        instanceId: iframe.dataset.instanceId || ""
-      });
+      return summaryPreviewItemFromResult(result, { index, order: index, instanceId: iframe.dataset.instanceId || "" });
     },
     cancelCollect: (frame, runId) => {
       const iframe = resolveIdleCaptureFrame(frame);
       if (!iframe || !runId) return undefined;
       return sendToContentFrame(iframe, "cancelSummaryCollection", { runId }, { timeoutMs: 2000, skipEnsure: true }).catch(() => null);
     },
-    waitUntilVisible: () => {
-      if (typeof document === "undefined" || document.visibilityState !== "hidden") return undefined;
-      return new Promise((resolve) => {
-        const onChange = () => {
-          if (document.visibilityState === "hidden") return;
-          document.removeEventListener("visibilitychange", onChange);
-          resolve();
-        };
-        document.addEventListener("visibilitychange", onChange);
-      });
+    persist: (item, captureMark) => persistRecordedFullText([{ ...item, captureMark }]),
+    persistMarks: (payload) => persistWorkspaceTabFullTextMarks(payload),
+    loadRecord: async (workspaceId) => {
+      // The port answers for one desk; a legacy store-shaped answer still
+      // resolves through its own workspace entry.
+      const loaded = await loadWorkspaceTabFullText(workspaceId);
+      return Array.isArray(loaded?.frames) ? loaded : loaded?.[workspaceId] || null;
     },
-    itemMatchesPrompt: (item, prompt) => (
-      String(prompt || "").trim()
-        ? fullTextMessagesMatchPrompt(item?.page?.messages, prompt)
-        : fullTextMessagesHavePair(item?.page?.messages)
-    ),
-    persistItem: async (item) => persistRecordedFullText([item]),
-    loadStoredSnapshots: async () => {
-      const workspaceId = workspaceSessionIdFromUrl(globalThis.location?.href || "");
-      if (!workspaceId) return [];
-      let record = null;
-      try {
-        // The port answers for one desk; a legacy store-shaped answer still
-        // resolves through its own workspace entry.
-        const loaded = await loadWorkspaceTabFullText(workspaceId);
-        record = Array.isArray(loaded?.frames) ? loaded : loaded?.[workspaceId] || null;
-      } catch {
-        return [];
-      }
-      const frames = Array.isArray(record?.frames) ? record.frames : [];
-      return frames.flatMap((frame) => {
-        if (!fullTextMessagesHavePair(frame?.messages)) return [];
-        const metrics = fullTextContentMetricsFromMessages(frame.messages);
-        const keys = [];
-        const instanceId = String(frame.instanceId || "").trim();
-        if (instanceId) {
-          keys.push(instanceId);
-          keys.push(`id:${instanceId}`);
-        }
-        const identity = workspaceTabFullTextFrameIdentityKey(frame);
-        if (identity) keys.push(identity);
-        return [{
-          keys,
-          signature: fullTextContentSignature(metrics),
-          hasPair: true,
-          ...metrics
-        }];
-      });
-    }
+    workspaceId: () => workspaceSessionIdFromUrl(globalThis.location?.href || ""),
+    loadCaptureState: async () => (await storageSessionGet(FULLTEXT_CAPTURE_STATE_SESSION_KEY))?.[FULLTEXT_CAPTURE_STATE_SESSION_KEY],
+    saveCaptureState: (value) => storageSessionSet({ [FULLTEXT_CAPTURE_STATE_SESSION_KEY]: value }),
+    recordAnomaly: (details = {}) => recordFunctionalAnomaly({ feature: "summary", ...details })
   });
 
-  function scheduleIdleFullTextCapture(prompt) {
-    if (state.options?.recordFullText !== true) return { scheduled: false };
-    return idleFullTextCapture.schedule(prompt);
+  function hintFullTextSend(prompt) {
+    if (state.options?.recordFullText !== true) return false;
+    return fullTextReconciler.hintSend(prompt);
+  }
+
+  function startFullTextCapture() {
+    if (state.options?.recordFullText !== true) return false;
+    return fullTextReconciler.start();
   }
 
   // A user-initiated collect (Summary, Share, Pocket, source refresh) must not
   // queue behind a background capture that is busy hovering Copy buttons in the
   // same frame: abandon that capture, including its in-flight collect, first.
   function cancelIdleFullTextCapture() {
-    return idleFullTextCapture.cancel();
-  }
-
-  function scheduleExistingIdleFullTextCapture() {
-    if (state.options?.recordFullText !== true) return { scheduled: false };
-    return idleFullTextCapture.schedule("", { existing: true });
-  }
-
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") scheduleExistingIdleFullTextCapture();
-    });
+    return fullTextReconciler.cancelInFlight();
   }
   
   async function collectSummary() {
@@ -1261,8 +1219,8 @@ export function createSummaryController(ctx) {
     syncSummarizeState: syncSummarizeState,
     toggleMaximized: toggleSummaryMaximized,
     loadPanelSize: loadSummaryPanelSize,
-    scheduleIdleFullTextCapture,
-    scheduleExistingIdleFullTextCapture,
+    hintFullTextSend,
+    startFullTextCapture,
     cancelIdleFullTextCapture,
     collectWorkspacePreviewItems,
     probeCollectorOnActiveFrame

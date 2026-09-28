@@ -10,7 +10,6 @@ const root = path.resolve(__dirname, "..");
   const {
     framesFromSummaryPreviewItems,
     fullTextMessagesHavePair,
-    fullTextMessagesMatchPrompt,
     fullTextTextsOverlap,
     findFullTextQueryRanges,
     matchesFullTextQuery,
@@ -27,11 +26,9 @@ const root = path.resolve(__dirname, "..");
     workspaceIdsMatchingFullText,
     workspaceTabFullTextFrameIdentityKey,
     workspaceTabFullTextFramesEqual,
-    fullTextContentSignature,
-    fullTextContentMetricsFromMessages,
-    fullTextConversationHrefIsStable,
-    fullTextExistingNeedsCollect,
-    fullTextExistingIsCovered
+    workspaceTabFullTextMarksEqual,
+    applyWorkspaceTabFullTextMarks,
+    workspaceTabFullTextConversation
   } = await import(pathToFileURL(path.join(root, "shared/workspace-tab-fulltext.js")).href);
 
   const workspaceId = "page-abcdefghijkl";
@@ -94,44 +91,9 @@ const root = path.resolve(__dirname, "..");
     { role: "user", text: prompt },
     { role: "assistant", text: "Claude is stronger at long documents." }
   ]), true);
-  assert.equal(fullTextMessagesMatchPrompt([{ role: "user", text: prompt }], prompt), false, "a user turn without an assistant pair must not match");
-  assert.equal(fullTextMessagesMatchPrompt([
-    { role: "user", text: prompt },
-    { role: "assistant", text: "Claude is stronger at long documents." }
-  ], prompt), true);
-  assert.equal(fullTextMessagesMatchPrompt([
-    { role: "user", text: `Title\n${prompt}` },
-    { role: "assistant", text: "done" }
-  ], prompt), true, "extracted USER text may wrap the sent prompt");
-  assert.equal(fullTextMessagesMatchPrompt([
-    { role: "user", text: "Compare ChatGPT" },
-    { role: "assistant", text: "done" }
-  ], prompt), true, "a truncated USER prefix must still match idle capture");
-  assert.equal(fullTextMessagesMatchPrompt([
-    { role: "user", text: "搜索:科幻作家七月出版的小说/小说集" },
-    { role: "assistant", text: "七月的代表作包括《…" }
-  ], "搜索：科幻作家 七月 \n出版的小说/小说集"), true, "NFKC punctuation and CJK spacing must not block idle capture");
-  assert.equal(fullTextMessagesMatchPrompt([
-    { role: "user", text: prompt },
-    { role: "assistant", text: "done" }
-  ], "unrelated prompt"), false);
-  assert.equal(fullTextMessagesMatchPrompt([
-    { role: "user", text: prompt },
-    { role: "assistant", text: "historical complete" },
-    { role: "user", text: "a newer prompt" },
-    { role: "assistant", text: "partial" }
-  ], prompt), false, "a historical pair must not count as the current send");
-  assert.equal(fullTextMessagesMatchPrompt([
-    { role: "user", text: "older question" },
-    { role: "assistant", text: "older answer" },
-    { role: "user", text: prompt },
-    { role: "assistant", text: "current answer" }
-  ], prompt), true, "only the latest prompt/assistant pair may complete a send capture");
-  assert.equal(fullTextMessagesMatchPrompt([
-    { role: "user", text: prompt },
-    { role: "assistant", text: "historical complete" },
-    { role: "user", text: prompt }
-  ], prompt), false, "skipping the live last assistant must not match via an older pair");
+  assert.equal(fullTextTextsOverlap(`Title\n${prompt}`, prompt), true, "extracted USER text may wrap the sent prompt");
+  assert.equal(fullTextTextsOverlap("Compare ChatGPT", prompt), true, "a truncated USER prefix still overlaps");
+  assert.equal(fullTextTextsOverlap("unrelated prompt", prompt), false);
 
   const merged = mergeWorkspaceTabFullTextFrames([
     {
@@ -307,83 +269,57 @@ const root = path.resolve(__dirname, "..");
     "id:chatgpt-1"
   );
 
-  const contentMessages = [
-    { role: "user", text: "Hello there" },
-    { role: "assistant", text: "General Kenobi" },
-    { role: "page", text: "ignored chrome" }
-  ];
-  const contentMetrics = fullTextContentMetricsFromMessages(contentMessages);
-  assert.equal(contentMetrics.turnCount, 2);
-  assert.equal(contentMetrics.userChars, "Hello there".length);
-  assert.equal(contentMetrics.assistantChars, "General Kenobi".length);
-  assert.match(contentMetrics.tailHash, /^[0-9a-f]{8}$/);
-  assert.equal(
-    fullTextContentSignature(contentMetrics),
-    `${contentMetrics.turnCount}\n${contentMetrics.userChars}\n${contentMetrics.assistantChars}\n${contentMetrics.tailHash}`
-  );
-  const storedPair = { ...contentMetrics, hasPair: true };
-  const liveCovered = { ...contentMetrics, href: "https://chatgpt.com/c/1" };
-  assert.equal(fullTextExistingNeedsCollect(liveCovered, storedPair), false);
-  assert.equal(fullTextExistingIsCovered(liveCovered, storedPair), true);
-  assert.equal(
-    fullTextExistingNeedsCollect({ ...liveCovered, turnCount: 4 }, storedPair),
-    false,
-    "DOM turnCount above a stored Last-N pair is not growth"
-  );
-  assert.equal(
-    fullTextExistingNeedsCollect({ ...liveCovered, tailHash: "deadbeef" }, storedPair),
-    false,
-    "DOM tailHash vs Copy-text tailHash is not growth"
-  );
-  assert.equal(fullTextExistingNeedsCollect({ turnCount: 0, href: "https://chatgpt.com/c/1" }, storedPair), false);
-  assert.equal(fullTextExistingIsCovered({ turnCount: 0, href: "https://chatgpt.com/c/1" }, storedPair), false);
-  assert.equal(fullTextExistingNeedsCollect(liveCovered, { hasPair: false }), true);
-  assert.equal(fullTextExistingIsCovered(liveCovered, { hasPair: false }), false);
-  assert.equal(
-    fullTextExistingNeedsCollect({ ...liveCovered, turnCount: 4 }, { ...storedPair, representation: "live" }),
-    true,
-    "same-representation live turn growth must collect"
-  );
-  assert.equal(
-    fullTextExistingNeedsCollect({ ...liveCovered, tailHash: "deadbeef" }, { ...storedPair, representation: "live" }),
-    true,
-    "same-representation live tailHash change must collect"
-  );
-  assert.equal(
-    fullTextExistingNeedsCollect(
-      { ...liveCovered, lastUserMessage: "Hello there", lastAssistantMessage: "General Kenobi" },
-      { ...storedPair, lastUserMessage: "Hello there", lastAssistantMessage: "General Kenobi" }
-    ),
-    false
-  );
-  assert.equal(
-    fullTextExistingNeedsCollect(
-      { ...liveCovered, lastUserMessage: "new question", lastAssistantMessage: "new answer" },
-      {
-        ...storedPair,
-        representation: "live",
-        lastUserMessage: "Hello there",
-        lastAssistantMessage: "General Kenobi"
-      }
-    ),
-    true,
-    "same-representation last-pair mismatch must collect"
-  );
-  assert.equal(
-    fullTextExistingNeedsCollect({ ...liveCovered, href: "https://app.notion.com/chat" }, storedPair),
-    false
-  );
-  assert.equal(
-    fullTextExistingIsCovered({ ...liveCovered, href: "https://app.notion.com/chat" }, storedPair),
-    false,
-    "a home href is not covered until the conversation identity is stable"
-  );
-  assert.equal(fullTextConversationHrefIsStable("https://chatgpt.com/c/1"), true);
-  assert.equal(fullTextConversationHrefIsStable("https://chatgpt.com/"), false);
-  assert.equal(fullTextConversationHrefIsStable("https://app.notion.com/chat?t=topic-1"), true);
-  assert.equal(fullTextConversationHrefIsStable("https://app.notion.com/chat"), false);
-  assert.equal(fullTextConversationHrefIsStable("https://www.notion.so/chat?t=topic-1"), true);
-  assert.equal(fullTextConversationHrefIsStable(""), false);
+  // Capture marks ride along with a frame's text but never count as text.
+  const mark = {
+    v: 1,
+    conversationKey: "chatgpt:abc",
+    granularity: "turns",
+    digest: "0123456789abcdef",
+    tail: ["u:0123456789abcdef", "a:fedcba9876543210"],
+    turnCount: 2,
+    capturedAt: "2026-09-28T00:00:00.000Z",
+    source: "idle"
+  };
+  const markedFrames = framesFromSummaryPreviewItems([{
+    status: "ok",
+    instanceId: "chatgpt-1",
+    captureMark: mark,
+    page: { href: "https://chatgpt.com/c/abc", messages }
+  }]);
+  assert.deepEqual(markedFrames[0].capture, mark, "a preview item's capture mark is stored with its frame");
+  const unmarked = normalizeWorkspaceTabFullTextStore({ [workspaceId]: { workspaceId, frames: [{ href: "https://chatgpt.com/c/abc", messages }] } })[workspaceId].frames;
+  assert.equal(workspaceTabFullTextFramesEqual(unmarked, markedFrames), true, "a mark alone is not a text change");
+  assert.equal(workspaceTabFullTextMarksEqual(unmarked, markedFrames), false, "mark equality is tracked separately");
+  const stored = normalizeWorkspaceTabFullTextStore({ [workspaceId]: { workspaceId, frames: markedFrames } })[workspaceId];
+  assert.deepEqual(stored.frames[0].capture, mark, "normalization keeps a valid mark");
+  const invalid = normalizeWorkspaceTabFullTextStore({ [workspaceId]: { workspaceId, frames: [{ href: "https://chatgpt.com/c/abc", messages, capture: { v: 0 } }] } })[workspaceId];
+  assert.equal(invalid.frames[0].capture, undefined, "normalization drops an invalid mark");
+
+  const sameText = mergeWorkspaceTabFullTextFrames(stored.frames, [{ href: "https://chatgpt.com/c/abc", messages }]);
+  assert.deepEqual(sameText[0].capture, mark, "re-merging the same text keeps the mark");
+  const grown = mergeWorkspaceTabFullTextFrames(stored.frames, [{
+    href: "https://chatgpt.com/c/abc",
+    messages: [...messages, { role: "user", text: "And Gemini?" }, { role: "assistant", text: "Gemini is fast." }]
+  }]);
+  assert.equal(grown[0].capture, undefined, "new text without a mark drops the stale mark");
+  const regrown = mergeWorkspaceTabFullTextFrames(stored.frames, [{
+    href: "https://chatgpt.com/c/abc",
+    capture: { ...mark, digest: "aaaaaaaaaaaaaaaa" },
+    messages: [...messages, { role: "user", text: "And Gemini?" }, { role: "assistant", text: "Gemini is fast." }]
+  }]);
+  assert.equal(regrown[0].capture.digest, "aaaaaaaaaaaaaaaa", "new text with its own mark stores that mark");
+
+  const legacy = normalizeWorkspaceTabFullTextStore({ [workspaceId]: { workspaceId, frames: [{ href: "https://chatgpt.com/c/abc?model=x", messages }] } })[workspaceId];
+  const adopted = applyWorkspaceTabFullTextMarks(legacy.frames, [mark]);
+  assert.deepEqual(adopted[0].capture, mark, "a mark finds a legacy frame through its conversation key");
+  assert.deepEqual(applyWorkspaceTabFullTextMarks(legacy.frames, [{ ...mark, conversationKey: "chatgpt:other" }])[0].capture, undefined);
+
+  const conversation = workspaceTabFullTextConversation(legacy, "chatgpt:abc");
+  assert.equal(conversation.hasPair, true);
+  assert.equal(conversation.mark, null);
+  assert.equal(conversation.lastUserMessage, "What about Gemini?", "the latest user turn is the adoption guard");
+  assert.equal(workspaceTabFullTextConversation(legacy, "chatgpt:other"), null);
+  assert.deepEqual(workspaceTabFullTextConversation(stored, "chatgpt:abc").mark, mark);
 
   console.log("workspace tab full text: ok");
 })().catch((error) => {

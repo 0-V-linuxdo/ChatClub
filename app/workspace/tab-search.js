@@ -2,6 +2,7 @@ import { dateGroupId, groupByDate, timestamp } from "../../shared/date-groups.js
 import { STORAGE_KEYS } from "../../shared/constants.js";
 import { t } from "../../shared/i18n.js";
 import {
+  applyWorkspaceTabFullTextMarks,
   framesFromSummaryPreviewItems,
   findFullTextQueryRanges,
   fullTextMessagesHavePair,
@@ -9,7 +10,8 @@ import {
   mergeWorkspaceTabFullTextFrames,
   normalizeWorkspaceTabFullTextStore,
   searchWorkspaceTabFullTextHits,
-  workspaceTabFullTextFramesEqual
+  workspaceTabFullTextFramesEqual,
+  workspaceTabFullTextMarksEqual
 } from "../../shared/workspace-tab-fulltext.js";
 import {
   evictOldestFromWorkspaceTabFullTextPlan,
@@ -96,7 +98,8 @@ export async function persistWorkspaceTabFullTextFromPreview({ workspaceId, topi
     && nextTitle === String(current.topicTitle || "").trim()
     && workspaceTabFullTextFramesEqual(current.frames, frames)
   ) {
-    return { saved: true, unchanged: true, workspaceId: id };
+    if (workspaceTabFullTextMarksEqual(current.frames, frames)) return { saved: true, unchanged: true, workspaceId: id };
+    return writeWorkspaceTabFullTextMarkOnly(snapshot, current, frames);
   }
   return writeWorkspaceTabFullTextRecord(snapshot, {
     workspaceId: id,
@@ -104,6 +107,25 @@ export async function persistWorkspaceTabFullTextFromPreview({ workspaceId, topi
     frames,
     updatedAt: new Date().toISOString()
   });
+}
+
+// Capture marks are bookkeeping, not content: writing one keeps the desk's
+// updatedAt (which orders eviction and recency) and reports unchanged so no
+// History or Tabs view refreshes for it.
+async function writeWorkspaceTabFullTextMarkOnly(snapshot, current, frames) {
+  const result = await writeWorkspaceTabFullTextRecord(snapshot, { ...current, frames, updatedAt: current.updatedAt });
+  return { ...result, unchanged: true, markOnly: true };
+}
+
+export async function persistWorkspaceTabFullTextMarks({ workspaceId, marks } = {}) {
+  const id = String(workspaceId || "").trim();
+  if (!id || !Array.isArray(marks) || !marks.length) return { saved: false };
+  const snapshot = await readSnapshot(workspaceTabFullTextRecordReadKeys(id));
+  const current = workspaceTabFullTextRecordFromSnapshot(snapshot, id);
+  if (!current) return { saved: false };
+  const frames = applyWorkspaceTabFullTextMarks(current.frames, marks);
+  if (workspaceTabFullTextMarksEqual(current.frames, frames)) return { saved: true, unchanged: true, workspaceId: id };
+  return writeWorkspaceTabFullTextMarkOnly(snapshot, current, frames);
 }
 
 export async function forgetWorkspaceTabFullText(workspaceId) {

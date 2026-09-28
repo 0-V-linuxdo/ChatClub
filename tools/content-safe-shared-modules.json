@@ -6,6 +6,7 @@
   "shared/default-shortcuts.js",
   "shared/delete-completion.js",
   "shared/frame-commands.js",
+  "shared/fulltext-ledger.js",
   "shared/model-preference-selection.js",
   "shared/notion-efforts.js",
   "shared/notion-models.js",

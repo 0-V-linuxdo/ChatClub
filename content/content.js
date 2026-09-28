@@ -413,12 +413,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "c4313b050e5febc9de1f93e857cf1cb9fe4f2d8206af468047a7983680cf13d2", "implementationSha256": "3af199af759dd88d3820bd2fc6bd8b474a84090ebc402d5497ca90148bf2192e", "implementationVersion": "2026.07.16.2+bundle.3af199af759dd88d3820bd2fc6bd8b474a84090ebc402d5497ca90148bf2192e" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "ea56a55beced3165083edf97867abb0daac9ef8cf32511cb97544032165239ca", "implementationSha256": "2e05cb5a8d7d0bcd09f5d865899cab6528674c9048eeec8f4937dad5ba663bc7", "implementationVersion": "2026.07.16.2+bundle.2e05cb5a8d7d0bcd09f5d865899cab6528674c9048eeec8f4937dad5ba663bc7" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -704,13 +704,6 @@
 
   // content-src/shared/summary-runtime.js
   var normalize = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-  function visible(el) {
-    if (!el?.getBoundingClientRect) return false;
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return false;
-    const style = getComputedStyle(el);
-    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) !== 0;
-  }
   function qsa(selector, root = document, options = {}) {
     try {
       const result = Array.from(root.querySelectorAll(selector));
@@ -770,32 +763,6 @@
       logoUrl: pageLogoUrl()
     };
   }
-  function fingerprintHash(value) {
-    const text = String(value || "");
-    let hash = 2166136261;
-    for (let index = 0; index < text.length; index += 1) {
-      hash ^= text.charCodeAt(index);
-      hash = Math.imul(hash, 16777619);
-    }
-    return (hash >>> 0).toString(16).padStart(8, "0");
-  }
-  function conversationHref() {
-    try {
-      const url = new URL(location.href);
-      const path = `${url.origin}${url.pathname}`;
-      const host = url.hostname.toLowerCase();
-      if ((host === "app.notion.com" || host === "notion.so" || host.endsWith(".notion.so")) && /^\/chat\/?$/i.test(url.pathname) && url.searchParams.get("t")) {
-        return url.href;
-      }
-      const hash = String(url.hash || "").replace(/^#/, "");
-      if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
-        return `${path}#${hash}`;
-      }
-      return path;
-    } catch {
-      return String(location.href || "").replace(/[?#].*$/, "");
-    }
-  }
   function conversationTurnRole(el) {
     const attr = String(el?.getAttribute?.("data-message-author-role") || "").toLowerCase();
     if (attr === "user" || attr === "assistant") return attr;
@@ -810,27 +777,39 @@
     if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
     return userscriptRole(el) || "";
   }
-  function conversationTurnNodes() {
-    const selectors = [
-      "[data-message-author-role]",
-      "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
-      "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
-      "user-query, model-response, .user-query, .model-response",
-      ".ds-message",
-      ".chat_bubble[role='article']",
-      "[data-testid='message']",
-      "article[data-testid*='conversation']"
-    ];
-    const nodes = [];
-    for (const selector of selectors) {
-      for (const node of qsa(selector).filter(visible)) {
-        if (internalTool(node)) continue;
-        if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
-        nodes.push(node);
-      }
-      if (nodes.length >= 2) break;
+  var CONVERSATION_TURN_SELECTORS = Object.freeze([
+    "[data-message-author-role]",
+    "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+    "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+    "user-query, model-response, .user-query, .model-response",
+    ".ds-message",
+    ".chat_bubble[role='article']",
+    "[data-testid='message']",
+    "article[data-testid*='conversation']"
+  ]);
+  function conversationTurnGroup(selector, nodes) {
+    for (const node of qsa(selector).filter(controlLayoutVisible)) {
+      if (internalTool(node)) continue;
+      if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
+      nodes.push(node);
     }
-    return nodes.sort(elementOrder);
+    return nodes;
+  }
+  function collectConversationTurns(preferredGroup = -1) {
+    const preferred = CONVERSATION_TURN_SELECTORS[preferredGroup];
+    if (preferred) {
+      const nodes2 = conversationTurnGroup(preferred, []);
+      if (nodes2.length) return { nodes: nodes2.sort(elementOrder), group: preferredGroup };
+    }
+    const nodes = [];
+    for (let index = 0; index < CONVERSATION_TURN_SELECTORS.length; index += 1) {
+      const before = nodes.length;
+      conversationTurnGroup(CONVERSATION_TURN_SELECTORS[index], nodes);
+      if (nodes.length >= 2) {
+        return { nodes: nodes.sort(elementOrder), group: before === 0 ? index : -1 };
+      }
+    }
+    return { nodes: nodes.sort(elementOrder), group: -1 };
   }
   function lastAssistantTurnNodeFrom(turns) {
     for (let index = turns.length - 1; index >= 0; index -= 1) {
@@ -905,6 +884,13 @@ ${raw.slice(-36e3)}`;
     }
     return live;
   }
+  function conversationToolActivityIsActive() {
+    try {
+      return conversationToolActivityFromLines(conversationLineSample({ tailOnly: true }));
+    } catch {
+    }
+    return false;
+  }
   function nodeLooksLikeStreamingTurn(el) {
     if (!el) return false;
     if (String(el.getAttribute?.("aria-busy") || "").toLowerCase() === "true") return true;
@@ -938,94 +924,10 @@ ${raw.slice(-36e3)}`;
     if (!turn) return false;
     return nodeLooksLikeStreamingTurn(turn);
   }
-  var TURN_FINGERPRINT_SKIP_SELECTOR = [
-    "button",
-    "[role='button']",
-    "[role='toolbar']",
-    "[role='menu']",
-    "[role='menuitem']",
-    "[aria-label*='copy' i]",
-    "[title*='copy' i]",
-    "[data-testid*='copy' i]",
-    ".code-buttons"
-  ].join(",");
-  function turnTextSkippingControls(turn) {
-    const doc = turn.ownerDocument || document;
-    if (typeof doc?.createTreeWalker !== "function" || typeof NodeFilter === "undefined") return null;
-    const walker = doc.createTreeWalker(turn, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-      acceptNode(node) {
-        if (node.nodeType === 3) return NodeFilter.FILTER_ACCEPT;
-        if (node !== turn && matches(node, TURN_FINGERPRINT_SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_SKIP;
-      }
-    });
-    const parts = [];
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) parts.push(node.nodeValue || "");
-    return parts.join("");
-  }
-  function conversationTurnFingerprintText(turn) {
-    if (!turn) return "";
-    let value = null;
-    try {
-      value = turnTextSkippingControls(turn);
-    } catch {
-      value = null;
-    }
-    if (value === null) {
-      try {
-        const clone = turn.cloneNode(true);
-        for (const node of clone.querySelectorAll(TURN_FINGERPRINT_SKIP_SELECTOR)) node.remove();
-        value = clone.textContent || "";
-      } catch {
-        value = turn.textContent || turn.innerText || "";
-      }
-    }
-    const raw = normalize(value).replace(/\s+/g, " ");
-    try {
-      return raw.normalize("NFKC").replace(/\s+/g, " ").trim();
-    } catch {
-      return raw.trim();
-    }
-  }
-  function conversationFingerprint(documentId = "", data = {}) {
-    const turns = conversationTurnNodes();
-    const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-    let userChars = 0;
-    let assistantChars = 0;
-    let lastText = "";
-    let classified = 0;
-    const haystackParts = [];
-    for (const turn of turns) {
-      const role = conversationTurnRole(turn);
-      const value = conversationTurnFingerprintText(turn);
-      if (!value) continue;
-      haystackParts.push(value);
-      if (role === "user") {
-        userChars += value.length;
-        classified += 1;
-        lastText = value;
-      } else if (role === "assistant") {
-        assistantChars += value.length;
-        classified += 1;
-        lastText = value;
-      }
-    }
-    const haystack = haystackParts.join(" ");
-    let containsPrompt = Boolean(prompt && haystack && haystack.includes(prompt));
-    if (prompt && !haystack) {
-      const lines = conversationLineSample();
-      containsPrompt = [...lines.slice(0, 48), ...lines.slice(-80)].join(" ").includes(prompt);
-    }
-    return {
-      href: conversationHref(),
-      documentId: String(documentId || ""),
-      turnCount: classified,
-      userChars,
-      assistantChars,
-      tailHash: lastText ? fingerprintHash(lastText.slice(-500)) : "",
-      containsPrompt,
-      generating: conversationComposerIsGenerating() || conversationToolActivityFromLines(conversationLineSample({ tailOnly: true })) || lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(turns))
-    };
+  function conversationTurnsAreGenerating(turns = []) {
+    if (conversationComposerIsGenerating()) return true;
+    if (conversationToolActivityIsActive()) return true;
+    return lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(Array.isArray(turns) ? turns : []));
   }
   function elementOrder(a, b) {
     try {
@@ -1090,91 +992,383 @@ ${raw.slice(-36e3)}`;
     return role === "user" || role === "assistant" ? role : null;
   }
 
-  // content-src/shared/conversation-observer.js
-  var CONVERSATION_FINGERPRINT_MAX_WAIT_MS = 25e3;
-  var CONVERSATION_FINGERPRINT_QUIET_MS = 1200;
-  var SIGNATURE_FIELDS = Object.freeze(["turnCount", "userChars", "assistantChars", "tailHash"]);
-  var STATE_FIELDS = Object.freeze(["generating", "containsPrompt"]);
-  function fieldValue(fingerprint, key) {
-    const value = fingerprint?.[key];
-    if (key === "tailHash") return String(value || "");
-    if (STATE_FIELDS.includes(key)) return value === true;
-    return Number(value) || 0;
+  // shared/delete-completion.js
+  var MAX_IDENTITY_ID_LENGTH = 512;
+  function hostMatches(host, roots = []) {
+    return roots.some((root) => host === root || host.endsWith(`.${root}`));
   }
-  function conversationFingerprintDiffers(next, since) {
-    if (!since || typeof since !== "object") return true;
-    for (const key of [...SIGNATURE_FIELDS, ...STATE_FIELDS]) {
-      if (fieldValue(next, key) !== fieldValue(since, key)) return true;
+  function cleanIdentityId(value) {
+    const raw = String(value || "").trim();
+    if (!raw || raw.length > MAX_IDENTITY_ID_LENGTH) return "";
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
     }
-    return false;
   }
-  function decorate(fingerprint, startedAt) {
-    return {
-      ...fingerprint,
-      inputIdleMs: userInputIdleMs(),
-      waitedMs: Math.max(0, Date.now() - startedAt)
+  function identity(provider, value) {
+    const id = cleanIdentityId(value);
+    return id ? Object.freeze({ provider, id }) : null;
+  }
+  function deleteConversationIdentityFromHref(value, baseHref = void 0) {
+    let url;
+    try {
+      url = baseHref ? new URL(String(value || ""), String(baseHref)) : new URL(String(value || ""));
+    } catch {
+      return null;
+    }
+    if (!/^https?:$/.test(url.protocol)) return null;
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname || "/";
+    let match = null;
+    if (hostMatches(host, ["chatgpt.com", "chat.openai.com"])) {
+      match = /\/(?:g\/[^/?#]+\/)?c\/([^/?#]+)/i.exec(path);
+      return match ? identity("chatgpt", match[1]) : null;
+    }
+    if (hostMatches(host, ["claude.ai"])) {
+      match = /^\/chat\/([^/?#]+)\/?$/i.exec(path);
+      return match ? identity("claude", match[1]) : null;
+    }
+    if (hostMatches(host, ["gemini.google.com", "bard.google.com"])) {
+      match = /^\/app\/([^/?#]+)/i.exec(path);
+      return match ? identity("gemini", match[1]) : null;
+    }
+    if (host === "assistant.kagi.com") {
+      match = /^\/(?:c|chat)\/([^/?#]+)/i.exec(path);
+      return match ? identity("kagi", match[1]) : null;
+    }
+    if (hostMatches(host, ["app.notion.com", "notion.so"]) && /^\/chat\/?$/i.test(path)) {
+      return identity("notion", url.searchParams.get("t"));
+    }
+    if (hostMatches(host, ["grok.com", "grok.x.ai", "gk.dairoot.cn"])) {
+      match = /^\/(?:c|chat)\/([^/?#]+)/i.exec(path);
+      return match ? identity("grok", match[1]) : null;
+    }
+    if (hostMatches(host, ["deepseek.com"])) {
+      match = /\/(?:a\/)?chat\/s\/([^/?#]+)/i.exec(path);
+      return match ? identity("deepseek", match[1]) : null;
+    }
+    return null;
+  }
+
+  // shared/fulltext-ledger.js
+  var FULLTEXT_LEDGER_VERSION = 1;
+  var FULLTEXT_LEDGER_TAIL = 12;
+  var KNOWN_CONVERSATION_HOSTS = Object.freeze([
+    "chatgpt.com",
+    "chat.openai.com",
+    "claude.ai",
+    "gemini.google.com",
+    "bard.google.com",
+    "assistant.kagi.com",
+    "app.notion.com",
+    "notion.so",
+    "grok.com",
+    "grok.x.ai",
+    "gk.dairoot.cn",
+    "deepseek.com"
+  ]);
+  var EMPTY_CONVERSATION_PATHS = /* @__PURE__ */ new Set(["/", "/new", "/ai", "/app", "/chat", "/chats", "/home", "/c"]);
+  var IDENTITY_QUERY_KEYS = Object.freeze([
+    "c",
+    "chat",
+    "chatid",
+    "conversation",
+    "conversationid",
+    "id",
+    "session",
+    "sessionid",
+    "t",
+    "thread",
+    "threadid",
+    "topic",
+    "topicid"
+  ]);
+  function hostMatches2(host, roots) {
+    return roots.some((root) => host === root || host.endsWith(`.${root}`));
+  }
+  function identityParams(url) {
+    const pairs = [];
+    const collect = (params) => {
+      for (const [name, value] of params) {
+        const key = String(name || "").toLowerCase();
+        const text = String(value || "").trim();
+        if (!IDENTITY_QUERY_KEYS.includes(key) || !text || text.length > 160) continue;
+        if (!pairs.some(([existing]) => existing === key)) pairs.push([key, text]);
+      }
     };
-  }
-  function observedRoot() {
-    return document.body || conversationSampleRoot() || document.documentElement;
-  }
-  function conversationFingerprintWhenChanged(documentId = "", data = {}) {
-    installUserActivityTracking();
-    const startedAt = Date.now();
-    const waitMs = Math.max(0, Math.min(CONVERSATION_FINGERPRINT_MAX_WAIT_MS, Number(data?.waitMs) || 0));
-    const since = data?.since && typeof data.since === "object" ? data.since : null;
-    const probe = () => conversationFingerprint(documentId, data);
-    let current = probe();
-    if (!waitMs || !since || conversationFingerprintDiffers(current, since) || typeof MutationObserver !== "function") {
-      return Promise.resolve(decorate(current, startedAt));
-    }
-    return new Promise((resolve) => {
-      let finished = false;
-      let dirty = false;
-      let quietTimer = 0;
-      const deadline = startedAt + waitMs;
-      const finish = (fingerprint) => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(quietTimer);
-        clearTimeout(deadlineTimer);
-        try {
-          observer.disconnect();
-        } catch {
-        }
-        window.removeEventListener("pagehide", onPageHide, true);
-        resolve(decorate(fingerprint, startedAt));
-      };
-      const recompute = () => {
-        quietTimer = 0;
-        if (finished) return;
-        dirty = false;
-        try {
-          current = probe();
-        } catch {
-          return;
-        }
-        if (conversationFingerprintDiffers(current, since)) finish(current);
-      };
-      const observer = new MutationObserver(() => {
-        if (finished) return;
-        dirty = true;
-        if (quietTimer) clearTimeout(quietTimer);
-        quietTimer = setTimeout(recompute, Math.max(0, Math.min(CONVERSATION_FINGERPRINT_QUIET_MS, deadline - Date.now())));
-      });
-      const onPageHide = () => finish(current);
-      const deadlineTimer = setTimeout(() => {
-        if (finished) return;
-        if (dirty) {
-          try {
-            current = probe();
-          } catch {
-          }
-        }
-        finish(current);
-      }, waitMs);
+    collect(url.searchParams);
+    const hash = String(url.hash || "").replace(/^#\/?/, "");
+    if (/[=&]/.test(hash)) {
       try {
-        observer.observe(observedRoot(), {
+        collect(new URLSearchParams(hash.replace(/^[^?]*\?/, "")));
+      } catch {
+      }
+    }
+    return pairs.sort(([left], [right]) => left.localeCompare(right));
+  }
+  function conversationKeyFromHref(value) {
+    let url;
+    try {
+      url = new URL(String(value || ""));
+    } catch {
+      return "";
+    }
+    if (!/^https?:$/.test(url.protocol)) return "";
+    const identity2 = deleteConversationIdentityFromHref(url.href);
+    if (identity2?.provider && identity2.id) return `${identity2.provider}:${identity2.id}`;
+    const host = url.hostname.toLowerCase();
+    if (hostMatches2(host, KNOWN_CONVERSATION_HOSTS)) return "";
+    const path = (url.pathname || "/").replace(/\/+$/, "") || "/";
+    const params = identityParams(url);
+    const query = params.length ? `?${params.map(([key, text]) => `${key}=${text}`).join("&")}` : "";
+    if (EMPTY_CONVERSATION_PATHS.has(path.toLowerCase()) && !query) {
+      const hash2 = String(url.hash || "").replace(/^#/, "");
+      if (!hash2 || /[=&]/.test(hash2) || hash2.length < 8 || hash2.length > 120) return "";
+      return `${host}${path}#${hash2}`;
+    }
+    const hash = String(url.hash || "").replace(/^#/, "");
+    const suffix = !query && hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120 ? `#${hash}` : "";
+    return `${host}${path}${query}${suffix}`;
+  }
+  function fnv1a(text, seed) {
+    let hash = seed >>> 0;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
+  }
+  function hash64(text) {
+    const value = String(text || "");
+    return `${fnv1a(value, 2166136261)}${fnv1a(value, 795577917)}`;
+  }
+  function roleCode(role) {
+    return role === "u" || role === "user" ? "u" : role === "a" || role === "assistant" ? "a" : "?";
+  }
+  function ledgerTurnEntry(role, text) {
+    const code = roleCode(role);
+    return `${code}:${hash64(`${code}
+${String(text || "")}`)}`;
+  }
+  function ledgerDigest(granularity, entries = []) {
+    const list = Array.isArray(entries) ? entries : [];
+    return list.length ? hash64(`${granularity}
+${list.join("|")}`) : "";
+  }
+
+  // content-src/shared/conversation-ledger.js
+  var CONVERSATION_LEDGER_TIMINGS = Object.freeze({
+    // Frame RPC clamps a command at 60s; one long poll stays well inside that
+    // so the parent's own timeout (waitMs plus a margin) never reaches the clamp.
+    maxWaitMs: 25e3,
+    // A streaming reply mutates the DOM continuously: recompute once it has
+    // been quiet this long, and at least this often while it keeps mutating.
+    quietMs: 1200,
+    maxDirtyMs: 4e3,
+    // Nobody has asked for a while: stop observing until the next request.
+    idleDisconnectMs: 5 * 6e4
+  });
+  var CONVERSATION_LEDGER_MAX_WAIT_MS = CONVERSATION_LEDGER_TIMINGS.maxWaitMs;
+  var CONVERSATION_LEDGER_QUIET_MS = CONVERSATION_LEDGER_TIMINGS.quietMs;
+  var CONVERSATION_LEDGER_MAX_DIRTY_MS = CONVERSATION_LEDGER_TIMINGS.maxDirtyMs;
+  var CONVERSATION_LEDGER_IDLE_DISCONNECT_MS = CONVERSATION_LEDGER_TIMINGS.idleDisconnectMs;
+  var EDITING_RECENT_INPUT_MS = 3e4;
+  var LEDGER_HARD_SKIP_SELECTOR = [
+    "button",
+    "[role='button']",
+    "[role='toolbar']",
+    "[role='menu']",
+    "[role='menuitem']",
+    "[aria-label*='copy' i]",
+    "[title*='copy' i]",
+    "[data-testid*='copy' i]",
+    ".code-buttons",
+    "svg",
+    "style",
+    "script",
+    "template",
+    "noscript",
+    "textarea",
+    "input",
+    "select",
+    "[contenteditable='true']",
+    "[contenteditable='']"
+  ].join(",");
+  var LEDGER_SOFT_SKIP_SELECTOR = [
+    "time",
+    "[datetime]",
+    "relative-time",
+    ".sr-only",
+    ".visually-hidden",
+    "[class*='sr-only']",
+    "[aria-live]",
+    "[role='status']",
+    "[role='alert']",
+    "[role='progressbar']",
+    "[role='tooltip']",
+    "[data-radix-popper-content-wrapper]"
+  ].join(",");
+  var LEDGER_SOFT_SKIP_MAX_CHARS = 160;
+  var LEDGER_NOISE_SEGMENT_MAX_CHARS = 80;
+  var LEDGER_NOISE_SEGMENTS = Object.freeze([
+    /^(?:thought|reasoned|worked|thinking|searched|analy[sz]ed)\s+for\s+[\d.,:]+\s*(?:ms|s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)?\b.*$/i,
+    /^(?:thinking|reasoning|searching(?:\s+the\s+web)?|analy[sz]ing|generating|writing)\s*[.。…]*$/i,
+    /^(?:已)?(?:深度)?思考(?:了|中|完成)?\s*(?:[（(]?\s*用时)?\s*[\d.,]*\s*(?:秒|分钟|分|s)?\s*[）)]?\s*[.。…]*$/,
+    /^(?:just now|now|today|yesterday|edited|\d+\s*(?:s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?|d|days?|w|wks?|weeks?|mo|months?|y|yrs?|years?)\s+ago)$/i,
+    /^(?:刚刚|今天|昨天|已编辑|\d+\s*(?:秒|分钟|小时|天|周|个月|年)前)$/,
+    /^\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?$/i
+  ]);
+  var MAX_WALK_DEPTH = 96;
+  function safeMatches(matches2, node, selector) {
+    try {
+      return Boolean(matches2(node, selector));
+    } catch {
+      return false;
+    }
+  }
+  function normalizeLedgerText(value) {
+    const text = String(value || "").replace(/ /g, " ").replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    try {
+      return text.normalize("NFKC").replace(/\s+/g, " ").trim();
+    } catch {
+      return text;
+    }
+  }
+  function noiseSegment(segment) {
+    const text = segment.replace(/\s+/g, " ").trim();
+    if (!text) return true;
+    if (text.length > LEDGER_NOISE_SEGMENT_MAX_CHARS) return false;
+    return LEDGER_NOISE_SEGMENTS.some((pattern) => pattern.test(text));
+  }
+  function ledgerTurnText(turn, matches2 = (node, selector) => node?.matches?.(selector)) {
+    if (!turn) return "";
+    const segments = [];
+    const walk = (node, depth) => {
+      if (depth > MAX_WALK_DEPTH) return;
+      let buffer = "";
+      for (const child of node.childNodes || []) {
+        if (child.nodeType === 3) {
+          buffer += child.nodeValue || "";
+          continue;
+        }
+        if (child.nodeType !== 1) continue;
+        if (buffer) {
+          segments.push(buffer);
+          buffer = "";
+        }
+        if (safeMatches(matches2, child, LEDGER_HARD_SKIP_SELECTOR)) continue;
+        if (safeMatches(matches2, child, LEDGER_SOFT_SKIP_SELECTOR) && String(child.textContent || "").length <= LEDGER_SOFT_SKIP_MAX_CHARS) continue;
+        walk(child, depth + 1);
+      }
+      if (buffer) segments.push(buffer);
+    };
+    walk(turn, 0);
+    return normalizeLedgerText(segments.filter((segment) => !noiseSegment(segment)).join(" "));
+  }
+  function documentEditableFocused() {
+    const doc = globalThis.document;
+    if (!doc) return false;
+    if (typeof doc.hasFocus === "function" && !doc.hasFocus()) return false;
+    const active = doc.activeElement;
+    if (!active || active === doc.body || active === doc.documentElement) return false;
+    const tag = String(active.tagName || "").toLowerCase();
+    return tag === "textarea" || tag === "input" || active.isContentEditable === true;
+  }
+  function lastTurnNearViewport(nodes = []) {
+    const last = nodes[nodes.length - 1];
+    if (!last?.getBoundingClientRect) return true;
+    const height = Number(globalThis.innerHeight) || Number(globalThis.document?.documentElement?.clientHeight) || 0;
+    if (!height) return true;
+    return last.getBoundingClientRect().top <= height * 1.5;
+  }
+  function windowPageHide(handler) {
+    if (typeof globalThis.addEventListener !== "function") return null;
+    globalThis.addEventListener("pagehide", handler, true);
+    return () => globalThis.removeEventListener("pagehide", handler, true);
+  }
+  function defaultTimer(ms, callback) {
+    return setTimeout(callback, Math.max(0, Number(ms) || 0));
+  }
+  function randomLedgerId() {
+    try {
+      const bytes = new Uint8Array(6);
+      globalThis.crypto.getRandomValues(bytes);
+      return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    } catch {
+      return Math.random().toString(16).slice(2, 14);
+    }
+  }
+  function createConversationLedger(deps = {}) {
+    const documentId = String(deps.documentId || "");
+    const listTurns = typeof deps.listTurns === "function" ? deps.listTurns : () => ({ nodes: [], group: -1 });
+    const turnRole = typeof deps.turnRole === "function" ? deps.turnRole : () => "";
+    const isGenerating = typeof deps.isGenerating === "function" ? deps.isGenerating : () => false;
+    const matches2 = typeof deps.matches === "function" ? deps.matches : (node, selector) => node?.matches?.(selector);
+    const locationHref = typeof deps.locationHref === "function" ? deps.locationHref : () => String(globalThis.location?.href || "");
+    const pageTextSample = typeof deps.pageTextSample === "function" ? deps.pageTextSample : () => "";
+    const inputIdleMs = typeof deps.inputIdleMs === "function" ? deps.inputIdleMs : () => null;
+    const editableFocused = typeof deps.editableFocused === "function" ? deps.editableFocused : documentEditableFocused;
+    const viewportAtEnd = typeof deps.viewportAtEnd === "function" ? deps.viewportAtEnd : lastTurnNearViewport;
+    const observeTarget = typeof deps.observeTarget === "function" ? deps.observeTarget : () => globalThis.document?.body || globalThis.document?.documentElement || null;
+    const onPageHide = deps.onPageHide === void 0 ? windowPageHide : typeof deps.onPageHide === "function" ? deps.onPageHide : null;
+    const MutationObserverImpl = deps.MutationObserver === void 0 ? globalThis.MutationObserver : deps.MutationObserver;
+    const now = typeof deps.now === "function" ? deps.now : () => Date.now();
+    const setTimer = typeof deps.setTimer === "function" ? deps.setTimer : defaultTimer;
+    const clearTimer = typeof deps.clearTimer === "function" ? deps.clearTimer : (id) => clearTimeout(id);
+    const ledgerId = String(deps.ledgerId || randomLedgerId());
+    let textCache = /* @__PURE__ */ new WeakMap();
+    let observer = null;
+    let removePageHide = null;
+    let installedAt = 0;
+    let lastMutationAt = 0;
+    let firstDirtyAt = 0;
+    let lastRequestAt = 0;
+    let quietTimer = null;
+    let idleTimer = null;
+    let disposed = false;
+    let revision = 0;
+    let conversationKey = null;
+    let stickyGroup = -1;
+    let lastDigest = null;
+    let lastGenerating = null;
+    let digestChangedAt = 0;
+    let generatingSeenAt = 0;
+    const waiters = /* @__PURE__ */ new Set();
+    function invalidate(target) {
+      for (let node = target, depth = 0; node && depth < MAX_WALK_DEPTH; node = node.parentNode, depth += 1) {
+        if (textCache.has(node)) textCache.delete(node);
+      }
+    }
+    function scheduleQuietRecompute() {
+      if (!waiters.size) return;
+      if (quietTimer !== null) clearTimer(quietTimer);
+      const at = now();
+      const maxDirty = firstDirtyAt ? Math.max(0, firstDirtyAt + CONVERSATION_LEDGER_MAX_DIRTY_MS - at) : CONVERSATION_LEDGER_QUIET_MS;
+      quietTimer = setTimer(Math.min(CONVERSATION_LEDGER_QUIET_MS, maxDirty), () => {
+        quietTimer = null;
+        firstDirtyAt = 0;
+        for (const waiter of [...waiters]) {
+          const current = compute(waiter.prompt);
+          if (differs(current, waiter.since)) finish(waiter, current);
+        }
+      });
+    }
+    function onMutations(records) {
+      const at = now();
+      lastMutationAt = at;
+      if (!firstDirtyAt) firstDirtyAt = at;
+      for (const record of records || []) invalidate(record?.target);
+      scheduleQuietRecompute();
+    }
+    function install() {
+      if (observer || disposed || typeof MutationObserverImpl !== "function") return;
+      const target = observeTarget();
+      if (!target) return;
+      try {
+        observer = new MutationObserverImpl(onMutations);
+        observer.observe(target, {
           childList: true,
           subtree: true,
           characterData: true,
@@ -1182,10 +1376,213 @@ ${raw.slice(-36e3)}`;
           attributeFilter: ["aria-busy", "data-is-streaming"]
         });
       } catch {
-        finish(current);
+        observer = null;
         return;
       }
-      window.addEventListener("pagehide", onPageHide, true);
+      installedAt = now();
+      lastMutationAt = 0;
+      firstDirtyAt = 0;
+      textCache = /* @__PURE__ */ new WeakMap();
+      if (onPageHide && !removePageHide) {
+        try {
+          removePageHide = onPageHide(handlePageHide) || null;
+        } catch {
+          removePageHide = null;
+        }
+      }
+    }
+    function disconnect() {
+      try {
+        observer?.disconnect?.();
+      } catch {
+      }
+      observer = null;
+      textCache = /* @__PURE__ */ new WeakMap();
+      if (quietTimer !== null) clearTimer(quietTimer);
+      quietTimer = null;
+      if (idleTimer !== null) clearTimer(idleTimer);
+      idleTimer = null;
+      try {
+        removePageHide?.();
+      } catch {
+      }
+      removePageHide = null;
+    }
+    function armIdleDisconnect() {
+      if (idleTimer !== null) clearTimer(idleTimer);
+      idleTimer = setTimer(CONVERSATION_LEDGER_IDLE_DISCONNECT_MS, () => {
+        idleTimer = null;
+        if (waiters.size || now() - lastRequestAt < CONVERSATION_LEDGER_IDLE_DISCONNECT_MS) return;
+        disconnect();
+      });
+    }
+    function turnText(node) {
+      let value = textCache.get(node);
+      if (value === void 0) {
+        value = ledgerTurnText(node, matches2);
+        textCache.set(node, value);
+      }
+      return value;
+    }
+    function inputState(at) {
+      let idleMs = null;
+      try {
+        const value = inputIdleMs();
+        idleMs = value === null || value === void 0 ? null : Math.max(0, Number(value) || 0);
+      } catch {
+      }
+      let editing = false;
+      try {
+        editing = idleMs !== null && idleMs < EDITING_RECENT_INPUT_MS && editableFocused() === true;
+      } catch {
+      }
+      return { seen: idleMs !== null, idleMs, editing, at };
+    }
+    function compute(prompt = "") {
+      const at = now();
+      const href = String(locationHref() || "");
+      const key = conversationKeyFromHref(href);
+      if (key !== conversationKey) {
+        if (conversationKey !== null) revision += 1;
+        conversationKey = key;
+        stickyGroup = -1;
+        lastDigest = null;
+        lastGenerating = null;
+        generatingSeenAt = 0;
+      }
+      let listed = null;
+      try {
+        listed = listTurns(stickyGroup);
+      } catch {
+        listed = null;
+      }
+      const nodes = Array.isArray(listed?.nodes) ? listed.nodes : [];
+      if (Number.isInteger(listed?.group) && listed.group >= 0) stickyGroup = listed.group;
+      const classified = [];
+      const all = [];
+      const haystack = [];
+      let users = 0;
+      let assistants = 0;
+      let lastUserText = "";
+      for (const node of nodes) {
+        const text = turnText(node);
+        if (!text) continue;
+        let role = "";
+        try {
+          role = String(turnRole(node) || "");
+        } catch {
+        }
+        const entry = ledgerTurnEntry(role, text);
+        all.push(entry);
+        haystack.push(text);
+        if (role === "user") {
+          users += 1;
+          lastUserText = text;
+          classified.push(entry);
+        } else if (role === "assistant") {
+          assistants += 1;
+          classified.push(entry);
+        }
+      }
+      const granularity = !all.length ? "none" : users && assistants ? "turns" : "blocks";
+      const entries = granularity === "turns" ? classified : all;
+      const digest = ledgerDigest(granularity, entries);
+      let generating = false;
+      try {
+        generating = isGenerating(nodes) === true;
+      } catch {
+      }
+      if (generating) generatingSeenAt = at;
+      if (digest !== lastDigest) {
+        if (lastDigest !== null) revision += 1;
+        lastDigest = digest;
+        digestChangedAt = at;
+      }
+      if (generating !== lastGenerating) {
+        if (lastGenerating !== null) revision += 1;
+        lastGenerating = generating;
+      }
+      const needle = normalizeLedgerText(prompt);
+      let containsPrompt = false;
+      if (needle) {
+        const text = haystack.join(" ");
+        if (text) containsPrompt = text.includes(needle);
+        else {
+          try {
+            containsPrompt = normalizeLedgerText(pageTextSample()).includes(needle);
+          } catch {
+          }
+        }
+      }
+      let atEnd = true;
+      try {
+        atEnd = viewportAtEnd(nodes) !== false;
+      } catch {
+      }
+      return {
+        ledgerVersion: FULLTEXT_LEDGER_VERSION,
+        ledgerId,
+        documentId,
+        href,
+        conversationKey: key,
+        revision,
+        granularity,
+        turnCount: entries.length,
+        hasPair: users > 0 && assistants > 0,
+        digest,
+        tail: entries.slice(-FULLTEXT_LEDGER_TAIL),
+        lastUser: lastUserText ? { head: lastUserText.slice(0, 160), tail: lastUserText.slice(-160) } : null,
+        containsPrompt,
+        generating,
+        generatingSeenAgoMs: generatingSeenAt ? Math.max(0, at - generatingSeenAt) : null,
+        stableForMs: Math.max(0, at - digestChangedAt),
+        quietForMs: lastMutationAt ? Math.max(0, at - lastMutationAt) : Math.max(0, at - installedAt),
+        viewportAtEnd: atEnd,
+        input: inputState(at)
+      };
+    }
+    function differs(current, since) {
+      if (!since || typeof since !== "object") return true;
+      return String(since.ledgerId || "") !== current.ledgerId || Number(since.revision) !== current.revision || String(since.conversationKey || "") !== current.conversationKey;
+    }
+    function finish(waiter, current) {
+      if (!waiters.delete(waiter)) return;
+      if (waiter.timer !== null) clearTimer(waiter.timer);
+      waiter.resolve(current || compute(waiter.prompt));
+    }
+    function handlePageHide() {
+      for (const waiter of [...waiters]) finish(waiter, null);
+      disconnect();
+    }
+    function whenChanged(data = {}) {
+      lastRequestAt = now();
+      install();
+      if (!disposed) armIdleDisconnect();
+      const prompt = String(data?.prompt || "");
+      const waitMs = Math.max(0, Math.min(CONVERSATION_LEDGER_MAX_WAIT_MS, Number(data?.waitMs) || 0));
+      const since = data?.since && typeof data.since === "object" ? data.since : null;
+      const current = compute(prompt);
+      if (!waitMs || !since || differs(current, since) || !observer) return Promise.resolve(current);
+      return new Promise((resolve) => {
+        const waiter = { resolve, prompt, since, timer: null };
+        waiter.timer = setTimer(waitMs, () => {
+          waiter.timer = null;
+          finish(waiter, null);
+        });
+        waiters.add(waiter);
+      });
+    }
+    function dispose() {
+      disposed = true;
+      for (const waiter of [...waiters]) finish(waiter, null);
+      disconnect();
+    }
+    return Object.freeze({
+      whenChanged,
+      dispose,
+      get observing() {
+        return Boolean(observer);
+      }
     });
   }
 
@@ -1258,8 +1655,8 @@ ${raw.slice(-36e3)}`;
         const extra = number(node.scrollHeight) - number(node.clientHeight);
         if (extra < 48) continue;
         const rect = node.getBoundingClientRect?.() || { width: 0, height: 0 };
-        const visible2 = Math.max(0, number(rect.width)) * Math.max(0, number(rect.height));
-        const score = extra * Math.min(visible2, viewportWidth * viewportHeight);
+        const visible = Math.max(0, number(rect.width)) * Math.max(0, number(rect.height));
+        const score = extra * Math.min(visible, viewportWidth * viewportHeight);
         if (score > bestScore) {
           bestScore = score;
           best = node;
@@ -1652,8 +2049,8 @@ ${raw.slice(-36e3)}`;
         activated: false
       };
     }
-    function bundleClaim(identity, generation = "") {
-      const source = identity?.bundle && typeof identity.bundle === "object" ? identity.bundle : identity;
+    function bundleClaim(identity2, generation = "") {
+      const source = identity2?.bundle && typeof identity2.bundle === "object" ? identity2.bundle : identity2;
       const claim = Object.freeze({
         outputPath: String(source?.outputPath || ""),
         entryPath: String(source?.entryPath || ""),
@@ -1662,7 +2059,7 @@ ${raw.slice(-36e3)}`;
         implementationVersion: String(source?.implementationVersion || "")
       });
       if (!claim.outputPath || !claim.entryPath || !/^[a-f0-9]{64}$/i.test(claim.sourceSha256) || !/^[a-f0-9]{64}$/i.test(claim.implementationSha256) || !claim.implementationVersion) throw new TypeError("Content runtime bundle identity is incomplete");
-      const declaredGeneration = String(identity?.implementationVersion || "");
+      const declaredGeneration = String(identity2?.implementationVersion || "");
       if (generation && declaredGeneration && declaredGeneration !== generation) {
         throw new Error(`Content runtime bundle ${claim.outputPath} belongs to generation ${declaredGeneration}, expected ${generation}`);
       }
@@ -1702,9 +2099,9 @@ ${raw.slice(-36e3)}`;
         get isActive() {
           return record.state === "active";
         },
-        registerBundle(identity) {
+        registerBundle(identity2) {
           assertUsable(record);
-          const claim = bundleClaim(identity, record.version);
+          const claim = bundleClaim(identity2, record.version);
           const previous = record.bundles.get(claim.outputPath);
           if (previous) {
             if (JSON.stringify(previous) !== JSON.stringify(claim)) {
@@ -1815,7 +2212,7 @@ ${raw.slice(-36e3)}`;
         const next = generations.get(generation);
         if (!next) throw new Error(`Content runtime generation ${generation} was not begun`);
         assertUsable(next);
-        const expected = Array.isArray(expectedBundles) ? expectedBundles.map((identity) => bundleClaim(identity)) : [];
+        const expected = Array.isArray(expectedBundles) ? expectedBundles.map((identity2) => bundleClaim(identity2)) : [];
         for (const claim of expected) {
           const registered = next.bundles.get(claim.outputPath);
           if (!registered || JSON.stringify(registered) !== JSON.stringify(claim)) {
@@ -2213,6 +2610,16 @@ ${raw.slice(-36e3)}`;
     const SUMMARY_POST_MESSAGE_SOURCE2 = PROTOCOL.SUMMARY_POST_MESSAGE_SOURCE;
     const { contentDocumentId, secureFrameToken, currentBrowserDocumentAttestationId, currentFrameBindingId } = createContentDocumentIdentity(window);
     const captureRuntime = createCaptureRuntime(window);
+    const previousConversationLedgerCleanup = window.__CHATCLUB_CONVERSATION_LEDGER_CLEANUP__;
+    const conversationLedger = createConversationLedger({
+      documentId: contentDocumentId,
+      listTurns: collectConversationTurns,
+      turnRole: conversationTurnRole,
+      isGenerating: conversationTurnsAreGenerating,
+      matches,
+      pageTextSample: () => conversationLineSample().join(" "),
+      inputIdleMs: () => userInputIdleMs()
+    });
     let contentLocationRevision = Math.max(0, Number(window.__CHATCLUB_CONTENT_LOCATION_REVISION__) || 0);
     const submissionNavigation = createSubmissionNavigationTracker(window);
     const markSubmissionNavigation = submissionNavigation.mark;
@@ -2349,6 +2756,11 @@ ${raw.slice(-36e3)}`;
       } catch {
       }
       try {
+        previousConversationLedgerCleanup?.();
+      } catch {
+      }
+      installUserActivityTracking();
+      try {
         document.documentElement?.removeAttribute(GEMINI_MODEL_PICKER_RUN_TOKEN_ATTRIBUTE);
       } catch {
       }
@@ -2360,6 +2772,7 @@ ${raw.slice(-36e3)}`;
       window.__CHATCLUB_CONTENT_BRIDGE_INSTALLED__ = true;
       if (locationReportCleanup) window.__CHATCLUB_LOCATION_REPORT_CLEANUP__ = locationReportCleanup;
       if (shortcutBridgeCleanup) window.__CHATCLUB_SHORTCUT_BRIDGE_CLEANUP__ = shortcutBridgeCleanup;
+      window.__CHATCLUB_CONVERSATION_LEDGER_CLEANUP__ = () => conversationLedger.dispose();
       contentGenerationActivated = true;
     }
     let lastReportedHref = String(location.href || "");
@@ -2492,7 +2905,7 @@ ${raw.slice(-36e3)}`;
           grokCookieRuntime: grokCookieRuntimeAttestation()
         }),
         getPageText: () => normalize(document.body?.innerText || ""),
-        getConversationFingerprint: (data) => conversationFingerprintWhenChanged(contentDocumentId, data),
+        getConversationFingerprint: (data) => conversationLedger.whenChanged(data),
         captureStart: () => captureRuntime.captureStart(),
         triggerScroll: () => captureRuntime.triggerScroll(),
         captureEnd: () => captureRuntime.captureEnd()

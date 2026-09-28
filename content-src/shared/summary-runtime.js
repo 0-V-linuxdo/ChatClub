@@ -131,38 +131,6 @@ function pageMeta() {
   };
 }
 
-function fingerprintHash(value) {
-  const text = String(value || "");
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function conversationHref() {
-  try {
-    const url = new URL(location.href);
-    const path = `${url.origin}${url.pathname}`;
-    const host = url.hostname.toLowerCase();
-    if (
-      (host === "app.notion.com" || host === "notion.so" || host.endsWith(".notion.so"))
-      && /^\/chat\/?$/i.test(url.pathname)
-      && url.searchParams.get("t")
-    ) {
-      return url.href;
-    }
-    const hash = String(url.hash || "").replace(/^#/, "");
-    if (hash && !/[=&]/.test(hash) && hash.length >= 8 && hash.length <= 120) {
-      return `${path}#${hash}`;
-    }
-    return path;
-  } catch {
-    return String(location.href || "").replace(/[?#].*$/, "");
-  }
-}
-
 function conversationTurnRole(el) {
   const attr = String(el?.getAttribute?.("data-message-author-role") || "").toLowerCase();
   if (attr === "user" || attr === "assistant") return attr;
@@ -178,27 +146,50 @@ function conversationTurnRole(el) {
   return userscriptRole(el) || "";
 }
 
-function conversationTurnNodes() {
-  const selectors = [
-    "[data-message-author-role]",
-    "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
-    "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
-    "user-query, model-response, .user-query, .model-response",
-    ".ds-message",
-    ".chat_bubble[role='article']",
-    "[data-testid='message']",
-    "article[data-testid*='conversation']"
-  ];
-  const nodes = [];
-  for (const selector of selectors) {
-    for (const node of qsa(selector).filter(visible)) {
-      if (internalTool(node)) continue;
-      if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
-      nodes.push(node);
-    }
-    if (nodes.length >= 2) break;
+const CONVERSATION_TURN_SELECTORS = Object.freeze([
+  "[data-message-author-role]",
+  "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+  "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+  "user-query, model-response, .user-query, .model-response",
+  ".ds-message",
+  ".chat_bubble[role='article']",
+  "[data-testid='message']",
+  "article[data-testid*='conversation']"
+]);
+
+function conversationTurnGroup(selector, nodes) {
+  for (const node of qsa(selector).filter(controlLayoutVisible)) {
+    if (internalTool(node)) continue;
+    if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
+    nodes.push(node);
   }
-  return nodes.sort(elementOrder);
+  return nodes;
+}
+
+// Turn roots in document order. Layout visibility only: a turn whose opacity
+// is animating (hover reveal, fade-in) is still a turn. `preferredGroup`
+// keeps a document on the selector group that first yielded a conversation,
+// so a group that briefly drops to one node cannot flap the turn list; the
+// returned `group` is that index, or -1 when groups were mixed.
+function collectConversationTurns(preferredGroup = -1) {
+  const preferred = CONVERSATION_TURN_SELECTORS[preferredGroup];
+  if (preferred) {
+    const nodes = conversationTurnGroup(preferred, []);
+    if (nodes.length) return { nodes: nodes.sort(elementOrder), group: preferredGroup };
+  }
+  const nodes = [];
+  for (let index = 0; index < CONVERSATION_TURN_SELECTORS.length; index += 1) {
+    const before = nodes.length;
+    conversationTurnGroup(CONVERSATION_TURN_SELECTORS[index], nodes);
+    if (nodes.length >= 2) {
+      return { nodes: nodes.sort(elementOrder), group: before === 0 ? index : -1 };
+    }
+  }
+  return { nodes: nodes.sort(elementOrder), group: -1 };
+}
+
+function conversationTurnNodes() {
+  return collectConversationTurns().nodes;
 }
 
 function lastAssistantTurnNodeFrom(turns) {
@@ -338,6 +329,13 @@ function conversationIsGenerating() {
   return lastAssistantTurnIsStreaming(lastAssistantTurnNode());
 }
 
+// The ledger already holds the turn list; reuse it for the streaming check.
+function conversationTurnsAreGenerating(turns = []) {
+  if (conversationComposerIsGenerating()) return true;
+  if (conversationToolActivityIsActive()) return true;
+  return lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(Array.isArray(turns) ? turns : []));
+}
+
 function nodeBelongsToTurn(node, turn) {
   if (!node || !turn) return false;
   return node === turn || Boolean(turn.contains?.(node) || node.contains?.(turn));
@@ -350,105 +348,6 @@ function shouldRefuseLiveAssistantCopy(node) {
   if (nodeBelongsToTurn(node, last)) return true;
   const article = closest(node, "article,[data-testid^='conversation-turn'],[data-testid*='conversation-turn']");
   return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
-}
-
-const TURN_FINGERPRINT_SKIP_SELECTOR = [
-  "button",
-  "[role='button']",
-  "[role='toolbar']",
-  "[role='menu']",
-  "[role='menuitem']",
-  "[aria-label*='copy' i]",
-  "[title*='copy' i]",
-  "[data-testid*='copy' i]",
-  ".code-buttons"
-].join(",");
-
-function turnTextSkippingControls(turn) {
-  // Walk the live subtree and reject control subtrees instead of cloning the
-  // whole turn and pruning the copy; the walk allocates no DOM at all.
-  const doc = turn.ownerDocument || document;
-  if (typeof doc?.createTreeWalker !== "function" || typeof NodeFilter === "undefined") return null;
-  const walker = doc.createTreeWalker(turn, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-    acceptNode(node) {
-      if (node.nodeType === 3) return NodeFilter.FILTER_ACCEPT;
-      if (node !== turn && matches(node, TURN_FINGERPRINT_SKIP_SELECTOR)) return NodeFilter.FILTER_REJECT;
-      return NodeFilter.FILTER_SKIP;
-    }
-  });
-  const parts = [];
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) parts.push(node.nodeValue || "");
-  return parts.join("");
-}
-
-function conversationTurnFingerprintText(turn) {
-  if (!turn) return "";
-  let value = null;
-  try {
-    value = turnTextSkippingControls(turn);
-  } catch {
-    value = null;
-  }
-  if (value === null) {
-    try {
-      const clone = turn.cloneNode(true);
-      for (const node of clone.querySelectorAll(TURN_FINGERPRINT_SKIP_SELECTOR)) node.remove();
-      value = clone.textContent || "";
-    } catch {
-      value = turn.textContent || turn.innerText || "";
-    }
-  }
-  const raw = normalize(value).replace(/\s+/g, " ");
-  try {
-    return raw.normalize("NFKC").replace(/\s+/g, " ").trim();
-  } catch {
-    return raw.trim();
-  }
-}
-
-function conversationFingerprint(documentId = "", data = {}) {
-  const turns = conversationTurnNodes();
-  const prompt = normalize(data?.prompt || "").replace(/\s+/g, " ");
-  let userChars = 0;
-  let assistantChars = 0;
-  let lastText = "";
-  let classified = 0;
-  const haystackParts = [];
-  for (const turn of turns) {
-    const role = conversationTurnRole(turn);
-    const value = conversationTurnFingerprintText(turn);
-    if (!value) continue;
-    haystackParts.push(value);
-    if (role === "user") {
-      userChars += value.length;
-      classified += 1;
-      lastText = value;
-    } else if (role === "assistant") {
-      assistantChars += value.length;
-      classified += 1;
-      lastText = value;
-    }
-  }
-  const haystack = haystackParts.join(" ");
-  // The full line sample reads the whole conversation root; only pay for it
-  // when no turn selector matched and a prompt still has to be located.
-  let containsPrompt = Boolean(prompt && haystack && haystack.includes(prompt));
-  if (prompt && !haystack) {
-    const lines = conversationLineSample();
-    containsPrompt = [...lines.slice(0, 48), ...lines.slice(-80)].join(" ").includes(prompt);
-  }
-  return {
-    href: conversationHref(),
-    documentId: String(documentId || ""),
-    turnCount: classified,
-    userChars,
-    assistantChars,
-    tailHash: lastText ? fingerprintHash(lastText.slice(-500)) : "",
-    containsPrompt,
-    generating: conversationComposerIsGenerating()
-      || conversationToolActivityFromLines(conversationLineSample({ tailOnly: true }))
-      || lastAssistantTurnIsStreaming(lastAssistantTurnNodeFrom(turns))
-  };
 }
 
 function copyLooksUseful(value) {
@@ -1279,8 +1178,10 @@ export {
   reveal,
   merge,
   pageMeta,
-  conversationFingerprint,
-  conversationSampleRoot,
+  collectConversationTurns,
+  conversationTurnRole,
+  conversationTurnsAreGenerating,
+  conversationLineSample,
   conversationIsGenerating,
   hasUserAndAssistant,
   classText,

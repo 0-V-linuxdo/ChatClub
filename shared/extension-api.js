@@ -144,6 +144,16 @@ export function storageLocalRemove(key) {
   return callPromise(["storage", "local", "remove"], [key]);
 }
 
+// Session storage survives page reloads and reopened tabs but not a browser
+// restart; callers must tolerate a rejection where the area is unavailable.
+export function storageSessionGet(key) {
+  return callPromise(["storage", "session", "get"], [key]);
+}
+
+export function storageSessionSet(value) {
+  return callPromise(["storage", "session", "set"], [value]);
+}
+
 export function permissionsContains(permissions) {
   return callPromise(["permissions", "contains"], [permissions]);
 }

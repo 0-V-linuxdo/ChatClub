@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "568c45bf324a96fd5e9ced3dac40549d9066fd43e17914202ea79813bd831eac", "implementationSha256": "7f3c4428e3517eefd5eac849dc4ddc1170b9f39fe5d6b16f33444d92781ff20f", "implementationVersion": "2026.07.16.2+bundle.7f3c4428e3517eefd5eac849dc4ddc1170b9f39fe5d6b16f33444d92781ff20f" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_PREFERRED_MODEL_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/preferred-model.js", "entryPath": "content-src/content-preferred-model.js", "sourceSha256": "ed622a28d6b039035cf1f12aba75ec980ae13f3c1ba7cc7ba23cc293104ceefe", "implementationSha256": "0daa33e17ec47b338324fcbfc5888925e9be53b94e5d46ebdc14e53d1e0d2ee2", "implementationVersion": "2026.07.16.2+bundle.0daa33e17ec47b338324fcbfc5888925e9be53b94e5d46ebdc14e53d1e0d2ee2" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -174,17 +174,16 @@
     } catch {
     }
   }
-  var TURN_FINGERPRINT_SKIP_SELECTOR = [
-    "button",
-    "[role='button']",
-    "[role='toolbar']",
-    "[role='menu']",
-    "[role='menuitem']",
-    "[aria-label*='copy' i]",
-    "[title*='copy' i]",
-    "[data-testid*='copy' i]",
-    ".code-buttons"
-  ].join(",");
+  var CONVERSATION_TURN_SELECTORS = Object.freeze([
+    "[data-message-author-role]",
+    "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+    "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+    "user-query, model-response, .user-query, .model-response",
+    ".ds-message",
+    ".chat_bubble[role='article']",
+    "[data-testid='message']",
+    "article[data-testid*='conversation']"
+  ]);
   function matches(el, selector) {
     try {
       return Boolean(el?.matches?.(selector));

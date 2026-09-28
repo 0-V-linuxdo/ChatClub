@@ -68,12 +68,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "54728fba3d79176272c6425e55c75d63fff8f717f0f513a9d4a683dfc9ecf023", "implementationSha256": "729eb76da28c30ffe480dfac99674c5a48010d4d353841db2e872761d356c7cc", "implementationVersion": "2026.07.16.2+bundle.729eb76da28c30ffe480dfac99674c5a48010d4d353841db2e872761d356c7cc" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_SEND_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/send.js", "entryPath": "content-src/content-send.js", "sourceSha256": "2e8eab9758ede241da8aba2f1879fdc3a2164a769aacd74259db29ebc4fec9a1", "implementationSha256": "3d64a4d99f5b57c86ad28445e4adc96e3257e694ab32d64131868fbb7985e24e", "implementationVersion": "2026.07.16.2+bundle.3d64a4d99f5b57c86ad28445e4adc96e3257e694ab32d64131868fbb7985e24e" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -138,17 +138,16 @@
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.value || "";
     return el.innerText || el.textContent || "";
   }
-  var TURN_FINGERPRINT_SKIP_SELECTOR = [
-    "button",
-    "[role='button']",
-    "[role='toolbar']",
-    "[role='menu']",
-    "[role='menuitem']",
-    "[aria-label*='copy' i]",
-    "[title*='copy' i]",
-    "[data-testid*='copy' i]",
-    ".code-buttons"
-  ].join(",");
+  var CONVERSATION_TURN_SELECTORS = Object.freeze([
+    "[data-message-author-role]",
+    "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+    "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+    "user-query, model-response, .user-query, .model-response",
+    ".ds-message",
+    ".chat_bubble[role='article']",
+    "[data-testid='message']",
+    "article[data-testid*='conversation']"
+  ]);
   function buttonText(el) {
     if (!el) return "";
     const labelledBy = String(el.getAttribute?.("aria-labelledby") || "").split(/\s+/).map((id) => id && document.getElementById(id)).filter(Boolean).map((node) => node.innerText || node.textContent || "").join(" ");

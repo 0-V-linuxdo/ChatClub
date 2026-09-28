@@ -53,7 +53,7 @@ import {
   loadRecordFullTextEnabled,
   loadWorkspaceTabFullTextRecord,
   loadWorkspaceTabFullTextStore,
-  persistWorkspaceTabFullTextFromPreview,
+  persistWorkspaceTabFullTextFromPreview, persistWorkspaceTabFullTextMarks,
   workspaceSearchCopy
 } from "./workspace/tab-search.js";
 import { createWorkspaceTopicTitleController } from "./workspace/topic-title-controller.js";
@@ -180,9 +180,7 @@ const composerController = createComposerController({
   recordFunctionalAnomaly,
   onPromptAdmitted: (text) => {
     workspaceTopicTitleController?.maybeGenerateFromPrompt(text);
-    if (state.options?.recordFullText === true) {
-      ensureSummaryController().then((summary) => summary?.scheduleIdleFullTextCapture?.(text)).catch(() => {});
-    }
+    if (state.options?.recordFullText === true) ensureSummaryController().then((summary) => summary?.hintFullTextSend?.(text)).catch(() => {});
   },
   persistComposerPlacement: (placement) => saveOptionsPatch({ composerPlacement: placement }),
   workspaceSearch: {
@@ -678,7 +676,7 @@ function ensureSummaryController() {
           }
           return result;
         },
-        loadWorkspaceTabFullText: loadWorkspaceTabFullTextRecord,
+        loadWorkspaceTabFullText: loadWorkspaceTabFullTextRecord, persistWorkspaceTabFullTextMarks,
         pocketPort: {
           save: (...args) => ensurePocketController().then((pocket) => pocket.saveSummaryPreviewToPocket(...args)),
           entries: (...args) => pocketController?.pocketEntriesFromSummaryPreview(...args) || []
@@ -807,6 +805,8 @@ function syncMessageNavigatorForActivation(activationRevision) {
   return messageNavigatorActivationSyncTail;
 }
 
+function startFullTextCapture() { if (state.options?.recordFullText === true) ensureSummaryController().then((summary) => summary?.startFullTextCapture?.()).catch(() => {}); } // idempotent; stops itself once the option is off
+
 function applyConfigSnapshot(snapshot = {}) {
   if (!snapshot || typeof snapshot !== "object") return;
   const wasLoaded = state.configSnapshotLoaded === true;
@@ -825,6 +825,7 @@ function applyConfigSnapshot(snapshot = {}) {
   if (wasLoaded && previousActivationRevision !== state.officialRulesActivationRevision) {
     void syncMessageNavigatorForActivation(state.officialRulesActivationRevision);
   }
+  if (wasLoaded) startFullTextCapture(); // Settings writes the option optimistically: never compare with the old value
 }
 
 async function saveOptionsState(nextOptions = {}) {
@@ -1535,9 +1536,7 @@ async function init() {
   }
   applyPreferredModelsToFrames(null, { immediate: false });
   finishPreferredModelBootstrapping();
-  if (state.options?.recordFullText === true) {
-    ensureSummaryController().then((summary) => summary?.scheduleExistingIdleFullTextCapture?.()).catch(() => {});
-  }
+  startFullTextCapture();
 }
 
 init().catch((error) => {

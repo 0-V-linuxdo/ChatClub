@@ -68,13 +68,13 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "bc4d62efe4517a69e2cae10759c2995116509d14c282e8f54a3226f8d17d2255";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "61affb44a2fa726484d84982aebead923965381e0f8cb0d0d6712b7895300989";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.23f449c5e744c3a26e7f666319822eb663cb0574d538f584c1c3a79c4702acde";
-  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "909c49d019310a4ce965e6472a9bbee161bb73c9e07ae042ddce328c45f97885", "implementationSha256": "4f3b66a0a142c21f2b2e64b5ce356faf97ffcaa3d058d8f6e103ad30aa10b58d", "implementationVersion": "2026.07.16.2+bundle.4f3b66a0a142c21f2b2e64b5ce356faf97ffcaa3d058d8f6e103ad30aa10b58d" });
-  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "7395a4a5b8ac71366f802862bf00119acffeebcf5348e1139b085effa8d6fb40", "implementationSha256": "01f1727364aa5b473a14f00ed73cb81463b03e769ea0e43c345b8d3fa2bc66e3", "implementationVersion": "2026.07.16.2+bundle.01f1727364aa5b473a14f00ed73cb81463b03e769ea0e43c345b8d3fa2bc66e3" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.a31c5bbc02c6fb54845759ca6ed7ab5d00abc04f5a3d2abe4740652b971deb8e";
+  var CONTENT_RUNTIME_SUMMARY_BRIDGE_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-bridge.js", "entryPath": "content-src/content-summary-bridge.js", "sourceSha256": "fad85abf21ed6fd62aff2f28f985277035d3d5a6539fa0a69a0cabf129e20886", "implementationSha256": "4ff027b50496b05b7ccb3f7061ef3bd04d958473d7b70a8c9469f60531436a96", "implementationVersion": "2026.07.16.2+bundle.4ff027b50496b05b7ccb3f7061ef3bd04d958473d7b70a8c9469f60531436a96" });
+  var CONTENT_RUNTIME_SUMMARY_MAIN_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts-main.js", "entryPath": "content-src/summary-userscripts-main.js", "sourceSha256": "754c8788179daa57a717c9c9ae30a636d8a9b3b6ea5aedcbc3cb169837f1df84", "implementationSha256": "aef35a387843ba557819397ef9a23154938c526b7f99776c78b17d72a429d016", "implementationVersion": "2026.07.16.2+bundle.aef35a387843ba557819397ef9a23154938c526b7f99776c78b17d72a429d016" });
   var CONTENT_RUNTIME_SUMMARY_ISOLATED_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/summary-userscripts.js", "entryPath": "content-src/summary-userscripts.js", "sourceSha256": "ff2ac89dfde2b3f166263b3cabe8c0431cdab734fbecd1a415e4b206a3979999", "implementationSha256": "631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04", "implementationVersion": "2026.07.16.2+bundle.631a85054a94c9e68d7be4c467845f71d783082758611771fa0b3d7e125abe04" });
 
   // shared/background-request-core.js
@@ -663,27 +663,42 @@ ${value}`);
     if (/font-claude-response|model-response|ds-assistant/.test(cls)) return "assistant";
     return userscriptRole(el) || "";
   }
-  function conversationTurnNodes() {
-    const selectors = [
-      "[data-message-author-role]",
-      "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
-      "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
-      "user-query, model-response, .user-query, .model-response",
-      ".ds-message",
-      ".chat_bubble[role='article']",
-      "[data-testid='message']",
-      "article[data-testid*='conversation']"
-    ];
-    const nodes = [];
-    for (const selector of selectors) {
-      for (const node of qsa(selector).filter(visible)) {
-        if (internalTool(node)) continue;
-        if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
-        nodes.push(node);
-      }
-      if (nodes.length >= 2) break;
+  var CONVERSATION_TURN_SELECTORS = Object.freeze([
+    "[data-message-author-role]",
+    "[data-testid='user-message'], [data-testid='assistant-message'], .font-claude-response",
+    "[data-testid='conversation-turn'], article[data-testid*='conversation-turn']",
+    "user-query, model-response, .user-query, .model-response",
+    ".ds-message",
+    ".chat_bubble[role='article']",
+    "[data-testid='message']",
+    "article[data-testid*='conversation']"
+  ]);
+  function conversationTurnGroup(selector, nodes) {
+    for (const node of qsa(selector).filter(controlLayoutVisible)) {
+      if (internalTool(node)) continue;
+      if (nodes.some((existing) => existing === node || existing.contains?.(node) || node.contains?.(existing))) continue;
+      nodes.push(node);
     }
-    return nodes.sort(elementOrder);
+    return nodes;
+  }
+  function collectConversationTurns(preferredGroup = -1) {
+    const preferred = CONVERSATION_TURN_SELECTORS[preferredGroup];
+    if (preferred) {
+      const nodes2 = conversationTurnGroup(preferred, []);
+      if (nodes2.length) return { nodes: nodes2.sort(elementOrder), group: preferredGroup };
+    }
+    const nodes = [];
+    for (let index = 0; index < CONVERSATION_TURN_SELECTORS.length; index += 1) {
+      const before = nodes.length;
+      conversationTurnGroup(CONVERSATION_TURN_SELECTORS[index], nodes);
+      if (nodes.length >= 2) {
+        return { nodes: nodes.sort(elementOrder), group: before === 0 ? index : -1 };
+      }
+    }
+    return { nodes: nodes.sort(elementOrder), group: -1 };
+  }
+  function conversationTurnNodes() {
+    return collectConversationTurns().nodes;
   }
   function lastAssistantTurnNodeFrom(turns) {
     for (let index = turns.length - 1; index >= 0; index -= 1) {
@@ -818,17 +833,6 @@ ${raw.slice(-36e3)}`;
     const article = closest(node, "article,[data-testid^='conversation-turn'],[data-testid*='conversation-turn']");
     return Boolean(article && (article === last || article.contains?.(last) || last.contains?.(article)));
   }
-  var TURN_FINGERPRINT_SKIP_SELECTOR = [
-    "button",
-    "[role='button']",
-    "[role='toolbar']",
-    "[role='menu']",
-    "[role='menuitem']",
-    "[aria-label*='copy' i]",
-    "[title*='copy' i]",
-    "[data-testid*='copy' i]",
-    ".code-buttons"
-  ].join(",");
   function copyLooksUseful(value) {
     const next = cleanCaptured(value);
     return Boolean(next && next.length >= 2 && next.length <= 5e4 && !/^(copy|copied|复制|已复制|share|link)$/i.test(next) && !/^(https?:\/\/|mailto:|#)[^\s]{1,240}$/i.test(next));

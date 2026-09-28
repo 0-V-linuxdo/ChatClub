@@ -139,10 +139,6 @@
     "kind": "test-only",
     "reason": "In-memory full-text store regressions still merge a desk after the page persist path moved onto the per-record storage plan."
   },
-  "app/summary/idle-capture.js#conversationFingerprintSignature": {
-    "kind": "test-only",
-    "reason": "Idle full-text capture regressions assert the content-only fingerprint signature ignores clocks, href, generating, and other extra fields so existing scans can skip Copy when the conversation is unchanged."
-  },
   "ui/dom.js#modal": {
     "kind": "test-only",
     "reason": "The backward-compatible modal primitive remains directly exercised by the overlay dismissal policy regression."
@@ -150,5 +146,21 @@
   "ui/dom.js#confirmationModal": {
     "kind": "test-only",
     "reason": "App confirmations now go through openConfirmationAction; confirmationModal stays exported as the typed family primitive and is still opened by that helper plus overlay-inventory regressions."
+  },
+  "content-src/shared/conversation-ledger.js#CONVERSATION_LEDGER_TIMINGS": {
+    "kind": "test-only",
+    "reason": "Conversation ledger regressions drive the quiet, max-dirty and idle-disconnect windows on a fake clock so a streaming or never-quiet page still answers the long poll and an unused observer is released."
+  },
+  "content-src/shared/conversation-ledger.js#ledgerTurnText": {
+    "kind": "test-only",
+    "reason": "Conversation ledger regressions assert that controls, timestamps, screen-reader labels, reasoning chips and editable drafts never change a turn's hash, which is what keeps Record Full Text from Copying an unchanged conversation."
+  },
+  "shared/workspace-tab-fulltext.js#workspaceTabFullTextFrameIdentityKey": {
+    "kind": "test-only",
+    "reason": "Full-text merge regressions pin frame identity (stable conversation href first, instance id as fallback) now that the idle reconciler keys conversations through shared/fulltext-ledger.js instead."
+  },
+  "app/summary/fulltext-decision.js#captureTurnCount": {
+    "kind": "test-only",
+    "reason": "Full-text ledger regressions pin that an idle Copy slice starts on the user turn that opened the first new exchange."
   }
 }

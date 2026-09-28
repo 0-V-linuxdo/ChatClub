@@ -1,4 +1,12 @@
 import { normalizeWorkspaceSessionId } from "./workspace-session.js";
+import {
+  conversationKeyFromHref,
+  fullTextCaptureMarksEqual,
+  fullTextTextsOverlap,
+  normalizeFullTextCaptureMark
+} from "./fulltext-ledger.js";
+
+export { fullTextTextsOverlap };
 
 export const WORKSPACE_TAB_FULLTEXT_MAX_WORKSPACES = 80;
 const WORKSPACE_TAB_FULLTEXT_MAX_FRAMES = 12;
@@ -7,31 +15,6 @@ const WORKSPACE_TAB_FULLTEXT_MAX_MESSAGE_CHARS = 20000;
 
 function textValue(value) {
   return String(value || "").trim();
-}
-
-const FULLTEXT_OVERLAP_MIN_CHARS = 8;
-
-function normalizeFullTextMatchText(value) {
-  const text = String(value || "").replace(/\r\n?/g, "\n").trim();
-  if (!text) return "";
-  try {
-    return text.normalize("NFKC").replace(/\s+/g, " ").trim();
-  } catch {
-    return text.replace(/\s+/g, " ").trim();
-  }
-}
-
-export function fullTextTextsOverlap(left, right) {
-  const a = normalizeFullTextMatchText(left);
-  const b = normalizeFullTextMatchText(right);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const compactA = a.replace(/\s+/g, "");
-  const compactB = b.replace(/\s+/g, "");
-  if (compactA === compactB) return true;
-  const includes = (short, long) => short.length >= FULLTEXT_OVERLAP_MIN_CHARS && long.includes(short);
-  if (a.length <= b.length ? includes(a, b) : includes(b, a)) return true;
-  return compactA.length <= compactB.length ? includes(compactA, compactB) : includes(compactB, compactA);
 }
 
 function foldFullTextSearchText(value) {
@@ -165,107 +148,6 @@ export function workspaceTabFullTextFrameIdentityKey(frame = {}) {
   return frameIdentityKey(frame);
 }
 
-function fullTextFingerprintHash(value) {
-  const text = String(value || "");
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
-export function fullTextContentSignature(metrics = {}) {
-  return [
-    String(metrics.turnCount ?? ""),
-    String(metrics.userChars ?? ""),
-    String(metrics.assistantChars ?? ""),
-    String(metrics.tailHash || "")
-  ].join("\n");
-}
-
-export function fullTextContentMetricsFromMessages(messages = []) {
-  const turns = (Array.isArray(messages) ? messages : [])
-    .map((message) => normalizeFullTextMessage(message))
-    .filter(Boolean);
-  let userChars = 0;
-  let assistantChars = 0;
-  let lastText = "";
-  for (const turn of turns) {
-    const value = normalizeFullTextMatchText(turn.text);
-    if (!value) continue;
-    if (turn.role === "user") userChars += value.length;
-    else if (turn.role === "assistant") assistantChars += value.length;
-    lastText = value;
-  }
-  return {
-    turnCount: turns.length,
-    userChars,
-    assistantChars,
-    tailHash: lastText ? fullTextFingerprintHash(lastText.slice(-500)) : ""
-  };
-}
-
-export function fullTextConversationHrefIsStable(value) {
-  return Boolean(stableConversationHref(value));
-}
-
-export function fullTextContentMetricsFromFingerprint(fingerprint = {}) {
-  return {
-    turnCount: Number(fingerprint?.turnCount) || 0,
-    userChars: Number(fingerprint?.userChars) || 0,
-    assistantChars: Number(fingerprint?.assistantChars) || 0,
-    tailHash: String(fingerprint?.tailHash || ""),
-    href: String(fingerprint?.href || ""),
-    lastUserMessage: String(fingerprint?.lastUserMessage || ""),
-    lastAssistantMessage: String(fingerprint?.lastAssistantMessage || "")
-  };
-}
-
-function lastPairOverlaps(live, stored) {
-  const liveUser = String(live?.lastUserMessage || "");
-  const storedUser = String(stored?.lastUserMessage || "");
-  if (!liveUser || !storedUser || !fullTextTextsOverlap(liveUser, storedUser)) return false;
-  const liveAsst = String(live?.lastAssistantMessage || "");
-  const storedAsst = String(stored?.lastAssistantMessage || "");
-  if (!liveAsst || !storedAsst) return true;
-  return fullTextTextsOverlap(liveAsst, storedAsst);
-}
-
-export function fullTextExistingNeedsCollect(live, stored) {
-  if (!stored?.hasPair) return true;
-  const liveTurns = Number(live?.turnCount) || 0;
-  if (liveTurns <= 0) return false;
-  if (!fullTextConversationHrefIsStable(live?.href)) return false;
-  if (lastPairOverlaps(live, stored)) return false;
-  if (stored.representation !== "live") return false;
-  const storedUser = String(stored.lastUserMessage || "");
-  const liveUser = String(live?.lastUserMessage || "");
-  if (storedUser && liveUser && !fullTextTextsOverlap(liveUser, storedUser)) return true;
-  const storedAsst = String(stored.lastAssistantMessage || "");
-  const liveAsst = String(live?.lastAssistantMessage || "");
-  if (storedAsst && liveAsst && !fullTextTextsOverlap(liveAsst, storedAsst)) return true;
-  const storedTurns = Number(stored.turnCount) || 0;
-  if (liveTurns > storedTurns) return true;
-  const liveHash = String(live?.tailHash || "");
-  const storedHash = String(stored.tailHash || "");
-  if (liveHash && storedHash && liveHash !== storedHash) return true;
-  return false;
-}
-
-export function fullTextExistingIsCovered(live, stored) {
-  if (!stored?.hasPair) return false;
-  if (!fullTextConversationHrefIsStable(live?.href)) return false;
-  const liveTurns = Number(live?.turnCount) || 0;
-  if (liveTurns <= 0) return false;
-  return !fullTextExistingNeedsCollect(live, stored);
-}
-
-export function fullTextContentSignatureFromFingerprint(fingerprint) {
-  if (!fingerprint || typeof fingerprint !== "object") return "";
-  return fullTextContentSignature(fullTextContentMetricsFromFingerprint(fingerprint));
-}
-
 function pairsOverlap(left, right) {
   return fullTextTextsOverlap(left?.userMessage, right?.userMessage);
 }
@@ -326,11 +208,20 @@ export function mergeWorkspaceTabFullTextFrames(existing = [], incoming = []) {
     const key = frameIdentityKey(frame);
     const index = key ? indexByKey.get(key) : undefined;
     if (index != null) {
+      const previous = merged[index];
+      const messages = mergeFrameMessages(previous.messages, frame.messages);
+      // A mark describes the text it was Copied with. An incoming frame
+      // brings its own; otherwise the old mark survives only while the text
+      // it describes is unchanged, so a Summary persist cannot leave a stale
+      // baseline behind.
+      const capture = frame.capture || (messagesEqual(previous.messages, messages) ? previous.capture : null);
       merged[index] = {
         ...frame,
-        messages: mergeFrameMessages(merged[index].messages, frame.messages),
-        order: merged[index].order
+        messages,
+        order: previous.order,
+        ...(capture ? { capture } : {})
       };
+      if (!capture) delete merged[index].capture;
       continue;
     }
     if (key) indexByKey.set(key, merged.length);
@@ -345,26 +236,6 @@ export function fullTextMessagesHavePair(messages) {
   return pocketPairsFromMessages(messages).some((pair) => (
     textValue(pair.userMessage) && textValue(pair.assistantMessage)
   ));
-}
-
-export function fullTextMessagesMatchPrompt(messages, prompt) {
-  if (!normalizeFullTextMatchText(prompt)) return false;
-  const turns = [];
-  for (const raw of Array.isArray(messages) ? messages : []) {
-    const message = normalizeFullTextMessage(raw);
-    if (message) turns.push(message);
-  }
-  if (!turns.length) return false;
-  const last = turns[turns.length - 1];
-  if (last.role !== "assistant" || !textValue(last.text)) return false;
-  let lastUser = null;
-  for (let index = turns.length - 2; index >= 0; index -= 1) {
-    if (turns[index].role === "user") {
-      lastUser = turns[index];
-      break;
-    }
-  }
-  return Boolean(lastUser && fullTextTextsOverlap(lastUser.text, prompt));
 }
 
 export function framesFromSummaryPreviewItems(items = []) {
@@ -384,31 +255,82 @@ export function framesFromSummaryPreviewItems(items = []) {
       appName: textValue(item.siteName || item.name || page.siteName || page.name),
       logoUrl: textValue(page.logoUrl || item.logoUrl),
       messages,
-      order: Number.isInteger(item.order) ? item.order : order
+      order: Number.isInteger(item.order) ? item.order : order,
+      ...(item.captureMark ? { capture: item.captureMark } : {})
     }];
   }).slice(0, WORKSPACE_TAB_FULLTEXT_MAX_FRAMES);
 }
 
+function messagesEqual(left = [], right = []) {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index].role !== right[index].role) return false;
+    if (left[index].text !== right[index].text) return false;
+  }
+  return true;
+}
+
+function normalizedFrames(frames) {
+  return (Array.isArray(frames) ? frames : [])
+    .map((frame, order) => normalizeFrame(frame, order))
+    .filter(Boolean);
+}
+
+// Text equality only: capture marks are compared separately so a mark-only
+// change is written without counting as new content.
 export function workspaceTabFullTextFramesEqual(left = [], right = []) {
-  const a = (Array.isArray(left) ? left : [])
-    .map((frame, order) => normalizeFrame(frame, order))
-    .filter(Boolean);
-  const b = (Array.isArray(right) ? right : [])
-    .map((frame, order) => normalizeFrame(frame, order))
-    .filter(Boolean);
+  const a = normalizedFrames(left);
+  const b = normalizedFrames(right);
   if (a.length !== b.length) return false;
   for (let index = 0; index < a.length; index += 1) {
     if (frameIdentityKey(a[index]) !== frameIdentityKey(b[index])) return false;
     if (textValue(a[index].href) !== textValue(b[index].href)) return false;
-    const leftMessages = a[index].messages;
-    const rightMessages = b[index].messages;
-    if (leftMessages.length !== rightMessages.length) return false;
-    for (let messageIndex = 0; messageIndex < leftMessages.length; messageIndex += 1) {
-      if (leftMessages[messageIndex].role !== rightMessages[messageIndex].role) return false;
-      if (leftMessages[messageIndex].text !== rightMessages[messageIndex].text) return false;
-    }
+    if (!messagesEqual(a[index].messages, b[index].messages)) return false;
   }
   return true;
+}
+
+export function workspaceTabFullTextMarksEqual(left = [], right = []) {
+  const a = normalizedFrames(left);
+  const b = normalizedFrames(right);
+  if (a.length !== b.length) return false;
+  return a.every((frame, index) => fullTextCaptureMarksEqual(frame.capture, b[index].capture));
+}
+
+function frameConversationKey(frame = {}) {
+  return frame.capture?.conversationKey || conversationKeyFromHref(frame.href);
+}
+
+// Mark-only update from the idle reconciler: the frames keep their text and
+// order, only the matching conversation's capture mark changes.
+export function applyWorkspaceTabFullTextMarks(frames = [], marks = []) {
+  const byKey = new Map();
+  for (const raw of Array.isArray(marks) ? marks : []) {
+    const mark = normalizeFullTextCaptureMark(raw);
+    if (mark) byKey.set(mark.conversationKey, mark);
+  }
+  return normalizedFrames(frames).map((frame) => {
+    const mark = byKey.get(frameConversationKey(frame));
+    return mark ? { ...frame, capture: mark } : frame;
+  });
+}
+
+// The stored frame for one conversation, for the reconciler's decision.
+export function workspaceTabFullTextConversation(record, conversationKey) {
+  const key = String(conversationKey || "");
+  if (!key) return null;
+  let found = null;
+  for (const frame of normalizedFrames(record?.frames)) {
+    if (frameConversationKey(frame) !== key) continue;
+    if (!found || String(frame.capture?.capturedAt || "") > String(found.capture?.capturedAt || "")) found = frame;
+  }
+  if (!found) return null;
+  const users = found.messages.filter((message) => message.role === "user");
+  return {
+    mark: found.capture || null,
+    hasPair: fullTextMessagesHavePair(found.messages),
+    lastUserMessage: users.length ? users[users.length - 1].text : ""
+  };
 }
 
 function clipText(value, max = WORKSPACE_TAB_FULLTEXT_MAX_MESSAGE_CHARS) {
@@ -423,6 +345,7 @@ function normalizeFrame(frame = {}, order = 0) {
     .filter(Boolean)
     .slice(0, WORKSPACE_TAB_FULLTEXT_MAX_MESSAGES);
   if (!messages.length) return null;
+  const capture = normalizeFullTextCaptureMark(frame.capture);
   return {
     appId: textValue(frame.appId),
     instanceId: textValue(frame.instanceId),
@@ -431,7 +354,8 @@ function normalizeFrame(frame = {}, order = 0) {
     appName: textValue(frame.appName),
     logoUrl: textValue(frame.logoUrl),
     messages,
-    order: Number.isInteger(frame.order) ? frame.order : order
+    order: Number.isInteger(frame.order) ? frame.order : order,
+    ...(capture ? { capture } : {})
   };
 }
 
