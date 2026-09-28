@@ -197,7 +197,18 @@ Record Full Text Copies a frame's conversation only when that conversation chang
 - Mark-only writes keep the desk's `updatedAt` and report `unchanged`, so History and Tabs do not refresh for them. A text change persisted without a mark drops the old mark.
 - History, Tabs and quick save serve a frame from its record while the mark still matches the live ledger (`storedTextFor`), and store fresh Copies with the ledger they were taken on.
 
-Acceptance: `tools/fulltext-ledger-test.cjs`, `tools/conversation-ledger-test.cjs`, `tools/fulltext-reconciler-test.cjs`, `tools/summary-idle-tail-test.cjs`, `tools/workspace-tab-fulltext-test.cjs`.
+User-directed product rules, recorded 2026-09-28: keep Copy-based extraction for background capture (the user rejected DOM-only capture for fidelity); a conversation that changed in a tab must be recorded; a conversation that did not change must never be Copied. Do not trade the third rule for coverage by Copying restored conversations or re-scanning on visibility.
+
+Lessons from that rewrite:
+
+- Check that the content side really sends a field before a parent rule depends on it. The old parent logic compared `lastUserMessage` / `lastAssistantMessage` that the content fingerprint never returned; the tests injected them, so every test passed while production always took the fallback. Reconciler fixtures now derive their ledgers with the same `ledgerTurnEntry` / `ledgerDigest` the content side uses.
+- `Number(null)` is `0`. An optional numeric field (`inputIdleMs` null meant "never touched") read as "busy for 0 ms" and deferred every Copy to the 9-minute wall. Test `=== null` before any numeric comparison.
+- Every failure outcome must be counted and tied to what it failed on. The old existing-scan `unmatched` path neither counted an attempt nor remembered the content, so one broken collector Copied every idle window for 45 minutes and restarted on each `visibilitychange`.
+- A hash over rendered text is only as good as its noise list. Walk `childNodes` (no `innerText` layout), keep each element's own text nodes as one segment so a chip split across nodes drops as a whole, and skip live regions only while short, because some sites wrap the whole streaming reply in `aria-live`.
+- Evidence beats heuristics for "the last reply changed". A real regenerate shows a generating signal after the mark; a mid-stream mark on a site without that signal is caught by text growth; hover text has neither.
+- Idle tail slices start on the user message that opened the exchange, and never reveal turns outside the slice (Gemini revealed every turn before Copying).
+- Keep the decision and the reconciler behind the lazy Summary boundary. `shared/workspace-tab-fulltext.js` is in the bootstrap and both background graphs, so decision code placed in a shared module it imports cost about 20 KB in each of those footprints.
+- Diagnose in Arc from the ChatClub page's own DevTools, not the iframe's: reload the unpacked extension, reload the page, filter the console for `Record Full Text`, and reproduce. An unexpected Copy line names the rule that allowed it (`reason`, `alignment`, `turns`, `conversationKey`). "Settings open for 10+ minutes while switching tabs" is the regression scenario, because it is the first quiet window after a reload.
 
 ## Release Versioning
 
@@ -226,6 +237,10 @@ After all intended source and generated changes are present:
 7. Build both `npm run pack` and `npm run pack:firefox` for a release.
 
 The complete automated engine-baseline gate is the GitHub Actions workflow, not `npm run ci` by itself. It does not replace the manual Arc check when a branded-browser behavior is affected.
+
+The numeric version is also a cache-busting query, `?chatclub-runtime=<manifest version>`, in `chatClub.html`, `options.html`, `background/service-worker.js`, and `background/firefox-background.js`; update all four with the numeric version or `npm run check` fails version verification.
+
+If a payload file changes after `npm run version:snapshot` while that new version is still uncommitted, the snapshot refuses because it already recorded that version for the old payload. Restore the committed snapshot (`git checkout HEAD -- version-state.json`) and run `npm run version:snapshot` again; a release already committed under a version needs a new version instead.
 
 Do not refresh `version-state.json` to hide a missing version or site-config bump. Fix the version first, then regenerate the snapshot.
 Treat `version-state.json` as a generated release snapshot; update it only with `npm run version:snapshot` after the required version changes.
@@ -517,3 +532,13 @@ Before committing:
 Prefer the repository checks over ad hoc syntax commands; they validate module context, generated ownership, static browser-target constraints, version state, and source/output freshness. These commands do not launch a browser.
 
 For cross-browser, frame-injection, Cookie, manifest, or packaging changes, also run the relevant browser smoke tests. Record manual branded-browser verification in the PR description, commit notes, or delivery report with the browser/version and behavior checked.
+
+Before blaming a change for a smoke failure, run the same smoke on a clean export of `HEAD` (`git archive HEAD | tar -x -C <scratch dir>` with `node_modules` symlinked in); never a worktree or a branch. Recorded 2026-09-28: `smoke:chromium` with Playwright Chromium 149 times out in the workspace session recovery probe, and `smoke:firefox` with Firefox Nightly fails with "custom app retention probe found no save action", on that clean `HEAD` as well.
+
+Static gates that commonly trip a feature change:
+
+- Size ratchets are exact in both directions. After a change, copy the numbers `npm run check` reports into `tools/module-size-allowlist.json` and `tools/native-entry-budgets.json`, and the bundle sizes into `tools/content-capability-bundle-size-test.cjs` (its failure message stops at the first bundle; measure every bundle before editing), and extend each `reason`. A file that drops below the 1200-line default must lose its exception.
+- An export used only by tests needs a reasoned entry in `tools/export-liveness-allowlist.json`; an export used only inside its module must not be exported.
+- Every new `__CHATCLUB_*__` window global needs an entry in `tools/global-runtime-ownership.json`.
+- A shared module a content bundle imports must be listed in `tools/content-safe-shared-modules.json`.
+- Source-shape tests pin some surfaces: `tools/app-architecture-test.cjs` rejects controller object keys such as `collect:` at four-space indentation (name injected dependencies differently), and `tools/composer-topbar-controller-test.cjs` caps `app/runtime.js` lines.
