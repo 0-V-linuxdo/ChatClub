@@ -434,8 +434,29 @@ function createClock() {
     assert.equal(h.collects.length, 1);
   }
 
+  // 14. History, Tabs and quick save read a recorded conversation from its
+  //     record while the live ledger still matches, and only Copy the rest.
+  {
+    const recorded = createFrame("f1", "kept");
+    const unrecorded = createFrame("f2", "new");
+    const h = harness({ frames: [recorded, unrecorded], record: (clock) => [recordedFrame(recorded, clock)] });
+    const kept = await h.reconciler.storedTextFor({ key: "f1", frame: recorded });
+    assert.equal(kept.stored.messages.length, recorded.messages.length, "a matching record is served without a Copy");
+    assert.equal(kept.ledger.conversationKey, "chatgpt:kept");
+    recorded.change(h.clock, { prepended: pair(-1) });
+    assert.ok((await h.reconciler.storedTextFor({ key: "f1", frame: recorded })).stored, "older turns loading above do not invalidate it");
+    recorded.change(h.clock, { messages: [...recorded.messages, ...pair(8)] });
+    assert.equal((await h.reconciler.storedTextFor({ key: "f1", frame: recorded })).stored, null, "a grown conversation is Copied fresh");
+    const fresh = await h.reconciler.storedTextFor({ key: "f2", frame: unrecorded });
+    assert.equal(fresh.stored, null);
+    assert.equal(fresh.ledger.conversationKey, "chatgpt:new", "the ledger comes back so the fresh Copy can carry its mark");
+    assert.equal(h.collects.length, 0);
+  }
+
   // Wiring.
   const summary = read("app/summary/controller.js");
+  assert.match(summary, /fullTextReconciler\.storedTextFor\(/, "History, Tabs and quick save reuse matching records");
+  assert.match(summary, /captureMark: markFromLedger\(ledger, \{ source: "fresh" \}\)/);
   assert.match(summary, /createFullTextReconciler\(/);
   assert.match(summary, /getConversationFingerprint/);
   assert.match(summary, /\{ prompt, waitMs, since \}/);

@@ -13,7 +13,7 @@ import { optionalControllerFunction, optionalControllerObject, requireController
 import { createFrameRequest } from "../frame-request.js";
 import { renderMarkdown } from "./markdown.js";
 import { workspaceSessionIdFromUrl } from "../../shared/workspace-session.js";
-import { FULLTEXT_CAPTURE_STATE_SESSION_KEY } from "./fulltext-decision.js";
+import { FULLTEXT_CAPTURE_STATE_SESSION_KEY, markFromLedger } from "./fulltext-decision.js";
 import { storageSessionGet, storageSessionSet } from "../../shared/extension-api.js";
 import { createFullTextReconciler, FULLTEXT_RECONCILER_DEFAULTS } from "./fulltext-reconciler.js";
 import {
@@ -953,12 +953,39 @@ export function createSummaryController(ctx) {
     });
   }
 
+  function storedFrameSummary(iframe, index, stored) {
+    const base = summaryFrameBase(iframe, frameApp(iframe), index);
+    const href = stored.href || base.href;
+    const config = findSummarySiteConfig(state.options.summarySiteConfigs, href);
+    return {
+      context: {
+        ...base,
+        href,
+        pageTitle: stored.title || base.pageTitle,
+        siteId: config?.id || stored.appId || "",
+        siteName: config?.name || stored.appName || base.name,
+        messages: stored.messages
+      }
+    };
+  }
+
+  // History, Tabs and quick save: a frame whose recorded text still matches
+  // its live conversation ledger is served from that record instead of being
+  // Copied again; the rest are Copied and stored with the ledger they match.
   async function collectWorkspacePreviewItems() {
     const frames = currentFrames();
     if (!frames.length) return [];
     cancelIdleFullTextCapture();
-    const results = await Promise.all(frames.map((iframe, index) => collectLockedFrameSummary(iframe, index)));
-    const items = results.map((result, index) => summaryPreviewItemFromResult(result, { index, order: index }));
+    const results = await Promise.all(frames.map(async (iframe, index) => {
+      const { ledger, stored } = await fullTextReconciler.storedTextFor({ key: String(iframe.dataset.instanceId || ""), iframe });
+      if (stored) return storedFrameSummary(iframe, index, stored);
+      const result = await collectLockedFrameSummary(iframe, index);
+      return result?.context && ledger?.conversationKey ? { ...result, captureMark: markFromLedger(ledger, { source: "fresh" }) } : result;
+    }));
+    const items = results.map((result, index) => {
+      const item = summaryPreviewItemFromResult(result, { index, order: index });
+      return result?.captureMark && item.status === "ok" ? { ...item, captureMark: result.captureMark } : item;
+    });
     await persistRecordedFullText(items).catch(() => {});
     return items;
   }

@@ -327,6 +327,7 @@ export function workspaceTabFullTextConversation(record, conversationKey) {
   if (!found) return null;
   const users = found.messages.filter((message) => message.role === "user");
   return {
+    frame: found,
     mark: found.capture || null,
     hasPair: fullTextMessagesHavePair(found.messages),
     lastUserMessage: users.length ? users[users.length - 1].text : ""

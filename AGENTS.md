@@ -182,6 +182,22 @@ A desk's `topicTitle` normally comes from the first composer prompt. Conversatio
 
 Acceptance: `tools/workspace-auto-title-test.cjs`, `tools/workspace-topic-title-test.cjs`, the `conversationOpening` block in `tools/message-navigator-module-boundaries-test.cjs`, and the `Restore group` rows in `tools/workspace-tabs-sidebar-test.cjs`.
 
+## Record Full Text Capture
+
+Record Full Text Copies a frame's conversation only when that conversation changed. The 2026-09-28 report was the site's Copy buttons being hovered and clicked on an unchanged conversation after reopening a tab and while Settings was open. Three earlier patches tuned a comparison between a DOM fingerprint and stored Copy text, two representations that never agree, while "already recorded" lived only in memory keyed by frame instance. Do not reintroduce either.
+
+- Compare like with like. `content-src/shared/conversation-ledger.js` hashes each rendered turn (role + noise-hardened text) into a digest and a 12-entry tail. The Copy text is stored, never compared. Each stored frame carries `capture`, the ledger its last Copy was taken on (`shared/fulltext-ledger.js`), and `conversationKeyFromHref` is the one conversation identity on both sides: delete-completion identities for known sites, otherwise host + path + identity parameters. Start pages have no key and are never recorded.
+- Only a ledger that moved away from its mark may Copy: append, regenerate, edit, or first sight of a conversation this desk never recorded. `app/summary/fulltext-decision.js` owns that rule. Older turns loading above and a virtualized window (`behind`) are not growth. Restores, sends, `visibilitychange`, Settings, History and time passing are never a reason to Copy; sends are hints the ledger must confirm. Do not add a trigger that starts a Copy scan.
+- A missing or mismatched `ledgerVersion` fails closed: an older content bundle is never Copied on. Bump `FULLTEXT_LEDGER_VERSION` whenever turn text, noise rules or hashing change; old marks are then adopted, not treated as growth. A record without a mark is adopted when its last prompt overlaps the live one.
+- Noise stays out of the turn hash: controls and Copy buttons, `time` / `[datetime]`, screen-reader labels, short live-status regions, reasoning chips ("Thought for…", "已思考"), relative times and editable drafts. Turn discovery keeps a sticky selector group and never drops an `opacity:0` turn.
+- A frame nobody touched reports `input.seen: false`, which is not busy; only recent trusted input or an editing caret defers a Copy.
+- Failures park per conversation digest in `storage.session` (`chatclub.fullTextCaptureState.v1`): `unmatched` retries once after 5 min, errors back off, repeated user aborts park. A Copy that returns unchanged text adopts the ledger and counts toward strict mode. Keep the per-conversation rate cap and the desk-wide breaker.
+- Idle Copy passes the changed tail (`idleFullTextTurns`) to the built-in bodies; 0 means the whole conversation for first sight. Idle runs never `focus()` a site button and restore every scroll ancestor they moved unless user input ended the run. User-initiated Summary collects are unchanged.
+- Mark-only writes keep the desk's `updatedAt` and report `unchanged`, so History and Tabs do not refresh for them. A text change persisted without a mark drops the old mark.
+- History, Tabs and quick save serve a frame from its record while the mark still matches the live ledger (`storedTextFor`), and store fresh Copies with the ledger they were taken on.
+
+Acceptance: `tools/fulltext-ledger-test.cjs`, `tools/conversation-ledger-test.cjs`, `tools/fulltext-reconciler-test.cjs`, `tools/summary-idle-tail-test.cjs`, `tools/workspace-tab-fulltext-test.cjs`.
+
 ## Release Versioning
 
 Use Node.js 22 or 24 for generation, verification, and packaging. The repository `.nvmrc` pins Node 24; run `nvm use` and confirm `node --version` before `npm ci` or release-related scripts. `package.json` permits 22.x or 24.x. Generation, static verification, Node regression tests, package verification, local CI, GitHub CI, and release packaging all reject unsupported majors.

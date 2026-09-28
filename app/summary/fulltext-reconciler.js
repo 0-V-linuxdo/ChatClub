@@ -504,6 +504,27 @@ export function createFullTextReconciler(deps = {}) {
     return true;
   }
 
+  // For History, Tabs and quick save: the stored frame of this frame's
+  // conversation while it still matches the live ledger, so a live preview
+  // does not Copy a conversation that is already recorded. The ledger comes
+  // back too, so a fresh Copy can be stored with its mark.
+  async function storedTextFor(frame) {
+    let ledger = null;
+    try {
+      ledger = normalizeLedger(await probe(frame, { waitMs: 0, since: null, prompt: "" }));
+    } catch {
+      ledger = null;
+    }
+    const desk = String(workspaceId() || "");
+    if (!ledger?.conversationKey || !desk || ledger.generating) return { ledger, stored: null };
+    invalidateRecord();
+    const found = workspaceTabFullTextConversation(await deskRecord(desk), ledger.conversationKey);
+    const mark = found?.mark;
+    if (!mark || mark.v !== ledger.ledgerVersion || !found.frame) return { ledger, stored: null };
+    const kind = mark.digest === ledger.digest ? "none" : alignLedgerTails(mark.tail, ledger.tail).kind;
+    return { ledger, stored: kind === "none" || kind === "behind" ? found.frame : null };
+  }
+
   // A user-initiated collect must not queue behind an idle Copy busy in the
   // same frame: stop that Copy and keep new ones off for a moment.
   function cancelInFlight() {
@@ -524,6 +545,7 @@ export function createFullTextReconciler(deps = {}) {
     hintSend,
     cancelInFlight,
     invalidateRecord,
+    storedTextFor,
     isRunning: () => running
   });
 }

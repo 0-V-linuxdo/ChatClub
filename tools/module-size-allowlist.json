@@ -84,11 +84,11 @@
     "reason": "The cross-engine smoke exercises protected-header initial loading, target-correlated workspace-frame reset that ignores delayed initial-navigation events before retention baselines, owner-tab session rules, durable workspace reconstruction with failure-shell diagnostics, document-initiated iframe self-navigation, the authenticated binding handshake, explicit importability of every app lazy boundary including the signed official-rules service and the Prompt History viewer, complete Settings-menu and fullscreen-window probes, preferred-model overlay sizing and opacity across themes and narrow panels, accessible Workspace subtabs with focus and pending-color retention, content-sized Apps headers, source-specific iframe list drag-handle shapes without a redundant source column, compact iframe hover-help validation, and the one-shot prompt-handoff tab lifecycle with duplicate-click and cleanup assertions. Custom-app deletion now confirms through the themed alertdialog instead of mocking window.confirm."
   },
   "app/summary/controller.js": {
-    "maxLines": 1229,
+    "maxLines": 1256,
     "target": 1200,
-    "maxBytes": 56180,
+    "maxBytes": 57477,
     "targetBytes": 48000,
-    "reason": "Record Full Text is wired to the lazy full-text reconciler: idle Copy passes are named with a runId, cancelled through cancelSummaryCollection when a user-initiated collect needs the frame, re-decided under the summary collection lock, and persisted with the DOM ledger mark they were taken on."
+    "reason": "Record Full Text is wired to the lazy full-text reconciler: idle Copy passes are named with a runId, cancelled through cancelSummaryCollection when a user-initiated collect needs the frame, re-decided under the summary collection lock, and persisted with the DOM ledger mark they were taken on. History, Tabs and quick-save live previews serve a frame from its record while the stored mark still matches the live ledger, and store fresh Copies with that ledger."
   },
   "ui/dom.js": {
     "maxLines": 1202,
