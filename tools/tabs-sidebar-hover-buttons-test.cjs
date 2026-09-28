@@ -34,7 +34,9 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(constantsSource, /id: "edit"/);
   assert.match(constantsSource, /id: "delete"/);
   assert.match(constantsSource, /id: "more"[\s\S]*requiredPinned: true/);
-  assert.match(tabGroupSource, /\["tabsSidebar",\s*t\("appearance\.tabsSidebar"/);
+  // The ChatClub Tabs board is the last of three stacked Tab Group cards.
+  assert.match(tabGroupSource, /settingsBlock\(t\("appearance\.tabsSidebar"\), t\("appearance\.tabsSidebarDesc"\)/);
+  assert.match(tabGroupSource, /tabContextMenuPane\(redraw\),\s*tabsSidebarPane\(redraw\)/);
   assert.match(tabGroupSource, /kind === "tabsSidebar"/);
   assert.match(tabGroupSource, /tabsSidebarButtonPlacement:/);
   assert.match(tabGroupSource, /tabsSidebarButtonOrder:/);

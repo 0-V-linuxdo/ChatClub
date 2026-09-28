@@ -126,8 +126,8 @@ export function createAppsSettingsSection(ctx) {
   function pane(redraw) {
     const activeTab = state.settingsAppsTab === "iframe" ? "iframe" : "platforms";
     const tabs = [
-      ["platforms", t("apps.tabPlatforms"), t("apps.tabPlatformsDesc")],
-      ["iframe", t("apps.tabIframe"), t("apps.tabIframeDesc")]
+      ["platforms", t("apps.tabPlatforms")],
+      ["iframe", t("apps.tabIframe")]
     ];
     const tabBar = settingsInnerTabs(tabs, activeTab, (tabId) => {
       state.settingsAppsTab = tabId;
@@ -389,8 +389,8 @@ export function createAppsSettingsSection(ctx) {
   function iframePermissionsTabBar(redraw) {
     const activeSource = state.options?.iframePermissionsSource === "custom" ? "custom" : "builtIn";
     const tabs = [
-      ["builtIn", t("apps.tabBuiltIn"), t("apps.tabBuiltInDesc")],
-      ["custom", t("apps.tabCustom"), t("apps.tabCustomDesc")]
+      ["builtIn", t("apps.tabBuiltIn")],
+      ["custom", t("apps.tabCustom")]
     ];
     const tabBar = settingsInnerTabs(tabs, activeSource, (source) => {
       void selectIframePermissionsSource(source, redraw);

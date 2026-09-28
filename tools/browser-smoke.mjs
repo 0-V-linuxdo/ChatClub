@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 import { CONTENT_BUNDLES, contentInjectionPlan } from "../shared/frame-commands.js";
 import { CONTENT_BRIDGE_VERSION } from "../shared/protocol.js";
 import {
-  appearanceWorkspaceSubtabsProbe,
+  appearanceWorkspacePaneProbe,
   assertNewWorkspaceTabResult,
   assertPromptHandoffTabResult,
   completeChromiumNewWorkspaceTabProbe,
@@ -96,16 +96,17 @@ function assertRuntimeResult(result, browserTarget, options = {}) {
   assert(loopback?.summaryState?.bridgeVersion === CONTENT_BRIDGE_VERSION, `${browserTarget}: loopback runtime bridge version mismatch`);
   const retention = result?.customAppFrameRetention;
   assert(retention?.ok === true, `${browserTarget}: custom app iframe-retention probe did not finish`);
+  const workspacePane = retention.workspacePane || {};
   assert(
-    retention.workspaceSubtabs?.visited?.length === 3
-      && retention.workspaceSubtabs.visited.every((item) => item.noHorizontalOverflow && item.stableTracks),
-    `${browserTarget}: workspace subtab layout failed: ${JSON.stringify(retention.workspaceSubtabs)}`
+    workspacePane.nestedTabs === 0 && workspacePane.rows === 8
+      && workspacePane.noHorizontalOverflow && workspacePane.sharedControlEdge
+      && workspacePane.selectsHug && workspacePane.singleLineTabs && workspacePane.rowsCompact,
+    `${browserTarget}: workspace pane layout failed: ${JSON.stringify(workspacePane)}`
   );
-  assert(retention.workspaceSubtabs.reopenedOnOverlays === true, `${browserTarget}: workspace subtab was not preserved`);
-  assert(retention.workspaceSubtabs.colorDraftPreserved === true, `${browserTarget}: pending color draft was lost`);
-  assert(retention.workspaceSubtabs.keyboardFocusRestored === true, `${browserTarget}: workspace tab focus was not restored`);
-  assert(retention.workspaceSubtabs.controlsDescribed === true, `${browserTarget}: overlay controls lack descriptions`);
-  assert(retention.workspaceSubtabs.labeled === true, `${browserTarget}: workspace subtabs lack accessible labels`);
+  assert(workspacePane.reopenedOnWorkspace === true, `${browserTarget}: Appearance tab was not preserved`);
+  assert(workspacePane.colorDraftPreserved === true, `${browserTarget}: pending color draft was lost`);
+  assert(workspacePane.controlsDescribed === true, `${browserTarget}: overlay controls lack descriptions`);
+  assert(workspacePane.labelsResolve === true, `${browserTarget}: workspace row labels do not name their controls`);
   assert(retention.gridSame === true, `${browserTarget}: adding a custom app replaced the workspace root`);
   assert(
     retention.frameCountAfter === retention.frameCountBefore,
@@ -412,7 +413,7 @@ const pageProbe = `async (fixtureUrl) => {
   });
   const newWorkspaceTabProbe = ${newWorkspaceTabProbe.toString()};
   const promptHandoffTabProbe = ${promptHandoffTabProbe.toString()};
-  const appearanceWorkspaceSubtabsProbe = ${appearanceWorkspaceSubtabsProbe.toString()};
+  const appearanceWorkspacePaneProbe = ${appearanceWorkspacePaneProbe.toString()};
   const preferredModelSelectionOverlayLayoutProbe = ${preferredModelSelectionOverlayLayoutProbe.toString()};
   const readPromptHandoffSessionState = ${readPromptHandoffSessionState.toString()};
   const stableConfigInfoProbe = ${stableConfigInfoProbe.toString()};
@@ -885,7 +886,7 @@ const pageProbe = `async (fixtureUrl) => {
         && left.width === right.width
         && left.height === right.height
       );
-      const workspaceSubtabs = await appearanceWorkspaceSubtabsProbe({
+      const workspacePane = await appearanceWorkspacePaneProbe({
         quietWindow, selectSettingsSection, settingsButton, waitForCondition
       });
       const assertIframePermissionListShape = (source) => {
@@ -1169,7 +1170,7 @@ const pageProbe = `async (fixtureUrl) => {
         frameCountAfter: afterFrames.length,
         fullscreenPreserved: (document.querySelector(".chat-card.fullscreen")?.dataset.groupId || "") === fullscreenGroupId,
         tabScopedSelfNavigation,
-        workspaceSubtabs,
+        workspacePane,
         frames: additionFrames,
         usedAppEdits: { metadataEdit, attributeContractEdit, urlEdit },
         usedAppDeletion: {

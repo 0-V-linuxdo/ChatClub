@@ -187,13 +187,13 @@ for (const key of [
   );
 }
 
-// The setting lives in the existing Appearance -> Top Bar -> Layout pane, on the hug-row grammar the
-// Input tab already uses, and it is the only writer of the preference besides the shortcut.
+// The setting lives in the Toolbar layout card of Appearance -> Top Bar, on the shared settings row the
+// Input card also uses, and it is the only writer of the preference besides the shortcut.
 assert.match(appearanceTopbar, /function topbarVisibilityBlock\(/);
 assert.match(appearanceTopbar, /queueAppearanceAutoSave\(\{ topbarVisibility: next \}/);
 assert.match(appearanceTopbar, /value: "auto", label: t\("topbar\.visibility\.auto"\)/);
 assert.match(appearanceTopbar, /topbarVisibilityBlock\(redraw\)/);
-assert.match(appearanceTopbar, /appearance-overlay-row/);
+assert.match(appearanceTopbar, /settingsFieldRow\(t\("topbar\.visibility\.mode"\), visibilitySelect/);
 // A docked composer would hide with the bar, so that pane points at the center float instead of
 // silently moving the input.
 assert.match(appearanceTopbar, /topbar\.visibility\.composerHint/);

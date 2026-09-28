@@ -70,8 +70,8 @@ export function createProfilesSettingsSection(ctx) {
     const activeTab = state.settingsProfilesTab === "inventory" ? "inventory" : "providers";
     state.settingsProfilesTab = activeTab;
     const tabs = [
-      ["providers", t("profiles.providersTab"), t("profiles.providersTabDesc")],
-      ["inventory", t("profiles.inventoryTab"), t("profiles.inventoryTabDesc")]
+      ["providers", t("profiles.providersTab")],
+      ["inventory", t("profiles.inventoryTab")]
     ];
     const tabBar = settingsInnerTabs(tabs, activeTab, (id) => {
       state.settingsProfilesTab = id;

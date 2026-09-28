@@ -1,148 +1,96 @@
 import { t } from "../../shared/i18n.js";
-import { el, field } from "../../ui/dom.js";
+import { el } from "../../ui/dom.js";
 import { createAppearanceOverlayInfoButton } from "./appearance-model-selection-overlay.js";
 
-export const APPEARANCE_WORKSPACE_TAB_IDS = Object.freeze(["general", "color", "overlays"]);
-const WORKSPACE_PANEL_ID = "appearance-workspace-panel";
-const workspaceTabId = (id) => `appearance-workspace-tab-${id}`;
-const LOADING_OVERLAY_HELP_ID = "appearance-loading-overlay-help";
-const PRIMARY_COLOR_ID = "appearance-primary-color";
-const PRIMARY_COLOR_HELP_ID = "appearance-primary-color-help";
+// The controls are built in appearance.js and labelled here, so both sides
+// share these ids: each row's <label for> and each control's
+// aria-describedby must name the same node.
+export const APPEARANCE_WORKSPACE_FIELD_IDS = Object.freeze({
+  themeMode: "appearance-theme-mode",
+  primaryColor: "appearance-primary-color",
+  primaryColorHelp: "appearance-primary-color-help",
+  language: "appearance-language",
+  columnCount: "appearance-column-count",
+  pocketIconHelp: "appearance-pocket-icon-help",
+  clickReorder: "appearance-click-reorder",
+  clickReorderHelp: "appearance-click-reorder-help",
+  loadingOverlay: "appearance-loading-overlay-enabled",
+  loadingOverlayHelp: "appearance-loading-overlay-help",
+  modelSelectionOverlay: "appearance-model-selection-overlay-enabled",
+  modelSelectionOverlayHelp: "appearance-model-selection-overlay-help"
+});
 
+// Workspace is one scrolling page of two cards. It used to be a third tab row
+// (General / Color / Overlays) under the Appearance row under the sidebar, so
+// eight controls sat behind three clicks and four stacked headings, and the
+// Color tab held a single field.
 export function createAppearanceWorkspacePane({
-  activeId,
   clickReorderControl,
   colorControl,
   columnCount,
   language,
-  onSelect,
   overlayOpacityControl,
   overlayToggleControl,
   pocketIconControl,
   selectionOverlayControls,
   settingsBlock,
-  settingsInnerTabs,
+  settingsFieldGrid,
+  settingsFieldRow,
   svgIcon,
   themeMode
 }) {
-  const appearanceRow = (node) => el("div", { class: "appearance-field-row" }, node);
-  const generalCol = (...rows) => el("div", { class: "appearance-general-col" }, ...rows);
-  const overlayRangeRow = (toggle, title, titleFor, info, control, extraClass = "") => appearanceRow(
-    el("div", { class: extraClass ? `appearance-overlay-row ${extraClass}` : "appearance-overlay-row" },
-      toggle,
-      el("span", { class: "appearance-overlay-copy" },
-        el("label", { for: titleFor }, el("strong", {}, title)),
-        info
-      ),
-      control
+  const ids = APPEARANCE_WORKSPACE_FIELD_IDS;
+  const generalBlock = settingsBlock(t("appearance.workspaceGeneral"), "",
+    settingsFieldGrid(
+      settingsFieldRow(t("appearance.themeMode"), themeMode, { htmlFor: ids.themeMode }),
+      settingsFieldRow(t("appearance.primaryColor"), colorControl, {
+        htmlFor: ids.primaryColor,
+        help: t("appearance.primaryColorHelp"),
+        helpId: ids.primaryColorHelp
+      }),
+      settingsFieldRow(t("appearance.language"), language, { htmlFor: ids.language }),
+      settingsFieldRow(t("appearance.maxColumns"), columnCount, { htmlFor: ids.columnCount }),
+      settingsFieldRow(t("appearance.pocketIcon"), pocketIconControl, {
+        help: t("appearance.pocketIconDesc"),
+        helpId: ids.pocketIconHelp
+      }),
+      clickReorderControl
+        ? settingsFieldRow(t("appearance.clickReorderButtons"), clickReorderControl, {
+          htmlFor: ids.clickReorder,
+          help: t("appearance.clickReorderButtonsHelp"),
+          helpId: ids.clickReorderHelp
+        })
+        : null
     )
   );
-  const generalBlock = () => settingsBlock(
-    t("appearance.workspaceGeneral"),
-    t("appearance.workspaceGeneralTabDesc"),
-    el("div", { class: "appearance-field-list" },
-      generalCol(
-        appearanceRow(field(t("appearance.themeMode"), themeMode)),
-        appearanceRow(field(t("appearance.language"), language)),
-        appearanceRow(field(t("appearance.maxColumns"), columnCount))
-      ),
-      generalCol(
-        appearanceRow(pocketIconControl),
-        clickReorderControl ? appearanceRow(clickReorderControl) : null
-      )
-    )
-  );
-  const colorBlock = () => settingsBlock(
-    t("appearance.workspaceColor"),
-    "",
-    el("div", { class: "appearance-field-list" },
-      appearanceRow(
-        el("div", { class: "appearance-color-row" },
-          el("span", { class: "appearance-color-copy" },
-            el("label", { for: PRIMARY_COLOR_ID }, el("strong", {}, t("appearance.primaryColor"))),
-            el("small", { class: "appearance-color-help", id: PRIMARY_COLOR_HELP_ID }, t("appearance.primaryColorHelp"))
-          ),
-          colorControl
-        )
-      )
-    )
-  );
-  const overlaysBlock = () => settingsBlock(
-    t("appearance.workspaceOverlays"),
-    t("appearance.workspaceOverlaysTabDesc"),
-    el("div", { class: "appearance-field-list" },
-      overlayRangeRow(
-        overlayToggleControl,
-        t("appearance.loadingOverlay"),
-        "appearance-loading-overlay-enabled",
-        createAppearanceOverlayInfoButton(
+  // Each overlay row keeps its enable switch beside the opacity it enables,
+  // and folds the explanation into the ghost (i) beside its name.
+  const overlaysBlock = settingsBlock(t("appearance.workspaceOverlays"), "",
+    settingsFieldGrid(
+      settingsFieldRow(t("appearance.loadingOverlay"), [overlayToggleControl, overlayOpacityControl], {
+        htmlFor: ids.loadingOverlay,
+        info: createAppearanceOverlayInfoButton(
           svgIcon,
           t("appearance.loadingOverlayHelp"),
-          LOADING_OVERLAY_HELP_ID,
+          ids.loadingOverlayHelp,
           "settings.appearance.loadingOverlay"
-        ),
-        overlayOpacityControl
-      ),
-      overlayRangeRow(
-        selectionOverlayControls.toggleControl,
+        )
+      }),
+      settingsFieldRow(
         t("appearance.modelSelectionOverlay"),
-        "appearance-model-selection-overlay-enabled",
-        createAppearanceOverlayInfoButton(
-          svgIcon,
-          `${t("appearance.modelSelectionOverlayHelp")} ${t("appearance.modelSelectionOverlayOpacityHelp")}`,
-          "appearance-model-selection-overlay-help",
-          "settings.appearance.modelSelectionOverlay"
-        ),
-        selectionOverlayControls.opacityControl,
-        "appearance-overlays-model"
+        [selectionOverlayControls.toggleControl, selectionOverlayControls.opacityControl],
+        {
+          htmlFor: ids.modelSelectionOverlay,
+          className: "appearance-overlays-model",
+          info: createAppearanceOverlayInfoButton(
+            svgIcon,
+            `${t("appearance.modelSelectionOverlayHelp")} ${t("appearance.modelSelectionOverlayOpacityHelp")}`,
+            ids.modelSelectionOverlayHelp,
+            "settings.appearance.modelSelectionOverlay"
+          )
+        }
       )
     )
   );
-  const activeBlock = activeId === "color"
-    ? colorBlock()
-    : activeId === "overlays"
-      ? overlaysBlock()
-      : generalBlock();
-  const selectAndRestoreFocus = (id) => {
-    onSelect(id);
-    document.querySelector?.(
-      `[data-appearance-workspace-tab-id="${id}"]`
-    )?.focus?.({ preventScroll: true });
-  };
-  const tabs = settingsInnerTabs([
-    ["general", t("appearance.workspaceGeneral"), t("appearance.workspaceGeneralTabDesc")],
-    ["color", t("appearance.workspaceColor"), t("appearance.workspaceColorTabDesc")],
-    ["overlays", t("appearance.workspaceOverlays"), t("appearance.workspaceOverlaysTabDesc")]
-  ], activeId, selectAndRestoreFocus);
-  tabs.setAttribute("aria-label", t("appearance.workspaceTabsLabel"));
-  Array.from(tabs.children).forEach((tab, index) => {
-    const id = APPEARANCE_WORKSPACE_TAB_IDS[index];
-    tab.id = workspaceTabId(id);
-    tab.dataset.appearanceWorkspaceTabId = id;
-    tab.setAttribute("tabindex", id === activeId ? "0" : "-1");
-    tab.setAttribute("aria-controls", WORKSPACE_PANEL_ID);
-    tab.addEventListener("keydown", (event) => {
-      const currentIndex = APPEARANCE_WORKSPACE_TAB_IDS.indexOf(id);
-      let nextIndex = currentIndex;
-      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + APPEARANCE_WORKSPACE_TAB_IDS.length) % APPEARANCE_WORKSPACE_TAB_IDS.length;
-      else if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % APPEARANCE_WORKSPACE_TAB_IDS.length;
-      else if (event.key === "Home") nextIndex = 0;
-      else if (event.key === "End") nextIndex = APPEARANCE_WORKSPACE_TAB_IDS.length - 1;
-      else return;
-      event.preventDefault();
-      const nextId = APPEARANCE_WORKSPACE_TAB_IDS[nextIndex];
-      if (nextId === activeId) tab.focus?.();
-      else selectAndRestoreFocus(nextId);
-    });
-  });
-  return el("div", { class: "settings-pane appearance-workspace-pane" },
-    tabs,
-    el("div", {
-      id: WORKSPACE_PANEL_ID,
-      class: `appearance-workspace-subpane is-${activeId}`,
-      role: "tabpanel",
-      tabindex: "0",
-      "aria-labelledby": workspaceTabId(activeId)
-    }, activeBlock)
-  );
+  return el("div", { class: "settings-pane appearance-workspace-pane" }, generalBlock, overlaysBlock);
 }

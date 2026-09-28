@@ -66,8 +66,8 @@ export function createMessageNavigationSettingsSection(ctx) {
     state.messageNavigatorSettingsTab = activeTab;
     return el("div", { class: "settings-pane message-navigator-settings-pane" },
       settingsInnerTabs([
-        ["effects", t("messageNavigator.effects.title"), t("messageNavigator.effects.tabDesc")],
-        ["sites", t("messageNavigator.sites.title"), t("messageNavigator.sites.tabDesc")]
+        ["effects", t("messageNavigator.effects.title")],
+        ["sites", t("messageNavigator.sites.title")]
       ], activeTab, (id) => {
         state.messageNavigatorSettingsTab = id;
         redraw();

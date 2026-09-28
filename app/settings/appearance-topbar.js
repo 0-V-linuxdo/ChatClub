@@ -26,7 +26,6 @@ import {
 
 const TOPBAR_STATE_KEYS = Object.freeze([
   "options",
-  "settingsAppearanceTopbarTab",
   "settingsTopbarPromptPlaceholderDraft",
   "settingsTopbarPromptPlaceholderDragIndex",
   "settingsTopbarPromptPlaceholderEditingIndex"
@@ -63,8 +62,9 @@ export function createAppearanceTopbarController(dependencies = {}) {
     settingsBlock,
     settingsReorderHandle,
     settingsEmptyRow,
+    settingsFieldGrid,
+    settingsFieldRow,
     settingsIconAction,
-    settingsInnerTabs,
     settingsList,
     settingsListDropPlacement,
     settingsPaneToolbar,
@@ -238,15 +238,18 @@ export function createAppearanceTopbarController(dependencies = {}) {
       { value: "refresh", label: t("topbar.placeholder.modeRefresh") },
       { value: "interval", label: t("topbar.placeholder.modeInterval") }
     ], {
+      id: "appearance-topbar-placeholder-mode",
       onchange: () => saveTopbarPromptPlaceholderConfig({ ...config, mode: modeSelect.value }, redraw)
     });
     const orderSelect = select(config.order, [
       { value: "sequential", label: t("topbar.placeholder.orderSequential") },
       { value: "random", label: t("topbar.placeholder.orderRandom") }
     ], {
+      id: "appearance-topbar-placeholder-order",
       onchange: () => saveTopbarPromptPlaceholderConfig({ ...config, order: orderSelect.value }, redraw)
     });
     const intervalInput = input(String(config.intervalSec), {
+      id: "appearance-topbar-placeholder-interval",
       class: "input topbar-placeholder-interval-input",
       type: "number",
       min: String(TOPBAR_PROMPT_PLACEHOLDER_INTERVAL_MIN_SEC),
@@ -271,9 +274,11 @@ export function createAppearanceTopbarController(dependencies = {}) {
       }
     });
     return el("div", { class: "topbar-placeholder-controls" },
-      field(t("topbar.placeholder.mode"), modeSelect),
-      field(t("topbar.placeholder.order"), orderSelect),
-      field(t("topbar.placeholder.interval"), intervalInput)
+      settingsFieldGrid(
+        settingsFieldRow(t("topbar.placeholder.mode"), modeSelect, { htmlFor: "appearance-topbar-placeholder-mode" }),
+        settingsFieldRow(t("topbar.placeholder.order"), orderSelect, { htmlFor: "appearance-topbar-placeholder-order" }),
+        settingsFieldRow(t("topbar.placeholder.interval"), intervalInput, { htmlFor: "appearance-topbar-placeholder-interval" })
+      )
     );
   }
 
@@ -319,9 +324,9 @@ export function createAppearanceTopbarController(dependencies = {}) {
       : settingsEmptyRow(t("topbar.placeholder.noItems"));
     return settingsBlock(t("topbar.placeholder.title"), t("topbar.placeholder.desc"),
       settingsPaneToolbar(t("topbar.placeholder.help", { maxCount: TOPBAR_PROMPT_PLACEHOLDER_MAX_COUNT })),
-      topbarPromptPlaceholderEditor(config, redraw),
       topbarPromptPlaceholderSettingsControls(config, redraw),
-      settingsList(["", t("topbar.placeholder.text"), t("profiles.actions")], rows, "settings-manager-list topbar-placeholder-list settings-list-fill")
+      topbarPromptPlaceholderEditor(config, redraw),
+      settingsList(["", t("topbar.placeholder.text"), t("profiles.actions")], rows, "settings-manager-list topbar-placeholder-list")
     );
   }
 
@@ -330,6 +335,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
     const placement = normalizeComposerPlacement(state.options.composerPlacement);
     const fontSizeValue = el("span", { class: "appearance-range-value" }, `${initialFontSize}px`);
     const fontSizeSlider = el("input", {
+      id: "appearance-topbar-input-font-size",
       class: "appearance-range-slider topbar-prompt-input-font-size-slider",
       type: "range",
       min: String(TOPBAR_PROMPT_INPUT_FONT_SIZE_MIN_PX),
@@ -349,34 +355,34 @@ export function createAppearanceTopbarController(dependencies = {}) {
       { value: "topbar", label: t("topbar.input.placementTopbar") },
       { value: "center", label: t("topbar.input.placementCenter") }
     ], {
+      id: "appearance-topbar-input-placement",
       class: "select topbar-prompt-input-placement",
       "aria-label": t("topbar.input.placement"),
       "aria-describedby": "appearance-topbar-input-placement-help",
       onchange: () => queueAppearanceAutoSave({ composerPlacement: normalizeComposerPlacement(placementSelect.value) })
     });
     return settingsBlock(t("topbar.input.title"), t("topbar.input.desc"),
-      el("div", { class: "appearance-field-list topbar-prompt-input-settings" },
-        el("div", { class: "appearance-overlay-row" },
-          el("span", { class: "appearance-overlay-copy" },
-            el("strong", {}, t("topbar.input.placement")),
-            createAppearanceOverlayInfoButton(svgIcon, t("topbar.input.placementHelp"), "appearance-topbar-input-placement-help", "settings.appearance.topbarInputPlacement")
-          ),
-          placementSelect
-        ),
-        el("div", { class: "appearance-overlay-row" },
-          el("span", { class: "appearance-overlay-copy" },
-            el("strong", {}, t("topbar.input.fontSize")),
-            createAppearanceOverlayInfoButton(svgIcon, t("topbar.input.fontSizeHelp"), "appearance-topbar-input-font-size-help", "settings.appearance.topbarInputFontSize")
-          ),
+      settingsFieldGrid(
+        settingsFieldRow(t("topbar.input.placement"), placementSelect, {
+          htmlFor: "appearance-topbar-input-placement",
+          info: createAppearanceOverlayInfoButton(svgIcon, t("topbar.input.placementHelp"), "appearance-topbar-input-placement-help", "settings.appearance.topbarInputPlacement")
+        }),
+        settingsFieldRow(t("topbar.input.fontSize"),
           el("div", { class: "appearance-range-control topbar-prompt-input-font-size-control" },
             fontSizeSlider,
             fontSizeValue
-          )
+          ),
+          {
+            htmlFor: "appearance-topbar-input-font-size",
+            info: createAppearanceOverlayInfoButton(svgIcon, t("topbar.input.fontSizeHelp"), "appearance-topbar-input-font-size-help", "settings.appearance.topbarInputFontSize")
+          }
         )
       )
     );
   }
 
+  // Visibility and the live-toolbar editor are one card: both decide what the
+  // bar shows, and as two cards under a "Top Bar" tab both were titled "Top Bar".
   function topbarVisibilityBlock(redraw) {
     const visibility = normalizeTopbarVisibility(state.options.topbarVisibility);
     const composerDocked = normalizeComposerPlacement(state.options.composerPlacement) === "topbar";
@@ -384,6 +390,7 @@ export function createAppearanceTopbarController(dependencies = {}) {
       { value: "always", label: t("topbar.visibility.always") },
       { value: "auto", label: t("topbar.visibility.auto") }
     ], {
+      id: "appearance-topbar-visibility",
       class: "select topbar-visibility-select",
       "aria-label": t("topbar.visibility.mode"),
       "aria-describedby": "appearance-topbar-visibility-help",
@@ -393,55 +400,32 @@ export function createAppearanceTopbarController(dependencies = {}) {
         if (next === "auto") toast(t("toast.topbarAutoHideEnabled"), "info");
       }
     });
-    return settingsBlock(t("topbar.visibility.title"), t("topbar.visibility.desc"),
-      el("div", { class: "appearance-field-list topbar-visibility-settings" },
-        el("div", { class: "appearance-overlay-row" },
-          el("span", { class: "appearance-overlay-copy" },
-            el("strong", {}, t("topbar.visibility.mode")),
-            createAppearanceOverlayInfoButton(svgIcon, t("topbar.visibility.help"), "appearance-topbar-visibility-help", "settings.appearance.topbarVisibility")
-          ),
-          visibilitySelect
-        ),
-        visibility === "auto" && composerDocked
-          ? el("p", { class: "settings-muted-help" }, t("topbar.visibility.composerHint"))
-          : null
-      )
-    );
-  }
-
-  function pane(redraw) {
-    const activeTab = ["input", "layout"].includes(state.settingsAppearanceTopbarTab)
-      ? state.settingsAppearanceTopbarTab
-      : "placeholder";
-    state.settingsAppearanceTopbarTab = activeTab;
     const enterTopbarEditModeFromSettings = () => {
       closeSettingsDialog();
       requestAnimationFrame(() => enterTopbarEditMode());
     };
+    return settingsBlock(t("topbar.customize.workbench"), t("topbar.visibility.desc"),
+      settingsFieldGrid(
+        settingsFieldRow(t("topbar.visibility.mode"), visibilitySelect, {
+          htmlFor: "appearance-topbar-visibility",
+          info: createAppearanceOverlayInfoButton(svgIcon, t("topbar.visibility.help"), "appearance-topbar-visibility-help", "settings.appearance.topbarVisibility"),
+          note: visibility === "auto" && composerDocked ? t("topbar.visibility.composerHint") : null
+        }),
+        settingsFieldRow(t("topbar.customize.arrange"),
+          settingsPrimaryAction(t("topbar.customize.enter"), "customizeTopbar", enterTopbarEditModeFromSettings),
+          { help: t("topbar.customize.help") }
+        )
+      )
+    );
+  }
+
+  // One page of stacked cards, most general first. Layout / Input /
+  // Placeholder used to be a third tab row under Appearance's own.
+  function pane(redraw) {
     return el("div", { class: "settings-pane topbar-settings-pane" },
-      settingsInnerTabs([
-        ["placeholder", t("topbar.placeholder.title"), t("topbar.placeholder.tabDesc")],
-        ["input", t("topbar.input.title"), t("topbar.input.tabDesc")],
-        ["layout", t("topbar.customize.title"), t("topbar.customize.tabDesc")]
-      ], activeTab, (id) => {
-        state.settingsAppearanceTopbarTab = id;
-        redraw();
-      }),
-      activeTab === "layout"
-        ? [
-          topbarVisibilityBlock(redraw),
-          settingsBlock(t("topbar.customize.title"), t("topbar.customize.desc"),
-            settingsPaneToolbar(t("topbar.customize.help"),
-              settingsPrimaryAction(t("topbar.customize.enter"), "customizeTopbar", enterTopbarEditModeFromSettings)
-            ),
-            el("div", { class: "topbar-customizer topbar-customizer-launcher" },
-              el("p", { class: "topbar-layout-hint" }, t("topbar.customize.dragHint"))
-            )
-          )
-        ]
-        : activeTab === "input"
-          ? topbarPromptInputBlock()
-          : topbarPromptPlaceholderBlock(redraw)
+      topbarVisibilityBlock(redraw),
+      topbarPromptInputBlock(),
+      topbarPromptPlaceholderBlock(redraw)
     );
   }
 

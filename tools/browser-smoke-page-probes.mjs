@@ -153,72 +153,56 @@ export async function stableConfigInfoProbe({ request, withTimeout, expectedIds 
   }), 15000, "stable dynamic content registration");
 }
 
-export async function appearanceWorkspaceSubtabsProbe({
+export async function appearanceWorkspacePaneProbe({
   quietWindow,
   selectSettingsSection,
   settingsButton,
   waitForCondition
 }) {
-  const ids = ["general", "color", "overlays"];
+  // Workspace is one page of cards on the shared settings row grid; it used to
+  // nest a General / Color / Overlays tab row under the Appearance tab row.
   const currentState = () => {
-    const pane = document.querySelector(".appearance-workspace-pane");
-    const tablist = pane?.querySelector(":scope > .settings-inner-tabs");
-    const tabs = ids.map((id) => tablist?.querySelector(`[data-appearance-workspace-tab-id="${id}"]`));
-    const panel = pane?.querySelector(".appearance-workspace-subpane");
-    const tablistRect = tablist?.getBoundingClientRect();
-    const tabRects = tabs.map((tab) => tab?.getBoundingClientRect());
+    const appearance = document.querySelector(".appearance-settings-pane");
+    const appearanceTabs = Array.from(appearance?.querySelectorAll(":scope > .settings-inner-tabs [role='tab']") || []);
+    const pane = appearance?.querySelector(".appearance-workspace-pane");
+    const controls = Array.from(pane?.querySelectorAll(".settings-field-control") || []);
+    const lefts = controls.map((control) => Math.round(control.getBoundingClientRect().left));
+    const selects = Array.from(pane?.querySelectorAll(".settings-field-control > .select") || []);
+    const rowHeight = (node) => node.closest(".settings-field-row")?.getBoundingClientRect().height || 0;
     return {
+      appearanceTabs,
       pane,
-      panel,
-      tablist,
-      tabs,
-      noHorizontalOverflow: Boolean(tablistRect && panel)
-        && tablist.scrollWidth <= tablist.clientWidth + 1
-        && panel.scrollWidth <= panel.clientWidth + 1,
-      stableTracks: tabRects.every((rect) => rect?.width > 0)
-        && Math.max(...tabRects.map((rect) => rect.width)) - Math.min(...tabRects.map((rect) => rect.width)) < 1
+      nestedTabs: pane?.querySelectorAll(".settings-inner-tabs").length ?? -1,
+      rows: pane?.querySelectorAll(".settings-field-row").length || 0,
+      noHorizontalOverflow: Boolean(pane) && pane.scrollWidth <= pane.clientWidth + 1,
+      sharedControlEdge: lefts.length > 0 && Math.max(...lefts) - Math.min(...lefts) <= 1,
+      selectsHug: selects.length === 3 && selects.every((select) => select.getBoundingClientRect().width <= 257),
+      singleLineTabs: appearanceTabs.length === 5
+        && appearanceTabs.every((tab) => tab.getBoundingClientRect().height <= 34 && !tab.querySelector("span")),
+      rowsCompact: selects.every((select) => rowHeight(select) <= 64)
     };
   };
   selectSettingsSection("appearance");
-  await waitForCondition(() => Boolean(currentState().pane), 3000, "Appearance workspace subtabs");
-  currentState().tabs[0]?.click();
-  await waitForCondition(() => currentState().panel?.classList.contains("is-general"), 3000, "General workspace subtab");
-  currentState().tabs[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-  await waitForCondition(
-    () => currentState().panel?.classList.contains("is-color")
-      && document.activeElement?.dataset.appearanceWorkspaceTabId === "color",
-    3000,
-    "workspace subtab keyboard focus restoration"
-  );
-  const keyboardFocusRestored = true;
-  const visited = [];
-  for (const id of ids) {
-    currentState().tabs[ids.indexOf(id)]?.click();
-    await waitForCondition(
-      () => currentState().panel?.classList.contains(`is-${id}`),
-      3000,
-      `${id} workspace subtab`
-    );
-    const state = currentState();
-    visited.push({ id, noHorizontalOverflow: state.noHorizontalOverflow, stableTracks: state.stableTracks });
-  }
-  currentState().tabs[1]?.click();
-  await waitForCondition(() => currentState().panel?.classList.contains("is-color"), 3000, "Color workspace subtab");
+  await waitForCondition(() => currentState().appearanceTabs.length === 5, 3000, "Appearance tab row");
+  currentState().appearanceTabs[0]?.click();
+  await waitForCondition(() => Boolean(currentState().pane), 3000, "Appearance workspace pane");
+  const layout = currentState();
+  const labelsResolve = Array.from(layout.pane.querySelectorAll(".settings-field-name label[for]"))
+    .every((label) => Boolean(document.getElementById(label.getAttribute("for"))));
   const originalColor = document.querySelector(".appearance-color-text")?.value || "#1f7a5f";
   const draftColor = originalColor.toLowerCase() === "#123456" ? "#654321" : "#123456";
   const colorInput = document.querySelector(".appearance-color-text");
   colorInput.value = draftColor;
   colorInput.dispatchEvent(new Event("input", { bubbles: true }));
-  currentState().tabs[0]?.click();
-  currentState().tabs[1]?.click();
-  await waitForCondition(() => currentState().panel?.classList.contains("is-color"), 3000, "restored Color workspace subtab");
+  currentState().appearanceTabs[1]?.click();
+  await waitForCondition(() => !currentState().pane, 3000, "Top Bar pane replaced Workspace");
+  currentState().appearanceTabs[0]?.click();
+  await waitForCondition(() => Boolean(currentState().pane), 3000, "restored Workspace pane");
   const colorDraftPreserved = document.querySelector(".appearance-color-text")?.value === draftColor;
   const restoredColorInput = document.querySelector(".appearance-color-text");
   restoredColorInput.value = originalColor;
   restoredColorInput.dispatchEvent(new Event("input", { bubbles: true }));
-  currentState().tabs[2]?.click();
-  await waitForCondition(() => currentState().panel?.classList.contains("is-overlays"), 3000, "Overlays workspace subtab");
-  const overlayToggle = document.querySelector('.appearance-toggle-control input[role="switch"]');
+  const overlayToggle = document.querySelector('.appearance-workspace-pane .appearance-toggle-control input[role="switch"]#appearance-loading-overlay-enabled');
   const overlaySlider = document.querySelector('.appearance-overlays-model .appearance-range-slider');
   const describedText = (control) => {
     const node = document.getElementById(control?.getAttribute("aria-describedby") || "");
@@ -230,18 +214,21 @@ export async function appearanceWorkspaceSubtabsProbe({
   document.querySelector('[data-tooltip-id="settings.modal.close"]')?.click();
   await waitForCondition(() => !document.querySelector(".settings-modal"), 3000, "closed Settings modal");
   settingsButton.click();
-  await waitForCondition(() => Boolean(currentState().pane), 3000, "reopened Appearance workspace subtabs");
+  await waitForCondition(() => Boolean(currentState().pane), 3000, "reopened Appearance workspace pane");
   await quietWindow();
-  const reopened = currentState();
   return {
-    visited,
+    nestedTabs: layout.nestedTabs,
+    rows: layout.rows,
+    noHorizontalOverflow: layout.noHorizontalOverflow,
+    sharedControlEdge: layout.sharedControlEdge,
+    selectsHug: layout.selectsHug,
+    singleLineTabs: layout.singleLineTabs,
+    rowsCompact: layout.rowsCompact,
+    labelsResolve,
     colorDraftPreserved,
     controlsDescribed,
-    keyboardFocusRestored,
-    reopenedOnOverlays: reopened.panel?.classList.contains("is-overlays") === true
-      && reopened.tabs[2]?.getAttribute("aria-selected") === "true",
-    labeled: Boolean(reopened.tablist?.getAttribute("aria-label"))
-      && reopened.panel?.getAttribute("role") === "tabpanel"
+    reopenedOnWorkspace: Boolean(currentState().pane)
+      && currentState().appearanceTabs[0]?.getAttribute("aria-selected") === "true"
   };
 }
 

@@ -4632,12 +4632,19 @@ body.tab-gesture-active * {
   height: 12px;
 }
 
+/* One single-line tab row per pane, hugging its labels. The 2026-09-28 report
+   was Appearance stacking the sidebar, a five-column row, a second
+   three-column row and a card header over five controls: each tab carried a
+   description line that was clipped with an ellipsis at every width and was
+   then repeated by the card it opened, and the equal columns spread three
+   tabs across the whole well. A sub-area below a tab row is a stacked card,
+   never a second tab row, and no pane restretches this row into columns. */
 .settings-inner-tabs {
-  display: inline-grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(132px, auto);
-  justify-content: start;
-  gap: var(--space-1);
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-self: start;
+  gap: 2px;
   width: fit-content;
   max-width: 100%;
   padding: 3px;
@@ -4646,43 +4653,18 @@ body.tab-gesture-active * {
   border-radius: calc(var(--settings-radius) + 2px);
 }
 
-.appearance-settings-pane > .settings-inner-tabs {
-  grid-auto-flow: initial;
-  grid-auto-columns: initial;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  width: 100%;
-}
-
-/* Appearance nests a second tab row under its own. That row drops the track
-   so the two levels do not read as the same control stacked twice. */
-.appearance-settings-pane > .settings-pane > .settings-inner-tabs,
-.appearance-tab-group-pane > .settings-inner-tabs {
-  padding: 0;
-  background: transparent;
-  border-color: transparent;
-}
-
 .appearance-tab-group-pane {
   display: grid;
   gap: var(--space-4);
 }
 
-.appearance-tab-group-pane > .settings-inner-tabs {
-  grid-auto-flow: initial;
-  grid-auto-columns: initial;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: fit-content;
-  max-width: 100%;
-}
-
 .settings-inner-tab {
-  display: grid;
-  align-content: center;
-  gap: 2px;
-  min-height: 42px;
-  padding: 5px var(--space-3);
-  color: var(--muted);
-  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ui-compact-height);
+  padding: 0 var(--space-3);
+  color: var(--text);
+  white-space: nowrap;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--settings-radius);
@@ -4700,24 +4682,12 @@ body.tab-gesture-active * {
   box-shadow: 0 1px 2px color-mix(in srgb, black 10%, transparent);
 }
 
-.settings-inner-tab strong,
-.settings-inner-tab span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+/* One weight in both states, so selecting a tab never reflows the row. */
 .settings-inner-tab strong {
-  color: var(--text);
+  color: inherit;
   font-size: var(--font-size);
   font-weight: var(--font-weight-medium);
   line-height: 1.15;
-}
-
-.settings-inner-tab span {
-  font-size: var(--font-size-xs);
-  line-height: 1.2;
 }
 
 .settings-block {
@@ -4753,18 +4723,109 @@ body.tab-gesture-active * {
   padding: var(--space-4);
 }
 
+/* A settings row names its setting in one shared label column and starts its
+   control on one shared edge (subgrid), with a hairline between rows, the way
+   system settings lists read. Controls keep their intrinsic width: Appearance
+   used to split five fields into two 1fr columns, which stretched each select
+   to ~680px with its value far from its chevron, and left the right-hand
+   column's switch dangling after its help text. The columns stay next to each
+   other instead of pinning controls to a far-right rail. */
+.settings-field-grid {
+  display: grid;
+  grid-template-columns: minmax(11rem, 16rem) minmax(0, 1fr);
+  column-gap: calc(var(--space-4) + var(--space-2));
+  min-width: 0;
+}
+
+.settings-field-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+}
+
+.settings-field-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.settings-field-row:last-child {
+  padding-bottom: 0;
+}
+
+.settings-field-label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-field-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--font-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.3;
+}
+
+.settings-field-name label {
+  cursor: pointer;
+}
+
+.settings-field-label small,
+.settings-field-note {
+  color: var(--muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.settings-field-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.settings-field-control > .select {
+  width: 16rem;
+  max-width: 100%;
+}
+
+.settings-field-control > .appearance-toggle-control {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+}
+
+.settings-field-control > .appearance-toggle-control input {
+  margin: 0;
+}
+
+.settings-field-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .settings-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-field-row {
+    row-gap: var(--space-2);
+  }
+}
+
 .appearance-field-list {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.appearance-field-row {
-  min-width: 0;
-}
-
-.appearance-pocket-icon-field {
-  min-width: 0;
 }
 
 .appearance-pocket-icon-options {
@@ -4883,230 +4944,6 @@ body.tab-gesture-active * {
   margin: 3px 0 0;
   justify-self: end;
   accent-color: var(--primary);
-}
-
-/* The card shares the tab rows' left edge like every other pane; centring it
-   in a narrower well left it indented against the tabs above it. */
-.appearance-workspace-pane {
-  justify-items: stretch;
-}
-
-.appearance-workspace-pane > .settings-inner-tabs {
-  width: fit-content;
-  max-width: 100%;
-}
-
-.appearance-workspace-subpane {
-  width: 100%;
-}
-
-.appearance-workspace-pane > .settings-inner-tabs {
-  grid-auto-flow: initial;
-  grid-auto-columns: initial;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  justify-self: start;
-}
-
-.appearance-workspace-subpane {
-  min-width: 0;
-  container-type: inline-size;
-}
-
-.appearance-workspace-subpane.is-general .appearance-field-list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
-  gap: 14px 28px;
-  width: 100%;
-  align-items: stretch;
-}
-
-.appearance-workspace-subpane.is-general .appearance-general-col {
-  display: grid;
-  grid-template-rows: subgrid;
-  grid-row: 1 / span 3;
-  min-width: 0;
-}
-
-.appearance-workspace-subpane.is-general .appearance-toggle-control {
-  display: grid;
-  grid-template-columns: minmax(0, max-content) auto;
-  grid-template-rows: auto var(--settings-control-height);
-  row-gap: 6px;
-  column-gap: var(--space-3);
-  width: max-content;
-  max-width: 100%;
-  align-items: center;
-}
-
-.appearance-workspace-subpane.is-general .appearance-toggle-copy {
-  display: contents;
-}
-
-.appearance-workspace-subpane.is-general .appearance-toggle-copy strong {
-  grid-column: 1 / -1;
-}
-
-.appearance-workspace-subpane.is-general .appearance-toggle-copy small {
-  display: flex;
-  align-items: center;
-  height: var(--settings-control-height);
-  line-height: 1.2;
-}
-
-.appearance-workspace-subpane.is-general .appearance-toggle-control input {
-  margin: 0;
-  justify-self: start;
-  align-self: center;
-}
-
-@container (max-width: 560px) {
-  .appearance-workspace-subpane.is-general .appearance-field-list {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-  }
-
-  .appearance-workspace-subpane.is-general .appearance-general-col {
-    grid-template-rows: none;
-    grid-row: auto;
-    gap: 14px;
-  }
-}
-
-.appearance-workspace-subpane.is-color .appearance-field-list {
-  display: grid;
-  grid-template-columns: minmax(0, max-content) max-content;
-  justify-content: start;
-  justify-items: start;
-  column-gap: var(--space-4);
-  row-gap: 14px;
-  width: max-content;
-  max-width: 100%;
-}
-
-.appearance-workspace-subpane.is-color .appearance-field-row,
-.appearance-workspace-subpane.is-color .appearance-color-row {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  align-items: start;
-  width: auto;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.appearance-workspace-subpane.is-color .appearance-color-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  max-width: 52ch;
-  justify-self: start;
-}
-
-.appearance-workspace-subpane.is-color .appearance-color-copy strong {
-  color: var(--text);
-  font-size: var(--font-size);
-}
-
-.appearance-workspace-subpane.is-color .appearance-color-copy label {
-  min-width: 0;
-}
-
-.appearance-workspace-subpane.is-color .appearance-color-control {
-  justify-self: start;
-}
-
-@container (max-width: 560px) {
-  .appearance-workspace-subpane.is-color .appearance-field-list {
-    grid-template-columns: minmax(0, 1fr);
-    width: 100%;
-  }
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-field-list {
-  display: grid;
-  grid-template-columns: max-content max-content max-content;
-  justify-content: start;
-  justify-items: start;
-  column-gap: var(--space-4);
-  row-gap: 14px;
-  width: max-content;
-  max-width: 100%;
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-field-row,
-.appearance-workspace-subpane.is-overlays .appearance-overlay-row {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  align-items: center;
-  width: auto;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-overlay-copy {
-  display: inline-flex;
-  align-items: center;
-  justify-self: start;
-  gap: 5px;
-  min-width: 0;
-  max-width: 52ch;
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-overlay-copy strong {
-  color: var(--text);
-  font-size: var(--font-size);
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-overlay-copy label {
-  min-width: 0;
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-range-control {
-  justify-self: start;
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-overlays-model {
-  padding-top: 14px;
-  border-top: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-overlay-row > .appearance-toggle-control {
-  display: inline-flex;
-  align-items: center;
-  width: max-content;
-  justify-self: start;
-}
-
-.appearance-workspace-subpane.is-overlays .appearance-overlay-row > .appearance-toggle-control input {
-  margin: 0;
-}
-
-@container (max-width: 560px) {
-  .appearance-workspace-subpane.is-overlays .appearance-field-list {
-    grid-template-columns: minmax(0, 1fr);
-    width: 100%;
-  }
-
-  .appearance-workspace-subpane.is-overlays .appearance-range-control {
-    width: 100%;
-    max-width: 100%;
-    grid-template-columns: minmax(0, 1fr) 48px;
-  }
-}
-
-@media (max-width: 620px) {
-  .appearance-workspace-pane > .settings-inner-tabs {
-    grid-template-columns: 1fr;
-  }
-
-  .appearance-workspace-pane .settings-inner-tab strong,
-  .appearance-workspace-pane .settings-inner-tab span {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-  }
 }
 
 .frame-toast-position-editor {
@@ -5405,8 +5242,10 @@ body.tab-gesture-active * {
   color: var(--danger);
 }
 
+/* The three boards share one page now, so a sparse zone keeps a drop target
+   the height of two rows instead of reserving a board's worth of space. */
 .tab-group-button-placement-zone {
-  min-height: 172px;
+  min-height: 112px;
   display: grid;
   align-content: start;
   gap: var(--space-2);
@@ -5560,7 +5399,7 @@ body.settings-tab-group-button-dragging iframe {
 }
 
 .tab-context-menu-placement-zone {
-  min-height: 172px;
+  min-height: 112px;
   display: grid;
   align-content: start;
   gap: var(--space-2);
@@ -5705,13 +5544,6 @@ body.settings-tab-context-menu-dragging iframe {
   text-transform: lowercase;
 }
 
-.appearance-color-help {
-  min-width: 0;
-  color: var(--muted);
-  font-size: var(--font-size-sm);
-  line-height: 1.35;
-}
-
 .appearance-range-control {
   display: grid;
   grid-template-columns: minmax(0, 220px) 48px;
@@ -5763,10 +5595,6 @@ body.settings-tab-context-menu-dragging iframe {
   }
 
   .tab-context-menu-placement-list {
-    grid-template-columns: 1fr;
-  }
-
-  .appearance-tab-group-pane > .settings-inner-tabs {
     grid-template-columns: 1fr;
   }
 
@@ -6217,13 +6045,6 @@ body.settings-tab-context-menu-dragging iframe {
   background: color-mix(in srgb, var(--panel-2) 74%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--settings-radius);
-}
-
-.topbar-layout-hint {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-size-sm);
-  line-height: 1.45;
 }
 
 .tooltip-settings-list {
@@ -8501,8 +8322,6 @@ body.settings-tab-context-menu-dragging iframe {
 .apps-settings-tab-bar-row > .settings-inner-tabs {
   min-width: 0;
   flex: 0 0 auto;
-  width: fit-content;
-  grid-auto-columns: minmax(132px, auto);
 }
 
 .iframe-permission-group {
@@ -9367,59 +9186,6 @@ body.settings-tab-context-menu-dragging iframe {
   grid-template-columns: var(--ui-reorder-cluster) minmax(170px, .92fr) 104px minmax(260px, 1.45fr) minmax(112px, auto);
 }
 
-.topbar-settings-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  container-type: inline-size;
-}
-
-.topbar-prompt-input-settings {
-  display: grid;
-  grid-template-columns: max-content max-content;
-  justify-content: start;
-  justify-items: start;
-  column-gap: var(--space-4);
-  width: max-content;
-  max-width: 100%;
-}
-
-.topbar-prompt-input-settings .appearance-overlay-row {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-column: 1 / -1;
-  align-items: center;
-  width: auto;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.topbar-prompt-input-settings .appearance-overlay-copy {
-  display: inline-flex;
-  align-items: center;
-  justify-self: start;
-  gap: 5px;
-  min-width: 0;
-}
-
-.topbar-prompt-input-settings .appearance-overlay-copy strong {
-  color: var(--text);
-  font-size: var(--font-size);
-}
-
-@container (max-width: 560px) {
-  .topbar-prompt-input-settings {
-    grid-template-columns: minmax(0, 1fr);
-    width: 100%;
-  }
-
-  .topbar-prompt-input-settings .appearance-range-control {
-    width: 100%;
-    max-width: 100%;
-    grid-template-columns: minmax(0, 1fr) 48px;
-  }
-}
-
 .topbar-placeholder-editor {
   display: grid;
   gap: 10px;
@@ -9451,14 +9217,15 @@ body.settings-tab-context-menu-dragging iframe {
   line-height: 1.35;
 }
 
-.topbar-placeholder-controls {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr));
-  gap: var(--space-3);
+/* Switching, order and interval are settings rows like the Input card above,
+   so their controls start on the same edge instead of three 1fr fields. */
+.settings-field-control > .topbar-placeholder-interval-input {
+  width: 8rem;
 }
 
-.topbar-placeholder-interval-input {
-  max-width: 180px;
+.topbar-placeholder-controls + .topbar-placeholder-editor {
+  padding-top: var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
 }
 
 .topbar-placeholder-list .settings-list-header,
@@ -11303,18 +11070,8 @@ html:not([data-settings-click-reorder="always"]) .layout-preset-item {
     min-width: 0;
   }
 
-  .settings-inner-tabs {
-    width: 100%;
-    grid-auto-columns: 1fr;
-  }
-
   .apps-settings-tab-bar-row {
     gap: 10px;
-  }
-
-  .apps-settings-tab-bar-row > .settings-inner-tabs {
-    width: fit-content;
-    grid-auto-columns: minmax(132px, auto);
   }
 
   .shortcut-tabs-row {

@@ -637,7 +637,7 @@ assert.equal(shortcutTabContext.__normalizeShortcutSettingsTab("chat"), "chat");
 assert.match(stateSource, /shortcutSettingsTab: "topbar"/, "Top Bar must be the default shortcut settings tab");
 assert.match(
   shortcutSettingsSource,
-  /settingsInnerTabs\(\[\s*\["topbar", t\("topbar\.customize\.title"\), t\("shortcuts\.topbarTabDesc"\)\],\s*\["chat", t\("shortcuts\.chatTab"\), t\("shortcuts\.chatTabDesc"\)\]\s*\], active,/,
+  /settingsInnerTabs\(\[\s*\["topbar", t\("topbar\.customize\.title"\)\],\s*\["chat", t\("shortcuts\.chatTab"\)\]\s*\], active,/,
   "shortcut settings must expose only Top Bar and Chat Panel tabs"
 );
 assert.doesNotMatch(shortcutSettingsSource, /\["input", t\("shortcuts\.inputTab"\)/);

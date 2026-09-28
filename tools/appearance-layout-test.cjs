@@ -20,191 +20,77 @@ assert.doesNotMatch(controllerSource, /frameToastPositionPreset|frame-toast-posi
 assert.doesNotMatch(controllerSource, /frameToast(?:Top|Middle|Bottom|Center)/, "position preset definitions must be removed");
 assert.doesNotMatch(stylesheetSource, /frame-toast-position-preset/, "position preset CSS must be removed");
 assert.doesNotMatch(i18nSource, /appearance\.frameToast(?:Presets|Top|Middle|Bottom|Center)/, "position preset translations must be removed");
-assert.match(controllerSource, /APPEARANCE_WORKSPACE_TAB_IDS\.includes\(state\.settingsAppearanceWorkspaceTab\)/);
-assert.match(controllerSource, /activeId: state\.settingsAppearanceWorkspaceTab/);
-assert.match(controllerSource, /onSelect: \(id\) => \{\s*state\.settingsAppearanceWorkspaceTab = id;\s*redraw\(\);/);
-assert.doesNotMatch(
-  functionSource(controllerSource, "reset"),
-  /settingsAppearanceWorkspaceTab/,
-  "closing and reopening Settings must preserve the selected workspace subtab"
-);
-assert.match(workspaceSource, /Object\.freeze\(\["general", "color", "overlays"\]\)/);
-assert.match(workspaceSource, /tabs\.setAttribute\("aria-label", t\("appearance\.workspaceTabsLabel"\)\)/);
-assert.match(workspaceSource, /role: "tabpanel"/);
+// Workspace is one page of two cards on the shared settings row. It used to be
+// a General / Color / Overlays tab row nested under the Appearance tab row,
+// with General split into two 1fr columns that stretched every select.
+assert.doesNotMatch(controllerSource, /APPEARANCE_WORKSPACE_TAB_IDS|settingsAppearanceWorkspaceTab/);
+assert.doesNotMatch(workspaceSource, /settingsInnerTabs|role: "tabpanel"|role: "tablist"/, "Workspace must not nest a tab row");
 assert.match(
   workspaceSource,
-  /const generalBlock[\s\S]*appearance\.themeMode[\s\S]*appearance\.language[\s\S]*appearance\.maxColumns/,
-  "general workspace tab must own theme, language, and column controls"
+  /const generalBlock[\s\S]*appearance\.themeMode[\s\S]*appearance\.primaryColor[\s\S]*appearance\.language[\s\S]*appearance\.maxColumns[\s\S]*appearance\.pocketIcon[\s\S]*appearance\.clickReorderButtons[\s\S]*const overlaysBlock/,
+  "General owns theme, accent colour, language, columns, Pocket icon and click-reorder, in reading order"
 );
 assert.match(
   workspaceSource,
-  /const colorBlock[\s\S]*appearance\.primaryColor[\s\S]*appearance\.primaryColorHelp[\s\S]*const overlaysBlock/,
-  "color workspace tab must own the primary color control"
+  /const generalBlock = settingsBlock\(t\("appearance\.workspaceGeneral"\), "",/,
+  "General drops the subtitle that only listed the labels shown under it"
 );
 assert.match(
   workspaceSource,
-  /const colorBlock = \(\) => settingsBlock\(\s*t\("appearance\.workspaceColor"\),\s*""/,
-  "Color settingsBlock drops the duplicate Accent color subtitle"
+  /settingsFieldRow\(t\("appearance\.primaryColor"\), colorControl, \{[\s\S]*?help: t\("appearance\.primaryColorHelp"\)/,
+  "Color help sits under the Primary Color name, not under the hex field"
 );
-assert.match(
-  workspaceSource,
-  /appearance-color-copy[\s\S]*appearance\.primaryColor[\s\S]*appearance-color-help[\s\S]*appearance\.primaryColorHelp/,
-  "Color help sits under the Primary Color title, not under the hex field"
-);
-assert.doesNotMatch(
-  workspaceSource,
-  /const colorBlock[\s\S]*appearance-overlay-row[\s\S]*const overlaysBlock/,
-  "Color must not reuse the overlay switch|title|slider row"
-);
-assert.doesNotMatch(
-  controllerSource,
-  /appearance-color-preview/,
-  "Color pane must not keep a duplicate far-right preview orb"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /appearance-color-preview/,
-  "Color preview orb CSS must be removed"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-color \.appearance-color-control \{[^}]*minmax\(0,\s*1fr\)/,
-  "Color hex must not stretch as 1fr across the well"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-color \.appearance-color-help \{[^}]*grid-column:\s*1\s*\/\s*-1/,
-  "Color help must not span under the stretched control"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-color \.appearance-color-text \{[^}]*max-width:\s*none/,
-  "Color hex must keep its hug cap"
-);
+assert.doesNotMatch(controllerSource, /appearance-color-preview/, "Color pane must not keep a duplicate far-right preview orb");
+assert.doesNotMatch(stylesheetSource, /appearance-color-preview/, "Color preview orb CSS must be removed");
 assert.match(
   stylesheetSource,
   /\.appearance-color-control \{[\s\S]*?grid-template-columns: var\(--settings-control-height\) minmax\(0, 220px\);[\s\S]*?width:\s*max-content;/,
   "Color cluster hugs picker + capped hex"
 );
 assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-color \.appearance-field-list \{[\s\S]*?grid-template-columns: minmax\(0, max-content\) max-content;[\s\S]*?justify-content:\s*start;/,
-  "Color title and cluster share left-aligned hugging columns"
+  workspaceSource,
+  /const overlaysBlock[\s\S]*appearance\.loadingOverlay"\), \[overlayToggleControl, overlayOpacityControl\][\s\S]*appearance\.modelSelectionOverlay"\),\s*\[selectionOverlayControls\.toggleControl, selectionOverlayControls\.opacityControl\][\s\S]*className: "appearance-overlays-model"/,
+  "each overlay row keeps its switch beside the opacity it enables"
 );
 assert.match(
   workspaceSource,
-  /const overlaysBlock[\s\S]*overlayToggleControl[\s\S]*appearance\.loadingOverlay[\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl/,
-  "overlay workspace tab must own both loading and model-selection controls"
+  /const overlaysBlock[\s\S]*createAppearanceOverlayInfoButton\([\s\S]*"settings\.appearance\.loadingOverlay"[\s\S]*createAppearanceOverlayInfoButton\([\s\S]*"settings\.appearance\.modelSelectionOverlay"/,
+  "overlay help folds into the ghost (i) beside each row name"
 );
 assert.doesNotMatch(controllerSource, /appearance-workspace-(?:layout|main|aside)/);
-assert.doesNotMatch(stylesheetSource, /\.appearance-workspace-(?:layout|main|aside)/);
+assert.doesNotMatch(stylesheetSource, /\.appearance-workspace-(?:layout|main|aside|subpane)|\.appearance-general-col/);
+assert.doesNotMatch(workspaceSource, /is-rail-break/, "General grouping must not use hairline rail-break rows");
+
+// The shared row: one label column, one control edge, intrinsic control widths.
+assert.match(settingsKitSource, /function settingsFieldGrid\(/);
+assert.match(settingsKitSource, /function settingsFieldRow\(label, control, \{/);
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-pane > \.settings-inner-tabs \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/,
-  "workspace subtabs must have three stable tracks"
+  /\.settings-field-grid \{[^}]*grid-template-columns: minmax\(11rem, 16rem\) minmax\(0, 1fr\);/,
+  "the label column is bounded so controls sit beside their names, not on a far-right rail"
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-pane > \.settings-inner-tabs \{[\s\S]*?width: fit-content;[\s\S]*?max-width: 100%;/,
-  "workspace subtabs must size to their content"
+  /\.settings-field-row \{[^}]*grid-template-columns: subgrid;[^}]*border-top: 1px solid/s,
+  "rows share both columns and separate with one hairline"
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-pane > \.settings-inner-tabs \{[\s\S]*?justify-self: start;/,
-  "workspace subtabs must align to the left edge"
+  /\.settings-field-control > \.select \{[^}]*width: 16rem;[^}]*max-width: 100%;/,
+  "selects keep one intrinsic width instead of stretching across the well"
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-tab-group-pane > \.settings-inner-tabs \{[\s\S]*?width: fit-content;[\s\S]*?max-width: 100%;/,
-  "Tab Group subtabs must size to their content"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-field-list \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/,
-  "General fields must split into a left/right two-column track"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-general-col \{[\s\S]*?grid-template-rows:\s*subgrid;[\s\S]*?grid-row:\s*1\s*\/\s*span\s*3;/,
-  "General columns must share Theme|Pocket, Language|click-reorder, Columns|_ rows"
+  /@media \(max-width: 760px\) \{\s*\.settings-field-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/,
+  "narrow wells stack each name above its control"
 );
 assert.match(
   stylesheetSource,
   /\.appearance-toggle-control \{[^}]*grid-template-columns: minmax\(0, 52ch\) auto;[^}]*width: fit-content;/,
-  "overlay click-reorder switch stays to the right of its copy and hugs that copy"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[\s\S]*?grid-template-rows:\s*auto var\(--settings-control-height\);[\s\S]*?row-gap:\s*6px;/,
-  "General help and checkbox share the 36px control row used by Language"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-copy small \{[\s\S]*?height:\s*var\(--settings-control-height\);/,
-  "General help text is the same height as the left select"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[\s\S]*?width:\s*max-content;/,
-  "General click-reorder hugs the help and checkbox instead of filling the well"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-toggle-control \{[^}]*(?<![-\w])width:\s*100%/,
-  "General click-reorder must not stretch the checkbox to the far edge of the well"
-);
-assert.match(
-  workspaceSource,
-  /class: "appearance-general-col"[\s\S]*generalCol\(\s*appearanceRow\(field\(t\("appearance\.themeMode"\)[\s\S]*appearance\.language[\s\S]*appearance\.maxColumns[\s\S]*generalCol\(\s*appearanceRow\(pocketIconControl\)[\s\S]*clickReorderControl/,
-  "General left column owns theme/language/columns; right column owns Pocket and click-reorder"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-general \.appearance-field-list \{[\s\S]*?width: min\(100%, 32rem\)/,
-  "General must not keep the rejected 32rem stacked column"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /\.appearance-workspace-subpane[\s\S]{0,200}\.select \{[\s\S]*?max-width: 36ch/,
-  "General selects must not use the rejected 36ch right-rail cap"
-);
-assert.doesNotMatch(
-  workspaceSource,
-  /is-rail-break/,
-  "General grouping must not use hairline rail-break rows"
-);
-assert.match(
-  stylesheetSource,
-  /@container \(max-width: 560px\)[\s\S]*?\.appearance-workspace-subpane\.is-general \.appearance-field-list \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
-  "narrow General wells must stack the two columns"
-);
-assert.match(
-  workspaceSource,
-  /overlayRangeRow\([\s\S]*selectionOverlayControls\.toggleControl[\s\S]*appearance\.modelSelectionOverlay[\s\S]*selectionOverlayControls\.opacityControl[\s\S]*"appearance-overlays-model"/,
-  "model auto-selection puts the switch left of the title on one hugging row"
-);
-assert.match(
-  workspaceSource,
-  /overlayRangeRow\([\s\S]*overlayToggleControl[\s\S]*appearance\.loadingOverlay[\s\S]*overlayOpacityControl/,
-  "loading overlay has the same switch | title | slider grammar as Model"
+  "a toggle that carries its own copy keeps the switch right of that copy and hugs it"
 );
 assert.match(controllerSource, /frameLoadingOverlayEnabled: nextEnabled/);
 assert.match(storageSource, /frameLoadingOverlayEnabled: typeof raw\.frameLoadingOverlayEnabled === "boolean"/);
-assert.match(
-  workspaceSource,
-  /appearance-overlay-row[\s\S]*appearance-overlay-copy[\s\S]*createAppearanceOverlayInfoButton/,
-  "overlay range rows put title and a compact info trigger beside a compact slider"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-field-list \{[\s\S]*?grid-template-columns: max-content max-content max-content;[\s\S]*?justify-content:\s*start;/,
-  "overlay switches, titles, and sliders share left-aligned compact columns"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-field-row,\s*\n\.appearance-workspace-subpane\.is-overlays \.appearance-overlay-row \{[\s\S]*?grid-template-columns:\s*subgrid;/,
-  "overlay rows use subgrid so both titles and slider tracks start on the same left edge"
-);
 assert.match(
   stylesheetSource,
   /\.appearance-range-control \{[\s\S]*?grid-template-columns: minmax\(0, 220px\) 48px;[\s\S]*?width:\s*max-content;/,
@@ -212,19 +98,10 @@ assert.match(
 );
 assert.match(
   stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-range-control \{[\s\S]*?justify-self:\s*start;/,
-  "overlay sliders stay left-aligned on the shared compact track"
-);
-assert.match(
-  stylesheetSource,
   /\.model-preference-segmented-info,\s*\n\.appearance-overlay-info \{[\s\S]*?border:\s*0/,
   "overlay help uses the ghost info trigger, not a ringed icon-button"
 );
-assert.doesNotMatch(
-  workspaceSource,
-  /class: "appearance-range-help"/,
-  "overlay help must not remain a visible range-help line"
-);
+assert.doesNotMatch(workspaceSource, /class: "appearance-range-help"/, "overlay help must not remain a visible range-help line");
 assert.doesNotMatch(
   topbarSource,
   /class: "appearance-range-help"|field\(t\("topbar\.input\.fontSize"\)/,
@@ -232,39 +109,15 @@ assert.doesNotMatch(
 );
 assert.match(
   topbarSource,
-  /appearance-overlay-row[\s\S]*appearance-overlay-copy[\s\S]*createAppearanceOverlayInfoButton\([\s\S]*"settings\.appearance\.topbarInputFontSize"/,
-  "topbar input font-size uses the hug-row title + ghost info | compact slider grammar"
+  /settingsFieldRow\(t\("topbar\.input\.fontSize"\),[\s\S]*?appearance-range-control[\s\S]*?createAppearanceOverlayInfoButton\([\s\S]*?"settings\.appearance\.topbarInputFontSize"/,
+  "topbar input font-size is a settings row: name + ghost info | compact slider"
 );
 assert.match(
   topbarSource,
   /topbar-prompt-input-placement[\s\S]*queueAppearanceAutoSave\(\{ composerPlacement:/,
-  "topbar input placement is a native select in the Input tab"
+  "topbar input placement is a native select in the Input card"
 );
-assert.match(
-  stylesheetSource,
-  /\.topbar-prompt-input-settings \{[\s\S]*?grid-template-columns: max-content max-content;[\s\S]*?justify-content:\s*start;/,
-  "topbar input font-size title and slider share left-aligned compact columns"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /\.appearance-range-help/,
-  "the discarded range-help column must not remain in CSS"
-);
-assert.match(
-  stylesheetSource,
-  /\.appearance-workspace-subpane\.is-overlays \.appearance-overlays-model \{[\s\S]*?border-top:/,
-  "Loading and Model groups share one hairline, not a second settingsBlock"
-);
-assert.doesNotMatch(
-  stylesheetSource,
-  /\.appearance-overlays-child/,
-  "model opacity is no longer a nested child row"
-);
-assert.match(
-  stylesheetSource,
-  /@media \(max-width: 620px\)[\s\S]*?\.appearance-workspace-pane > \.settings-inner-tabs \{\s*grid-template-columns: 1fr;[\s\S]*?\.appearance-workspace-pane \.settings-inner-tab span \{[\s\S]*?white-space: normal;/,
-  "narrow workspace tabs must stack without truncating their labels"
-);
+assert.doesNotMatch(stylesheetSource, /\.topbar-prompt-input-settings|\.appearance-range-help|\.appearance-overlays-child/);
 assert.match(controllerSource, /state\.settingsAppearancePrimaryColorDraft \|\| state\.options\.primaryColor/);
 assert.match(controllerSource, /state\.settingsAppearancePrimaryColorDraft = primaryColorDraft = normalized/);
 assert.match(

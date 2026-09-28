@@ -600,8 +600,8 @@ export function createShortcutSettings(ctx) {
     return el("div", { class: "settings-pane" },
       el("div", { class: "shortcut-tabs-row" },
         settingsInnerTabs([
-          ["topbar", t("topbar.customize.title"), t("shortcuts.topbarTabDesc")],
-          ["chat", t("shortcuts.chatTab"), t("shortcuts.chatTabDesc")]
+          ["topbar", t("topbar.customize.title")],
+          ["chat", t("shortcuts.chatTab")]
         ], active, (id) => {
           state.shortcutSettingsTab = id;
           state.shortcutRecordingAction = "";

@@ -17,7 +17,7 @@ import { createAppearanceAutosave } from "./appearance-autosave.js";
 import { createModelSelectionOverlayAppearanceControls } from "./appearance-model-selection-overlay.js";
 import { createAppearanceTabGroupController } from "./appearance-tab-group.js";
 import { createAppearanceTopbarController } from "./appearance-topbar.js";
-import { APPEARANCE_WORKSPACE_TAB_IDS, createAppearanceWorkspacePane } from "./appearance-workspace.js";
+import { APPEARANCE_WORKSPACE_FIELD_IDS, createAppearanceWorkspacePane } from "./appearance-workspace.js";
 import { requireSettingsSectionStatePort } from "./section-contract.js";
 import { requireControllerContext, requireControllerFunction, validateControllerContract } from "../controller-contract.js";
 
@@ -44,15 +44,12 @@ export function createAppearanceSettingsSection(ctx) {
       "options",
       "settingsAppearancePrimaryColorDraft",
       "settingsAppearanceTab",
-      "settingsAppearanceTopbarTab",
-      "settingsAppearanceWorkspaceTab",
       "settingsTabContextMenuDragId",
       "settingsTabContextMenuHiddenIdsDraft",
       "settingsTabContextMenuOrderDraft",
       "settingsTabGroupButtonDragId",
       "settingsTabGroupButtonOrderDraft",
       "settingsTabGroupButtonPlacementDraft",
-      "settingsTabGroupTab",
       "settingsTabsSidebarButtonDragId",
       "settingsTabsSidebarButtonOrderDraft",
       "settingsTabsSidebarButtonPlacementDraft",
@@ -79,8 +76,11 @@ export function createAppearanceSettingsSection(ctx) {
   const closeSettingsDialog = requireControllerFunction(ctx, controllerName, "closeSettingsDialog");
   const {
     settingsBlock,
+    settingsFieldGrid,
+    settingsFieldRow,
     settingsInnerTabs
   } = createSettingsKit({ svgIcon });
+  const fieldIds = APPEARANCE_WORKSPACE_FIELD_IDS;
 
   let appearancePaneCleanup = () => {};
   const appearanceAutosave = createAppearanceAutosave({
@@ -127,14 +127,12 @@ export function createAppearanceSettingsSection(ctx) {
     const colorHexPattern = /^#?[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
     const appearanceTabIds = new Set(["workspace", "frameToast", "topbar", "tabGroup", "tooltips"]);
     if (!appearanceTabIds.has(state.settingsAppearanceTab)) state.settingsAppearanceTab = "workspace";
-    if (!APPEARANCE_WORKSPACE_TAB_IDS.includes(state.settingsAppearanceWorkspaceTab)) {
-      state.settingsAppearanceWorkspaceTab = "general";
-    }
     const themeMode = select(state.options.themeMode || "system", [
       { value: "system", label: t("appearance.followSystem") },
       { value: "light", label: t("appearance.light") },
       { value: "dark", label: t("appearance.dark") }
     ], {
+      id: fieldIds.themeMode,
       onchange: () => {
         const nextThemeMode = themeMode.value || "system";
         queueAppearanceAutoSave({ themeMode: nextThemeMode });
@@ -145,6 +143,7 @@ export function createAppearanceSettingsSection(ctx) {
       { value: "en", label: t("appearance.english") },
       { value: "zh_CN", label: t("appearance.simplifiedChinese") }
     ], {
+      id: fieldIds.language,
       onchange: () => {
         const nextLanguage = language.value || "system";
         queueAppearanceAutoSave({ language: nextLanguage }, { redraw });
@@ -157,6 +156,7 @@ export function createAppearanceSettingsSection(ctx) {
       { value: "3", label: t("appearance.columns", { count: 3 }) },
       { value: "4", label: t("appearance.columns", { count: 4 }) }
     ], {
+      id: fieldIds.columnCount,
       onchange: () => {
         const nextColumnCount = Number(columnCount.value) || 0;
         queueAppearanceAutoSave({ colMaxCount: nextColumnCount });
@@ -183,19 +183,14 @@ export function createAppearanceSettingsSection(ctx) {
       );
     };
     const pocketIconControl = el("div", {
-      class: "field appearance-pocket-icon-field",
-      title: t("appearance.pocketIconDesc"),
+      class: "appearance-pocket-icon-options",
+      role: "radiogroup",
+      "aria-label": t("appearance.pocketIcon"),
+      "aria-describedby": fieldIds.pocketIconHelp,
       dataset: { token: "pocket-icon" }
     },
-      el("span", {}, t("appearance.pocketIcon")),
-      el("div", {
-        class: "appearance-pocket-icon-options",
-        role: "radiogroup",
-        "aria-label": t("appearance.pocketIcon")
-      },
-        pocketIconOption("star", t("appearance.pocketIconStar")),
-        pocketIconOption("pocket", t("appearance.pocketIconPocket"))
-      )
+      pocketIconOption("star", t("appearance.pocketIconStar")),
+      pocketIconOption("pocket", t("appearance.pocketIconPocket"))
     );
     const normalizePercent = (value, fallback = DEFAULT_OPTIONS.frameLoadingOverlayOpacity) => {
       const number = Number(value);
@@ -205,12 +200,12 @@ export function createAppearanceSettingsSection(ctx) {
     const overlayEnabled = state.options.frameLoadingOverlayEnabled !== false;
     const overlayOpacityValue = el("span", { class: "appearance-range-value" }, `${overlayOpacityDraft}%`);
     const overlayEnabledToggle = el("input", {
-      id: "appearance-loading-overlay-enabled",
+      id: fieldIds.loadingOverlay,
       type: "checkbox",
       role: "switch",
       checked: overlayEnabled,
       "aria-label": t("appearance.loadingOverlay"),
-      "aria-describedby": "appearance-loading-overlay-help"
+      "aria-describedby": fieldIds.loadingOverlayHelp
     });
     overlayEnabledToggle.checked = overlayEnabled;
     const overlayOpacitySlider = el("input", {
@@ -222,7 +217,7 @@ export function createAppearanceSettingsSection(ctx) {
       value: String(overlayOpacityDraft),
       disabled: !overlayEnabled,
       "aria-label": t("appearance.loadingOverlay"),
-      "aria-describedby": "appearance-loading-overlay-help"
+      "aria-describedby": fieldIds.loadingOverlayHelp
     });
     const syncOverlayOpacity = () => {
       const nextOpacity = normalizePercent(overlayOpacitySlider.value, overlayOpacityDraft);
@@ -254,16 +249,16 @@ export function createAppearanceSettingsSection(ctx) {
       value: primaryColorDraft,
       title: t("appearance.primaryColor"),
       "aria-label": t("appearance.primaryColor"),
-      "aria-describedby": "appearance-primary-color-help"
+      "aria-describedby": fieldIds.primaryColorHelp
     });
     const colorText = input(primaryColorDraft, {
-      id: "appearance-primary-color",
+      id: fieldIds.primaryColor,
       class: "input appearance-color-text",
       spellcheck: "false",
       inputmode: "text",
       maxlength: "7",
       "aria-label": t("appearance.primaryColor"),
-      "aria-describedby": "appearance-primary-color-help"
+      "aria-describedby": fieldIds.primaryColorHelp
     });
     const syncColorDraft = (value, fromPicker = false) => {
       const raw = String(value || "").trim();
@@ -728,7 +723,8 @@ export function createAppearanceSettingsSection(ctx) {
         )
       );
     };
-    const tooltipBlock = () => settingsBlock(t("appearance.buttonTooltips"), t("appearance.buttonTooltipsDesc"),
+    // The Button Tips tab already names this card, so it only says what it does.
+    const tooltipBlock = () => settingsBlock("", t("appearance.buttonTooltipsDesc"),
       el("div", { class: "tooltip-settings-list" },
         TOOLTIP_TARGET_GROUPS.map((group) => el("section", { class: "tooltip-settings-group" },
           el("h5", { class: "tooltip-settings-group-title" }, t(group.labelKey)),
@@ -740,11 +736,12 @@ export function createAppearanceSettingsSection(ctx) {
     );
     const clickReorderEnabled = state.options.settingsClickReorderButtonsEnabled === true;
     const clickReorderToggle = el("input", {
+      id: fieldIds.clickReorder,
       type: "checkbox",
       role: "switch",
       checked: clickReorderEnabled,
       "aria-label": t("appearance.clickReorderButtons"),
-      "aria-describedby": "appearance-click-reorder-help"
+      "aria-describedby": fieldIds.clickReorderHelp
     });
     clickReorderToggle.checked = clickReorderEnabled;
     clickReorderToggle.addEventListener("change", () => {
@@ -757,25 +754,14 @@ export function createAppearanceSettingsSection(ctx) {
         redrawOnError: redraw
       });
     });
-    const clickReorderControl = el("label", {
+    const clickReorderControl = el("span", {
       class: "appearance-toggle-control",
       dataset: { token: "click-reorder" }
-    },
-      el("span", { class: "appearance-toggle-copy" },
-        el("strong", {}, t("appearance.clickReorderButtons")),
-        el("small", { id: "appearance-click-reorder-help" }, t("appearance.clickReorderButtonsHelp"))
-      ),
-      clickReorderToggle
-    );
+    }, clickReorderToggle);
     const workspaceBlock = () => createAppearanceWorkspacePane({
-      activeId: state.settingsAppearanceWorkspaceTab,
       clickReorderControl,
       colorControl, columnCount, language, overlayOpacityControl, overlayToggleControl, pocketIconControl, selectionOverlayControls,
-      settingsBlock, settingsInnerTabs, svgIcon, themeMode,
-      onSelect: (id) => {
-        state.settingsAppearanceWorkspaceTab = id;
-        redraw();
-      }
+      settingsBlock, settingsFieldGrid, settingsFieldRow, svgIcon, themeMode
     });
     const activeAppearancePane = state.settingsAppearanceTab === "frameToast"
       ? frameToastPositionBlock()
@@ -788,11 +774,11 @@ export function createAppearanceSettingsSection(ctx) {
             : workspaceBlock();
     return el("div", { class: "settings-pane appearance-settings-pane" },
       settingsInnerTabs([
-        ["workspace", t("appearance.workspace"), t("appearance.workspaceTabDesc")],
-        ["topbar", t("topbar.customize.title"), t("topbar.customize.tabDesc")],
-        ["tabGroup", t("appearance.tabGroup"), t("appearance.tabGroupTabDesc")],
-        ["tooltips", t("appearance.buttonTooltips"), t("appearance.buttonTooltipsTabDesc")],
-        ["frameToast", t("appearance.frameToastTab"), t("appearance.frameToastTabDesc")]
+        ["workspace", t("appearance.workspace")],
+        ["topbar", t("topbar.customize.title")],
+        ["tabGroup", t("appearance.tabGroup")],
+        ["tooltips", t("appearance.buttonTooltips")],
+        ["frameToast", t("appearance.frameToastTab")]
       ], state.settingsAppearanceTab, (id) => {
         state.settingsAppearanceTab = id;
         redraw();
@@ -823,7 +809,6 @@ export function createAppearanceSettingsSection(ctx) {
 
   function reset() {
     state.settingsAppearanceTab = "workspace";
-    state.settingsAppearanceTopbarTab = "placeholder";
     state.settingsTopbarPromptPlaceholderDraft = "";
     state.settingsTopbarPromptPlaceholderEditingIndex = -1;
     state.settingsTopbarPromptPlaceholderDragIndex = "";

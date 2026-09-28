@@ -32,7 +32,6 @@ assert.doesNotMatch(
 );
 assert.deepEqual(stateKeys(topbarSource), [
   "options",
-  "settingsAppearanceTopbarTab",
   "settingsTopbarPromptPlaceholderDraft",
   "settingsTopbarPromptPlaceholderDragIndex",
   "settingsTopbarPromptPlaceholderEditingIndex"
@@ -174,7 +173,6 @@ globalThis.window = { confirm: () => true };
         order: "sequential"
       }
     },
-    settingsAppearanceTopbarTab: "placeholder",
     settingsTopbarPromptPlaceholderDraft: "",
     settingsTopbarPromptPlaceholderDragIndex: "",
     settingsTopbarPromptPlaceholderEditingIndex: -1
@@ -213,8 +211,12 @@ globalThis.window = { confirm: () => true };
     /Appearance settings section state port/
   );
 
+  // Top Bar is one page of three cards; Layout / Input / Placeholder used to be
+  // a tab row nested under the Appearance tab row.
   const placeholderPane = controller.pane(() => { redrawCount += 1; });
   body.append(placeholderPane);
+  assert.ok(!firstByClass(placeholderPane, "settings-inner-tabs"), "Top Bar must not nest a tab row");
+  assert.equal(findByTag(placeholderPane, "section").length, 3, "Top Bar stacks Toolbar layout, Input and Placeholder cards");
   const rows = placeholderPane.querySelectorAll(".topbar-placeholder-row");
   assert.equal(rows.length, 2);
   const transferred = new Map();
@@ -242,7 +244,7 @@ globalThis.window = { confirm: () => true };
   assert.equal(state.settingsTopbarPromptPlaceholderDragIndex, "");
   assert.equal(rows[1].classList.contains("drop-after"), false);
 
-  const [modeSelect] = findByTag(placeholderPane, "select");
+  const [modeSelect] = findByTag(firstByClass(placeholderPane, "topbar-placeholder-controls"), "select");
   modeSelect.value = "interval";
   await modeSelect.listeners.get("change")[0]();
   assert.equal(savedPatches.length, 1);
@@ -265,7 +267,6 @@ globalThis.window = { confirm: () => true };
   assert.equal(syncCount, 2);
   assert.equal(redrawCount, 2);
 
-  state.settingsAppearanceTopbarTab = "input";
   const inputPane = controller.pane(() => {});
   const fontSizeSlider = firstByClass(inputPane, "topbar-prompt-input-font-size-slider");
   const fontSizeValue = firstByClass(inputPane, "appearance-range-value");
@@ -289,8 +290,7 @@ globalThis.window = { confirm: () => true };
   placementSelect.listeners.get("change")[0]();
   assert.deepEqual(autosavePatches[1], { composerPlacement: "center" });
 
-  state.settingsAppearanceTopbarTab = "layout";
-  const layoutPane = controller.pane(() => {});
+  const layoutPane = inputPane;
   const customizeButton = firstByClass(layoutPane, "settings-primary-action");
   customizeButton.listeners.get("click")[0]();
   assert.equal(closeCount, 1);

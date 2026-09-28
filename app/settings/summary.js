@@ -116,8 +116,8 @@ export function createSummarySettingsSection(ctx) {
     return el("div", { class: "settings-pane" },
       recordFullTextBlock(redraw),
       settingsInnerTabs([
-        ["ai", t("summary.aiTab"), t("summary.aiTabDesc")],
-        ["scripts", t("summary.scriptsTab"), t("summary.scriptsTabDesc")]
+        ["ai", t("summary.aiTab")],
+        ["scripts", t("summary.scriptsTab")]
       ], active, (id) => {
         state.summarySettingsTab = id;
         if (id !== "scripts") state.summaryCollectorEditingId = "";

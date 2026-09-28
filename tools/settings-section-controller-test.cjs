@@ -80,8 +80,6 @@ globalThis.document = { addEventListener() {} };
     "options",
     "settingsAppearancePrimaryColorDraft",
     "settingsAppearanceTab",
-    "settingsAppearanceTopbarTab",
-    "settingsAppearanceWorkspaceTab",
     "settingsTopbarPromptPlaceholderDraft",
     "settingsTopbarPromptPlaceholderDragIndex",
     "settingsTopbarPromptPlaceholderEditingIndex",
@@ -176,7 +174,8 @@ globalThis.document = { addEventListener() {} };
   assert.match(appsSource, /dataset\.appsTabId\s*=\s*tabs\[index\]/);
   assert.match(appsSource, /apps-settings-tab-bar-row/);
   assert.match(stylesSource, /\.apps-settings-tab-bar-row\s*\{[\s\S]*display:\s*flex[\s\S]*flex-wrap:\s*wrap[\s\S]*gap:\s*28px/);
-  assert.match(stylesSource, /\.apps-settings-tab-bar-row > \.settings-inner-tabs\s*\{[\s\S]*flex:\s*0 0 auto[\s\S]*width:\s*fit-content[\s\S]*grid-auto-columns:\s*minmax\(132px, auto\)/);
+  assert.match(stylesSource, /\.apps-settings-tab-bar-row > \.settings-inner-tabs\s*\{[^}]*flex:\s*0 0 auto/);
+  assert.match(stylesSource, /\.settings-inner-tabs \{[^}]*display: inline-flex;[^}]*width: fit-content;/, "both Apps tab bars hug their single-line labels");
   assert.match(appsSource, /function iframePermissionsTabBar\(/);
   assert.match(appsSource, /function platformsPane\(/);
   assert.match(appsSource, /function iframePermissionsPane\(/);
@@ -186,8 +185,8 @@ globalThis.document = { addEventListener() {} };
   assert.match(platformsPane, /activeSource === "custom" \? customPane\(redraw\) : builtInPane\(redraw\)/);
   const iframePermissionsTabBar = functionSource(appsSource, "iframePermissionsTabBar");
   assert.match(iframePermissionsTabBar, /state\.options\?\.iframePermissionsSource === "custom"/);
-  assert.match(iframePermissionsTabBar, /t\("apps\.tabBuiltIn"\), t\("apps\.tabBuiltInDesc"\)/);
-  assert.match(iframePermissionsTabBar, /t\("apps\.tabCustom"\), t\("apps\.tabCustomDesc"\)/);
+  assert.match(iframePermissionsTabBar, /\["builtIn", t\("apps\.tabBuiltIn"\)\]/);
+  assert.match(iframePermissionsTabBar, /\["custom", t\("apps\.tabCustom"\)\]/);
   assert.match(iframePermissionsTabBar, /dataset\.iframePermissionsTabId/);
   assert.match(iframePermissionsTabBar, /dataset\.platformSourceTabId/);
   const iframePermissionsPane = functionSource(appsSource, "iframePermissionsPane");

@@ -810,8 +810,8 @@ export function createModelsSettingsSection(ctx) {
     const activeTab = state.modelPreferenceSettingsTab === "failure" ? "failure" : "preferred";
     state.modelPreferenceSettingsTab = activeTab;
     const tabs = [
-      ["preferred", t("modelPreferences.preferredTab"), t("modelPreferences.preferredTabDesc")],
-      ["failure", t("modelPreferences.failureTab"), t("modelPreferences.failureTabDesc")]
+      ["preferred", t("modelPreferences.preferredTab")],
+      ["failure", t("modelPreferences.failureTab")]
     ];
     const tabBar = settingsInnerTabs(tabs, activeTab, (id) => {
       state.modelPreferenceSettingsTab = id;

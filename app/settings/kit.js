@@ -67,12 +67,37 @@ export function createSettingsKit({ svgIcon }) {
       title || description
         ? el("div", { class: "ui-card-header settings-block-header" },
           el("div", {},
-            el("h4", {}, title),
+            title ? el("h4", {}, title) : null,
             description ? el("p", {}, description) : null
           )
         )
         : null,
       el("div", { class: "ui-card-body settings-block-body" }, children)
+    );
+  }
+
+  // One setting per row: its name (plus a ghost (i) or a help line) in a
+  // shared label column, the control start-aligned in the next one. Rows of
+  // one grid share both columns through subgrid, so every control starts on
+  // the same edge however long its label is, and none is stretched to the
+  // card width. `note` is live guidance that belongs under the control.
+  function settingsFieldGrid(...rows) {
+    return el("div", { class: "settings-field-grid" }, rows);
+  }
+
+  function settingsFieldRow(label, control, { htmlFor = "", help = "", helpId = "", info = null, note = null, className = "" } = {}) {
+    return el("div", { class: `settings-field-row ${className}`.trim() },
+      el("div", { class: "settings-field-label" },
+        el("span", { class: "settings-field-name" },
+          htmlFor ? el("label", { for: htmlFor }, label) : el("span", {}, label),
+          info
+        ),
+        help ? el("small", { id: helpId || null }, help) : null
+      ),
+      el("div", { class: "settings-field-control" },
+        control,
+        note ? el("p", { class: "settings-field-note" }, note) : null
+      )
     );
   }
 
@@ -122,9 +147,14 @@ export function createSettingsKit({ svgIcon }) {
     );
   }
 
+  // A single-line tab row of [id, label] pairs that hugs its labels. Tabs
+  // used to carry a description line too: it doubled the row height, was
+  // clipped with an ellipsis at every width, and repeated the header of the
+  // card the tab opened. A pane holds at most one of these rows; sub-areas
+  // below it are stacked cards, never a second tab row.
   function settingsInnerTabs(tabs, activeId, onSelect) {
     return el("div", { class: "settings-inner-tabs", role: "tablist" },
-      tabs.map(([id, label, description]) => {
+      tabs.map(([id, label]) => {
         const active = id === activeId;
         return el("button", {
           class: `settings-inner-tab ${active ? "active" : ""}`,
@@ -136,8 +166,7 @@ export function createSettingsKit({ svgIcon }) {
             onSelect(id);
           }
         },
-          el("strong", {}, label),
-          description ? el("span", {}, description) : null
+          el("strong", {}, label)
         );
       })
     );
@@ -197,6 +226,8 @@ export function createSettingsKit({ svgIcon }) {
     settingsDragHandle,
     settingsReorderHandle,
     settingsEmptyRow,
+    settingsFieldGrid,
+    settingsFieldRow,
     settingsIconAction,
     settingsInfoButton,
     settingsInfoTitle,

@@ -17,8 +17,6 @@ import {
 } from "./appearance-model.js";
 import { validateControllerContract } from "../controller-contract.js";
 
-const TAB_GROUP_SETTINGS_TABS = Object.freeze(["buttons", "contextMenu", "tabsSidebar"]);
-
 export function createAppearanceTabGroupController(dependencies = {}) {
   const { state, svgIcon, queueAppearanceAutoSave } = validateControllerContract(
     dependencies,
@@ -29,7 +27,7 @@ export function createAppearanceTabGroupController(dependencies = {}) {
       queueAppearanceAutoSave: "function"
     }
   );
-  const { settingsBlock, settingsDragHandle, settingsInnerTabs } = createSettingsKit({ svgIcon });
+  const { settingsBlock, settingsDragHandle } = createSettingsKit({ svgIcon });
   let activeDrag = null;
 
   const tabGroupButtonLabel = (id) => ({
@@ -99,15 +97,20 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     if (!Array.isArray(state.settingsTabsSidebarButtonOrderDraft)) {
       state.settingsTabsSidebarButtonOrderDraft = normalizeTabsSidebarButtonOrder(state.options.tabsSidebarButtonOrder);
     }
-    if (!TAB_GROUP_SETTINGS_TABS.includes(state.settingsTabGroupTab)) state.settingsTabGroupTab = "buttons";
   }
+
+  // The three boards share one page, and the header and sidebar boards share
+  // their row and zone classes, so every selector is scoped to its board:
+  // otherwise a header button dragged over the sidebar board would preview a
+  // drop there and land in its own board's matching zone.
+  const boardScope = (kind) => `[data-drag-kind="${kind}"]`;
 
   function dragConfig(kind) {
     if (kind === "contextMenu") {
       return {
         kind,
-        rowSelector: ".tab-context-menu-placement-row",
-        zoneSelector: ".tab-context-menu-placement-zone",
+        rowSelector: `.tab-context-menu-placement-row${boardScope(kind)}`,
+        zoneSelector: `.tab-context-menu-placement-zone${boardScope(kind)}`,
         draggingClass: "settings-tab-context-menu-dragging",
         dragStateKey: "settingsTabContextMenuDragId",
         currentPlacement: (item) => state.settingsTabContextMenuHiddenIdsDraft.includes(item.id) ? "hidden" : "visible"
@@ -116,8 +119,8 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     if (kind === "tabsSidebar") {
       return {
         kind,
-        rowSelector: ".tab-group-button-placement-row",
-        zoneSelector: ".tab-group-button-placement-zone",
+        rowSelector: `.tab-group-button-placement-row${boardScope(kind)}`,
+        zoneSelector: `.tab-group-button-placement-zone${boardScope(kind)}`,
         draggingClass: "settings-tab-group-button-dragging",
         dragStateKey: "settingsTabsSidebarButtonDragId",
         currentPlacement: (item) => state.settingsTabsSidebarButtonPlacementDraft[item.id] || item.defaultPlacement || "pinned"
@@ -125,8 +128,8 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     }
     return {
       kind: "tabGroup",
-      rowSelector: ".tab-group-button-placement-row",
-      zoneSelector: ".tab-group-button-placement-zone",
+      rowSelector: `.tab-group-button-placement-row${boardScope("tabGroup")}`,
+      zoneSelector: `.tab-group-button-placement-zone${boardScope("tabGroup")}`,
       draggingClass: "settings-tab-group-button-dragging",
       dragStateKey: "settingsTabGroupButtonDragId",
       currentPlacement: (item) => state.settingsTabGroupButtonPlacementDraft[item.id] || item.defaultPlacement || "pinned"
@@ -379,7 +382,7 @@ export function createAppearanceTabGroupController(dependencies = {}) {
         : tabGroupButtonLabel(item.id);
     return el("div", {
       class: `${rowClass} ${item.danger ? "is-danger" : ""}`.trim(),
-      dataset: { buttonId: item.id },
+      dataset: { buttonId: item.id, dragKind: kind },
       draggable: "false",
       onpointerdown: (event) => startDrag(event, item, redraw, kind),
       ondragstart: preventNativeDrag,
@@ -414,6 +417,7 @@ export function createAppearanceTabGroupController(dependencies = {}) {
       el("div", {
         class: `${zoneClass} is-${placement}`,
         "data-placement": placement,
+        "data-drag-kind": kind,
         ondragover: preventNativeDrag,
         ondrop: preventNativeDrag
       },
@@ -430,7 +434,7 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     const byId = tabGroupButtonById;
     const ordered = order.map((id) => byId.get(id)).filter(Boolean);
     const itemsFor = (value) => ordered.filter((item) => tabGroupButtonPlacementValue(placement[item.id] || item.defaultPlacement) === value);
-    return settingsBlock(t("appearance.tabGroup"), t("appearance.tabGroupDesc"),
+    return settingsBlock(t("appearance.tabGroupButtons"), t("appearance.tabGroupDesc"),
       el("div", { class: "appearance-field-list" },
         el("p", { class: "settings-muted-help" }, t("appearance.tabGroupButtonsHelp")),
         el("div", { class: "tab-group-button-placement-list" },
@@ -475,31 +479,19 @@ export function createAppearanceTabGroupController(dependencies = {}) {
     );
   }
 
+  // Header buttons, the right-click menu and the Tabs sidebar hover buttons
+  // are three boards on one page; they used to be a third tab row under
+  // Appearance's own.
   function pane(redraw = () => {}) {
     ensureDrafts();
-    const activeTab = state.settingsTabGroupTab;
-    const innerTabs = settingsInnerTabs([
-      ["buttons", t("appearance.tabGroup"), t("appearance.tabGroupTabDesc")],
-      ["contextMenu", t("appearance.tabContextMenu"), t("appearance.tabContextMenuTabDesc")],
-      ["tabsSidebar", t("appearance.tabsSidebar"), t("appearance.tabsSidebarTabDesc")]
-    ], activeTab, (id) => {
-      state.settingsTabGroupTab = id;
-      redraw();
-    });
-    innerTabs.setAttribute("aria-label", t("appearance.tabGroupTabsLabel"));
-    const activePane = activeTab === "contextMenu"
-      ? tabContextMenuPane(redraw)
-      : activeTab === "tabsSidebar"
-        ? tabsSidebarPane(redraw)
-        : tabGroupButtonsPane(redraw);
-    return el("div", { class: `appearance-tab-group-pane is-${activeTab}` },
-      innerTabs,
-      activePane
+    return el("div", { class: "settings-pane appearance-tab-group-pane" },
+      tabGroupButtonsPane(redraw),
+      tabContextMenuPane(redraw),
+      tabsSidebarPane(redraw)
     );
   }
 
   function reset() {
-    state.settingsTabGroupTab = "buttons";
     state.settingsTabGroupButtonPlacementDraft = null;
     state.settingsTabGroupButtonOrderDraft = null;
     state.settingsTabGroupButtonDragId = "";

@@ -160,7 +160,6 @@ for (const [file, list] of [
   ["app/settings/message-navigation.js", "message-navigator-list settings-list-fill"],
   ["app/settings/topic-deletion.js", "topic-delete-list settings-list-fill"],
   ["app/settings/shortcuts.js", "shortcut-list settings-list-fill"],
-  ["app/settings/appearance-topbar.js", "topbar-placeholder-list settings-list-fill"],
   ["app/settings/controller.js", "prompt-library-list settings-list-fill"]
 ]) {
   assert.ok(fs.readFileSync(path.join(root, file), "utf8").includes(list), `${file} must let its table scroll instead of the page (${list})`);

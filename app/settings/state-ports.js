@@ -74,18 +74,18 @@ const SETTINGS_STATE_SECTION_IDS = Object.freeze([
 
 const SETTINGS_SECTION_STATE_ACCESS = Object.freeze({
   appearance: stateAccess([
-    "options", "settingsAppearancePrimaryColorDraft", "settingsAppearanceTab", "settingsAppearanceTopbarTab",
-    "settingsAppearanceWorkspaceTab", "settingsTabContextMenuDragId", "settingsTabContextMenuHiddenIdsDraft",
+    "options", "settingsAppearancePrimaryColorDraft", "settingsAppearanceTab",
+    "settingsTabContextMenuDragId", "settingsTabContextMenuHiddenIdsDraft",
     "settingsTabContextMenuOrderDraft", "settingsTabGroupButtonDragId", "settingsTabGroupButtonOrderDraft",
-    "settingsTabGroupButtonPlacementDraft", "settingsTabGroupTab", "settingsTabsSidebarButtonDragId",
+    "settingsTabGroupButtonPlacementDraft", "settingsTabsSidebarButtonDragId",
     "settingsTabsSidebarButtonOrderDraft", "settingsTabsSidebarButtonPlacementDraft",
     "settingsTopbarPromptPlaceholderDraft",
     "settingsTopbarPromptPlaceholderDragIndex", "settingsTopbarPromptPlaceholderEditingIndex", "topbarEditLayoutDraft"
   ], [
-    "options", "settingsAppearancePrimaryColorDraft", "settingsAppearanceTab", "settingsAppearanceTopbarTab",
-    "settingsAppearanceWorkspaceTab", "settingsTabContextMenuDragId", "settingsTabContextMenuHiddenIdsDraft",
+    "options", "settingsAppearancePrimaryColorDraft", "settingsAppearanceTab",
+    "settingsTabContextMenuDragId", "settingsTabContextMenuHiddenIdsDraft",
     "settingsTabContextMenuOrderDraft", "settingsTabGroupButtonDragId", "settingsTabGroupButtonOrderDraft",
-    "settingsTabGroupButtonPlacementDraft", "settingsTabGroupTab", "settingsTabsSidebarButtonDragId",
+    "settingsTabGroupButtonPlacementDraft", "settingsTabsSidebarButtonDragId",
     "settingsTabsSidebarButtonOrderDraft", "settingsTabsSidebarButtonPlacementDraft",
     "settingsTopbarPromptPlaceholderDraft",
     "settingsTopbarPromptPlaceholderDragIndex", "settingsTopbarPromptPlaceholderEditingIndex", "topbarEditLayoutDraft"

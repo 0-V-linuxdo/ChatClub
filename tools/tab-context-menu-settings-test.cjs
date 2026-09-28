@@ -19,9 +19,11 @@ const moduleUrl = (file) => pathToFileURL(path.join(root, file)).href;
   assert.match(appearanceSource, /createAppearanceTabGroupController/);
   assert.match(appearanceSource, /appearanceTabGroup\.pane\(redraw\)/);
   assert.doesNotMatch(appearanceSource, /\["contextMenu",\s*t\("appearance\.tabContextMenu"\)/);
-  assert.match(tabGroupSource, /settingsInnerTabs\(\[/);
-  assert.match(tabGroupSource, /\["contextMenu",\s*t\("appearance\.tabContextMenu"/);
-  assert.match(tabGroupSource, /state\.settingsTabGroupTab/);
+  // The right-click menu board is the second of three stacked Tab Group cards,
+  // no longer a tab of its own under the Appearance tab row.
+  assert.doesNotMatch(tabGroupSource, /settingsInnerTabs|settingsTabGroupTab/);
+  assert.match(tabGroupSource, /tabGroupButtonsPane\(redraw\),\s*tabContextMenuPane\(redraw\),\s*tabsSidebarPane\(redraw\)/);
+  assert.match(tabGroupSource, /settingsBlock\(t\("appearance\.tabContextMenu"\), t\("appearance\.tabContextMenuDesc"\)/);
   assert.match(tabGroupSource, /tabContextMenuOrder:/);
   assert.match(tabGroupSource, /tabContextMenuHiddenIds:/);
   assert.match(tabGroupSource, /tab-context-menu-placement-list/);
