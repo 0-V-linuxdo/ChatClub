@@ -130,7 +130,8 @@ const root = path.resolve(__dirname, "..");
   assert.deepEqual(liveOf({ tail: ["bogus", u("x")] }).tail, [u("x")]);
 
   // Marks.
-  const mark = markFromLedger(base, { now: Date.UTC(2026, 8, 28) });
+  const now = Date.UTC(2026, 8, 28, 12);
+  const mark = markFromLedger(base, { now: now - 60 * 60_000 });
   assert.equal(mark.v, FULLTEXT_LEDGER_VERSION);
   assert.equal(mark.conversationKey, "chatgpt:abc");
   assert.equal(mark.digest, base.digest);
@@ -147,7 +148,6 @@ const root = path.resolve(__dirname, "..");
   assert.equal(ledgerLastUserOverlaps({ head: "something else entirely", tail: "" }, "Explain ChatClub"), false);
 
   // Decisions.
-  const now = 10 * 60 * 60_000;
   const decide = (live, ctx = {}) => decideFullTextCapture(live, { now, visible: true, ...ctx });
 
   assert.equal(decide(null).action, "wait");
@@ -180,16 +180,33 @@ const root = path.resolve(__dirname, "..");
   assert.equal(decide(liveOf({ tail: behindTail, digest: ledgerDigest("turns", behindTail) }), { mark }).reason, "behind");
 
   // Other alignments.
+  // A changed tail without a new user message needs evidence.
   const regenTail = [u("q1"), a("r1"), u("q2"), a("r2 again")];
-  const regen = decide(liveOf({ tail: regenTail, digest: ledgerDigest("turns", regenTail) }), { mark });
-  assert.equal(regen.action, "capture");
+  const hovered = liveOf({ tail: regenTail, digest: ledgerDigest("turns", regenTail) });
+  assert.deepEqual(decide(hovered, { mark }), { action: "skip", reason: "no-evidence" }, "hover text on the last turn is not a regenerated reply");
+  assert.equal(decide({ ...hovered, generatingSeenAgoMs: 2 * 60 * 60_000 }, { mark }).reason, "no-evidence", "generating before the mark is no evidence");
+  const regen = decide({ ...hovered, generatingSeenAgoMs: 30_000 }, { mark });
+  assert.equal(regen.action, "capture", "a generating signal after the mark makes it a regenerate");
   assert.equal(regen.turns, 2);
+  assert.equal(decide(hovered, { mark, sendHint: { prompt: "q2", at: now } }).action, "skip", "a send hint alone is not enough without the prompt on the page");
+  assert.equal(decide({ ...hovered, containsPrompt: true }, { mark, sendHint: { prompt: "q2", at: now } }).action, "capture");
+  const markedWithChars = markFromLedger({ ...base, tailChars: [10, 200, 10, 300] }, { now: now - 60 * 60_000 });
+  assert.deepEqual(markedWithChars.tailChars, [10, 200, 10, 300]);
+  assert.equal(decide({ ...hovered, tailChars: [10, 200, 10, 320] }, { mark: markedWithChars }).reason, "no-evidence", "a few characters of hover text are not growth");
+  assert.equal(decide({ ...hovered, tailChars: [10, 200, 10, 1300] }, { mark: markedWithChars }).action, "capture", "a reply that kept streaming after a mid-stream mark is growth");
+  assert.equal(decide({ ...hovered, tailChars: [10, 200, 10, 1300] }, { mark }).reason, "no-evidence", "a mark without counts carries no length evidence");
+  const assistantOnlyTail = [...S, a("r2 continued")];
+  const assistantOnly = liveOf({ tail: assistantOnlyTail, digest: ledgerDigest("turns", assistantOnlyTail) });
+  assert.equal(decide(assistantOnly, { mark }).reason, "no-evidence", "an appended assistant block without a signal is not growth");
+  assert.equal(decide({ ...assistantOnly, tailChars: [10, 200, 10, 300, 900] }, { mark }).action, "capture");
   const otherTail = [u("x"), a("y")];
-  const diverged = liveOf({ tail: otherTail, digest: ledgerDigest("turns", otherTail) });
+  const diverged = liveOf({ tail: otherTail, digest: ledgerDigest("turns", otherTail), generatingSeenAgoMs: 30_000 });
+  assert.equal(decide({ ...diverged, generatingSeenAgoMs: null }, { mark }).reason, "no-evidence");
   assert.equal(decide(diverged, { mark }).turns, FULLTEXT_LEDGER_TAIL);
   assert.equal(decide({ ...diverged, viewportAtEnd: false }, { mark }).action, "wait", "a diverged tail read far above the end is not trusted");
 
-  // First sight: a conversation this desk never recorded is recorded once.
+  // First sight: a conversation this frame navigated to (or was sent to) that
+  // this desk never recorded is recorded once.
   const first = decide(base, {});
   assert.equal(first.action, "capture");
   assert.equal(first.reason, "first-sight");
@@ -198,11 +215,34 @@ const root = path.resolve(__dirname, "..");
 
   // Legacy records (no mark, or an older ledger version) are adopted when the last prompt matches.
   const record = { hasPair: true, lastUserMessage: "q2 question text" };
-  assert.deepEqual(decide(base, { record }), { action: "adopt", reason: "legacy" });
+  assert.deepEqual(decide(base, { record }), { action: "adopt", reason: "legacy", source: "adopted" });
   assert.equal(decide(base, { record, mark: { ...mark, v: FULLTEXT_LEDGER_VERSION + 1 } }).action, "adopt");
-  const legacyDiverged = decide(base, { record: { hasPair: true, lastUserMessage: "a completely different prompt" } });
+  const staleRecord = { hasPair: true, lastUserMessage: "a completely different prompt" };
+  const legacyDiverged = decide(base, { record: staleRecord });
   assert.equal(legacyDiverged.action, "capture");
   assert.equal(legacyDiverged.turns, FULLTEXT_LEDGER_TAIL);
+  assert.deepEqual(
+    decide(base, { record: staleRecord, restored: true }),
+    { action: "adopt", reason: "legacy-restored", source: "adopted-unverified" },
+    "a conversation that was already open is adopted, not Copied, even when its record is behind"
+  );
+  const unverified = decide(grown, { mark: { ...mark, source: "adopted-unverified" } });
+  assert.equal(unverified.action, "capture");
+  assert.equal(unverified.turns, FULLTEXT_LEDGER_TAIL, "its first real growth Copies a wider tail to cover what the record missed");
+
+  // Already open when the page started watching: remembered, never Copied
+  // until it grows, and then Copied whole.
+  assert.deepEqual(decide(base, { restored: true }), { action: "baseline", reason: "restored" });
+  const baseline = markFromLedger(base, { source: "baseline", now: now - 60 * 60_000 });
+  assert.equal(decide(base, { restored: true, baseline }).reason, "none");
+  assert.equal(decide(hovered, { restored: true, baseline }).reason, "no-evidence");
+  const restoredGrowth = decide(grown, { restored: true, baseline });
+  assert.deepEqual({ action: restoredGrowth.action, turns: restoredGrowth.turns, reason: restoredGrowth.reason }, { action: "capture", turns: 0, reason: "restored-append" });
+  assert.equal(
+    decide({ ...base, containsPrompt: true }, { restored: true, sendHint: { prompt: "q2", at: now } }).reason,
+    "first-sight",
+    "a conversation this page just sent to is never treated as merely restored"
+  );
   assert.equal(decide(liveOf({ lastUser: null, granularity: "blocks" }), { record }).action, "adopt");
 
   // Pages whose roles are not classified only Copy for a matching send.
@@ -248,7 +288,7 @@ const root = path.resolve(__dirname, "..");
   // Noise feedback: Copies that came back unchanged put the conversation in strict mode.
   const noisy = nextCaptureStateEntry(nextCaptureStateEntry(null, "unchanged", { now: now - 4 * 60 * 60_000 }), "unchanged", { now: now - 3 * 60 * 60_000 });
   assert.equal(noisy.noiseStreak, 2);
-  assert.equal(decide(regenTail && liveOf({ tail: regenTail, digest: ledgerDigest("turns", regenTail) }), { mark, state: noisy }).reason, "strict");
+  assert.equal(decide({ ...hovered, generatingSeenAgoMs: 30_000 }, { mark, state: noisy }).reason, "strict");
   assert.equal(decide(grown, { mark, state: noisy }).action, "capture", "a new user turn still Copies in strict mode");
   assert.equal(nextCaptureStateEntry(noisy, "saved", { now }).noiseStreak, 0);
 

@@ -99,10 +99,8 @@ function createClock() {
 
   function ledgerOf(frame, clock) {
     const rendered = [...frame.prepended, ...frame.messages];
-    const entries = rendered.map((message, index) => ledgerTurnEntry(
-      message.role,
-      index === rendered.length - 1 ? `${message.text}${frame.noiseSuffix}` : message.text
-    ));
+    const texts = rendered.map((message, index) => (index === rendered.length - 1 ? `${message.text}${frame.noiseSuffix}` : message.text));
+    const entries = rendered.map((message, index) => ledgerTurnEntry(message.role, texts[index]));
     const users = rendered.filter((message) => message.role === "user");
     const last = users[users.length - 1]?.text || "";
     return {
@@ -116,6 +114,7 @@ function createClock() {
       hasPair: rendered.some((message) => message.role === "assistant") && users.length > 0,
       digest: ledgerDigest("turns", entries),
       tail: entries.slice(-12),
+      tailChars: texts.map((text) => text.length).slice(-12),
       lastUser: last ? { head: last.slice(0, 160), tail: last.slice(-160) } : null,
       containsPrompt: Boolean(frame.prompt) && rendered.some((message) => message.text.includes(frame.prompt)),
       generating: frame.generating,
@@ -141,6 +140,7 @@ function createClock() {
     for (const frame of frames) frame.changedAt = clock.now() - 30 * MINUTE;
     const desk = { workspaceId: DESK, frames: typeof record === "function" ? record(clock) : record || [] };
     const collects = [];
+    const logs = [];
     const behaviour = { collect: null, persistPaused: null };
     let enabled = true;
     const visibilityWaiters = new Set();
@@ -193,12 +193,14 @@ function createClock() {
       workspaceId: () => DESK,
       loadCaptureState: async () => session.value,
       saveCaptureState: async (value) => { session.value = JSON.parse(JSON.stringify(value)); },
-      cancelCollect: () => undefined
+      cancelCollect: () => undefined,
+      log: (details) => { logs.push(details); }
     });
     return {
       clock,
       desk,
       collects,
+      logs,
       behaviour,
       reconciler,
       setVisible(value) {
@@ -253,15 +255,55 @@ function createClock() {
     h.reconciler.stop();
   }
 
-  // 3. A conversation this desk never recorded is recorded once.
+  // 3. A conversation that was already open when the page started (reload,
+  //    reopened desk) and was never recorded is not Copied for being there;
+  //    it is recorded, whole, once it grows.
   {
     const frame = createFrame("f1", "fresh");
     const h = harness({ frames: [frame] });
     h.reconciler.start();
     await h.clock.advance(30 * MINUTE);
+    assert.equal(h.collects.length, 0, "an unchanged open conversation is not Copied after a reload");
+    frame.change(h.clock, { messages: [...frame.messages, ...pair(3)] });
+    await h.clock.advance(5 * MINUTE);
     assert.equal(h.collects.length, 1);
-    assert.equal(h.collects[0].turns, 0, "first sight Copies the whole conversation");
+    assert.equal(h.collects[0].turns, 0, "a conversation recorded for the first time is Copied whole");
+    assert.equal(h.logs[0].reason, "restored-append");
     assert.ok(markFor(h.desk, frame));
+    h.reconciler.stop();
+  }
+
+  // 3b. A frame on a start page whose user starts a chat in the site's own
+  //     composer is recorded once the reply settles.
+  {
+    const frame = createFrame("f1", "later");
+    frame.href = "https://chatgpt.com/";
+    frame.messages = [];
+    const h = harness({ frames: [frame] });
+    h.reconciler.start();
+    await h.clock.advance(MINUTE);
+    frame.change(h.clock, { href: "https://chatgpt.com/c/started", messages: [pair(1)[0]], generating: true });
+    await h.clock.advance(15_000);
+    frame.change(h.clock, { messages: pair(1), generating: false });
+    await h.clock.advance(5 * MINUTE);
+    assert.equal(h.collects.length, 1);
+    assert.equal(h.logs[0].reason, "first-sight");
+    h.reconciler.stop();
+  }
+
+  // 3c. A record that fell behind is adopted while its conversation is
+  //     merely open, and its first real growth Copies a wider tail.
+  {
+    const frame = createFrame("f1", "behind");
+    const h = harness({ frames: [frame], record: (clock) => [recordedFrame({ ...frame, messages: frame.messages.slice(0, 2) }, clock, { withMark: false })] });
+    h.reconciler.start();
+    await h.clock.advance(10 * MINUTE);
+    assert.equal(h.collects.length, 0);
+    assert.equal(markFor(h.desk, frame)?.source, "adopted-unverified");
+    frame.change(h.clock, { messages: [...frame.messages, ...pair(5)] });
+    await h.clock.advance(5 * MINUTE);
+    assert.equal(h.collects.length, 1);
+    assert.equal(h.collects[0].turns, 12);
     h.reconciler.stop();
   }
 
@@ -286,13 +328,16 @@ function createClock() {
   {
     const frame = createFrame("f1", "unmatched");
     const session = { value: null };
-    const h = harness({ frames: [frame], session });
+    const record = (clock) => [recordedFrame(frame, clock)];
+    const h = harness({ frames: [frame], session, record });
     h.behaviour.collect = async () => ({ status: "ok", instanceId: frame.key, page: { href: frame.href, messages: [{ role: "user", text: "nothing like it" }] } });
     h.reconciler.start();
+    await h.clock.advance(MINUTE);
+    frame.change(h.clock, { messages: [...frame.messages, ...pair(6)] });
     await h.clock.advance(60 * MINUTE);
     assert.equal(h.collects.length, 2, "one retry, then parked");
     h.reconciler.stop();
-    const reloaded = harness({ frames: [frame], session });
+    const reloaded = harness({ frames: [frame], session, record: () => h.desk.frames });
     reloaded.behaviour.collect = h.behaviour.collect;
     reloaded.reconciler.start();
     await reloaded.clock.advance(30 * MINUTE);
@@ -363,18 +408,39 @@ function createClock() {
     h.reconciler.stop();
   }
 
-  // 10. A Copy that comes back with unchanged text adopts the ledger; a site
-  //     whose last turn keeps flickering ends in strict mode.
+  // 10. Text that comes and goes on the last message (a hover toolbar, a
+  //     counter, the pointer leaving for Settings) is not a new reply.
   {
     const frame = createFrame("f1", "noisy");
     const h = harness({ frames: [frame], record: (clock) => [recordedFrame(frame, clock)] });
     h.reconciler.start();
-    for (let index = 1; index <= 6; index += 1) {
+    for (let index = 1; index <= 8; index += 1) {
       await h.clock.advance(2 * MINUTE);
-      frame.change(h.clock, { noiseSuffix: ` (${index})` });
+      frame.change(h.clock, { noiseSuffix: index % 2 ? " 1/2 Good response" : "" });
     }
     await h.clock.advance(20 * MINUTE);
-    assert.ok(h.collects.length <= 2, `a flickering last turn stops being Copied (got ${h.collects.length})`);
+    assert.equal(h.collects.length, 0, "hover text on the last message never Copies");
+    h.reconciler.stop();
+  }
+
+  // 10b. A regenerated reply shows a generating signal after the mark and is
+  //      Copied once; the log says why.
+  {
+    const frame = createFrame("f1", "regen");
+    const h = harness({ frames: [frame], record: (clock) => [recordedFrame(frame, clock)] });
+    h.reconciler.start();
+    await h.clock.advance(MINUTE);
+    const kept = frame.messages.slice(0, -1);
+    frame.change(h.clock, { messages: [...kept, { role: "assistant", text: "A" }], generating: true });
+    await h.clock.advance(10_000);
+    frame.change(h.clock, { messages: [...kept, { role: "assistant", text: "A regenerated answer" }], generating: false });
+    await h.clock.advance(5 * MINUTE);
+    assert.equal(h.collects.length, 1);
+    assert.equal(h.collects[0].turns, 2);
+    assert.deepEqual(
+      { reason: h.logs[0].reason, alignment: h.logs[0].alignment, conversationKey: h.logs[0].conversationKey },
+      { reason: "last-changed", alignment: "last-changed", conversationKey: "chatgpt:regen" }
+    );
     h.reconciler.stop();
   }
 

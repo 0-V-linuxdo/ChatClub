@@ -21,9 +21,9 @@ const measuredOutputs = Object.keys(CONTENT_ENTRIES).sort();
 const byteBudgets = Object.freeze({
   // Exact base cost after the conversation ledger replaced the one-shot
   // fingerprint: one document observer, per-turn hashes over noise-hardened
-  // turn text, and conversation keys shared with the parent, so Record Full
-  // Text only Copies when the conversation actually changed.
-  "content/content.js": 133_158,
+  // turn text with per-turn lengths, and conversation keys shared with the
+  // parent, so Record Full Text only Copies when the conversation changed.
+  "content/content.js": 133_449,
   "content/send.js": 85_000,
   // Bundles that embed the shared frame-command contract each carry the
   // cancelSummaryCollection command plus collectSummary runId; the shared
@@ -49,13 +49,13 @@ const byteBudgets = Object.freeze({
 // Exact base-plus-capabilities closure after the conversation ledger joined
 // the base bundle, turn discovery gained its sticky selector group, and the
 // collection guard learned to restore an idle Copy's scroll.
-const aggregateByteBudget = 838_539;
+const aggregateByteBudget = 838_830;
 // Exact all-bundle closure after MAIN-world page-caret document_start
 // bootstrap plus the isolated command-contract growth for
 // cancelSummaryCollection and collectSummary runId, and the conversation
 // ledger that decides when Record Full Text may Copy, and the idle tail slice
 // in the built-in Summary bodies.
-const allBundlesByteBudget = 1_635_943;
+const allBundlesByteBudget = 1_636_234;
 
 const bundleIdentities = Object.fromEntries(Object.keys(CONTENT_ENTRIES).map((outputPath) => [
   outputPath,

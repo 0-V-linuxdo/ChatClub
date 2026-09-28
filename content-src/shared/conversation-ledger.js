@@ -328,6 +328,8 @@ export function createConversationLedger(deps = {}) {
     if (Number.isInteger(listed?.group) && listed.group >= 0) stickyGroup = listed.group;
     const classified = [];
     const all = [];
+    const classifiedChars = [];
+    const allChars = [];
     const haystack = [];
     let users = 0;
     let assistants = 0;
@@ -339,14 +341,17 @@ export function createConversationLedger(deps = {}) {
       try { role = String(turnRole(node) || ""); } catch {}
       const entry = ledgerTurnEntry(role, text);
       all.push(entry);
+      allChars.push(text.length);
       haystack.push(text);
       if (role === "user") {
         users += 1;
         lastUserText = text;
         classified.push(entry);
+        classifiedChars.push(text.length);
       } else if (role === "assistant") {
         assistants += 1;
         classified.push(entry);
+        classifiedChars.push(text.length);
       }
     }
     const granularity = !all.length ? "none" : users && assistants ? "turns" : "blocks";
@@ -387,6 +392,7 @@ export function createConversationLedger(deps = {}) {
       hasPair: users > 0 && assistants > 0,
       digest,
       tail: entries.slice(-FULLTEXT_LEDGER_TAIL),
+      tailChars: (granularity === "turns" ? classifiedChars : allChars).slice(-FULLTEXT_LEDGER_TAIL),
       lastUser: lastUserText ? { head: lastUserText.slice(0, 160), tail: lastUserText.slice(-160) } : null,
       containsPrompt,
       generating,

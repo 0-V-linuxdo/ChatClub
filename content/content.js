@@ -413,12 +413,12 @@
 
   // chatclub-runtime-version:shared/content-runtime-version.generated.js
   var CONTENT_RUNTIME_PROTOCOL_VERSION = "2026.07.16.2";
-  var CONTENT_RUNTIME_SOURCE_SHA256 = "a50077b932a7e242d82b97703368bb82cd7c5de052739a577d60f34524452c91";
+  var CONTENT_RUNTIME_SOURCE_SHA256 = "8cebbca0cf4774cd2647caa3c5d414952dfc42f65249c154a2702b87072c8e4d";
   var CONTENT_RUNTIME_BUILD_RECIPE_VERSION = "1+recipe.512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
   var CONTENT_RUNTIME_BUILD_RECIPE_SHA256 = "512e47683be2b8724d612f4f82b32e022c7fdc86a2d4a8fa6d958a824c280021";
-  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
-  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.21048b8d084f616dc808e806e1813ff2a3f4dd8af47320abe9ffb785afa17052";
-  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "61eaddfc0b8c669a3e0308b5abefcf27359686cc6cd509619d9ec1a6bfe0ea5b", "implementationSha256": "df3fe5ff4c73bed6f1ca76f8100fceab2e81051dbfa93d6154c30f69e0fc9143", "implementationVersion": "2026.07.16.2+bundle.df3fe5ff4c73bed6f1ca76f8100fceab2e81051dbfa93d6154c30f69e0fc9143" });
+  var CONTENT_RUNTIME_IMPLEMENTATION_SHA256 = "c1f18141a04368ea136fb2d65d9b2fb6618ba2713af931fa2b3235658c24e2d0";
+  var CONTENT_RUNTIME_IMPLEMENTATION_VERSION = "2026.07.16.2+implementation.c1f18141a04368ea136fb2d65d9b2fb6618ba2713af931fa2b3235658c24e2d0";
+  var CONTENT_RUNTIME_CONTENT_BUNDLE_IDENTITY = /* @__PURE__ */ Object.freeze({ "outputPath": "content/content.js", "entryPath": "content-src/content.js", "sourceSha256": "fcba1d3d4cd79f9ca318d53848d571581a3d0bd406fc364806be696d40a0f300", "implementationSha256": "c6ed0cd4dd0f727ec9b0da270b379950d3c7f9fc1ef12eeaaad21a254e66fd72", "implementationVersion": "2026.07.16.2+bundle.c6ed0cd4dd0f727ec9b0da270b379950d3c7f9fc1ef12eeaaad21a254e66fd72" });
 
   // shared/content-runtime-identity.js
   if (CONTENT_RUNTIME_PROTOCOL_VERSION !== CONTENT_BRIDGE_VERSION) {
@@ -1460,6 +1460,8 @@ ${list.join("|")}`) : "";
       if (Number.isInteger(listed?.group) && listed.group >= 0) stickyGroup = listed.group;
       const classified = [];
       const all = [];
+      const classifiedChars = [];
+      const allChars = [];
       const haystack = [];
       let users = 0;
       let assistants = 0;
@@ -1474,14 +1476,17 @@ ${list.join("|")}`) : "";
         }
         const entry = ledgerTurnEntry(role, text);
         all.push(entry);
+        allChars.push(text.length);
         haystack.push(text);
         if (role === "user") {
           users += 1;
           lastUserText = text;
           classified.push(entry);
+          classifiedChars.push(text.length);
         } else if (role === "assistant") {
           assistants += 1;
           classified.push(entry);
+          classifiedChars.push(text.length);
         }
       }
       const granularity = !all.length ? "none" : users && assistants ? "turns" : "blocks";
@@ -1531,6 +1536,7 @@ ${list.join("|")}`) : "";
         hasPair: users > 0 && assistants > 0,
         digest,
         tail: entries.slice(-FULLTEXT_LEDGER_TAIL),
+        tailChars: (granularity === "turns" ? classifiedChars : allChars).slice(-FULLTEXT_LEDGER_TAIL),
         lastUser: lastUserText ? { head: lastUserText.slice(0, 160), tail: lastUserText.slice(-160) } : null,
         containsPrompt,
         generating,

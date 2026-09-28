@@ -3,7 +3,8 @@ import {
   FULLTEXT_LEDGER_VERSION,
   fullTextTextsOverlap,
   normalizeLedgerGranularity,
-  normalizeLedgerTail
+  normalizeLedgerTail,
+  normalizeLedgerTailChars
 } from "../../shared/fulltext-ledger.js";
 
 // The Record Full Text decision: pure functions over a live conversation
@@ -20,6 +21,10 @@ export const FULLTEXT_CAPTURE_TIMINGS = Object.freeze({
   settleAfterGeneratingMs: 5_000,
   settleNoSignalMs: 20_000,
   generatingMemoryMs: 10 * 60_000,
+  // Without a new user message, a generating signal or a matching send, a
+  // changed tail only counts as content once it gained this much text:
+  // hover toolbars, counters and "Copied" labels never do.
+  minGrowthChars: 64,
   userQuietMs: 8_000,
   minCaptureGapMs: 45_000,
   maxCapturesPerHour: 8,
@@ -54,6 +59,7 @@ export function normalizeLedger(raw) {
     ? { head: sampleText(raw.lastUser.head), tail: sampleText(raw.lastUser.tail) }
     : null;
   const input = raw.input && typeof raw.input === "object" ? raw.input : {};
+  const tail = normalizeLedgerTail(raw.tail);
   return {
     ledgerVersion: FULLTEXT_LEDGER_VERSION,
     ledgerId: String(raw.ledgerId || ""),
@@ -65,7 +71,8 @@ export function normalizeLedger(raw) {
     turnCount: Math.max(0, Math.floor(Number(raw.turnCount) || 0)),
     hasPair: raw.hasPair === true,
     digest: /^[0-9a-f]{16}$/.test(String(raw.digest || "")) ? String(raw.digest) : "",
-    tail: normalizeLedgerTail(raw.tail),
+    tail,
+    tailChars: normalizeLedgerTailChars(raw.tailChars, tail),
     lastUser: lastUser && (lastUser.head || lastUser.tail) ? lastUser : null,
     containsPrompt: raw.containsPrompt === true,
     generating: raw.generating === true,
@@ -82,12 +89,15 @@ export function normalizeLedger(raw) {
 
 export function markFromLedger(ledger, { source = "idle", now = Date.now() } = {}) {
   if (!ledger?.conversationKey) return null;
+  const tail = normalizeLedgerTail(ledger.tail);
+  const tailChars = normalizeLedgerTailChars(ledger.tailChars, tail);
   return {
     v: FULLTEXT_LEDGER_VERSION,
     conversationKey: String(ledger.conversationKey),
     granularity: normalizeLedgerGranularity(ledger.granularity),
     digest: String(ledger.digest || ""),
-    tail: normalizeLedgerTail(ledger.tail),
+    tail,
+    ...(tailChars ? { tailChars } : {}),
     turnCount: Math.max(0, Math.floor(Number(ledger.turnCount) || 0)),
     capturedAt: new Date(Number(now) || Date.now()).toISOString(),
     source: String(source || "idle")
@@ -243,6 +253,22 @@ export function nextCaptureStateEntry(entry, outcome, { digest = "", now = Date.
   }
 }
 
+function sum(values = []) {
+  return values.reduce((total, value) => total + (Number(value) || 0), 0);
+}
+
+// Text the live tail gained over the mark: the new entries of an append, or
+// the growth of a changed last turn. 0 when either side has no counts.
+function tailGrowthChars(live, mark, alignment) {
+  const liveChars = live.tailChars;
+  if (!Array.isArray(liveChars) || liveChars.length !== live.tail.length) return 0;
+  if (alignment.kind === "append") return sum(liveChars.slice(alignment.firstNew));
+  if (alignment.kind !== "last-changed") return 0;
+  const markChars = mark.tailChars;
+  if (!Array.isArray(markChars) || !markChars.length) return 0;
+  return liveChars[liveChars.length - 1] - markChars[markChars.length - 1];
+}
+
 function skip(reason) {
   return { action: "skip", reason };
 }
@@ -276,39 +302,65 @@ export function decideFullTextCapture(live, ctx = {}) {
   // Without classified roles the digest is only a hint; it may only Copy on
   // first sight or for a prompt this page was just sent.
   const growthAllowed = live.granularity === "turns" || sendMatched;
-  let turns = 0;
-  let alignment = null;
-  let reason = "first-sight";
-  if (mark) {
-    if (live.granularity === "none") {
-      if (!sendMatched) return skip("no-turns");
-      reason = "send";
-    } else {
-      alignment = alignLedgerTails(mark.tail, live.tail);
-      reason = alignment.kind;
-      if (alignment.kind === "none" || alignment.kind === "behind") return skip(alignment.kind);
-      if (!growthAllowed) return skip("no-growth-signal");
-      if (alignment.kind === "append" || alignment.kind === "rewound") {
-        turns = captureTurnCount(live.tail, alignment.firstNew);
-      } else if (alignment.kind === "last-changed") {
-        turns = 2;
-      } else {
-        if (!live.viewportAtEnd) return wait("diverged-away", T.heartbeatMs);
-        turns = FULLTEXT_LEDGER_TAIL;
-      }
+  // The conversation this frame already showed when this page started
+  // watching it: nothing changed here, so it is never Copied just for being
+  // there, only once it really grows.
+  const restored = ctx.restored === true && !sendMatched;
+
+  // Compares the live tail with a reference ledger (the stored mark, or the
+  // baseline of a conversation that was already open) and returns either a
+  // skip/wait decision or what to Copy.
+  const growthOver = (reference) => {
+    if (live.granularity === "none") return sendMatched ? { turns: 0, reason: "send", alignment: null } : skip("no-turns");
+    const alignment = alignLedgerTails(reference.tail, live.tail);
+    if (alignment.kind === "none" || alignment.kind === "behind") return skip(alignment.kind);
+    if (!growthAllowed) return skip("no-growth-signal");
+    // A changed tail is content only with evidence: a new user message, a
+    // generating signal after the reference was taken, a matching send, or
+    // real text growth. Hover-mounted text that comes and goes has none.
+    const referenceAt = Date.parse(reference.capturedAt) || 0;
+    const generatedSince = live.generatingSeenAgoMs !== null && now - live.generatingSeenAgoMs >= referenceAt;
+    const evidence = sendMatched
+      || generatedSince
+      || (alignment.kind === "append" && alignment.newUserTurns > 0)
+      || tailGrowthChars(live, reference, alignment) >= T.minGrowthChars;
+    if (!evidence) return skip("no-evidence");
+    if (alignment.kind === "append" || alignment.kind === "rewound") {
+      return { turns: captureTurnCount(live.tail, alignment.firstNew), reason: alignment.kind, alignment };
     }
+    if (alignment.kind === "last-changed") return { turns: 2, reason: alignment.kind, alignment };
+    if (!live.viewportAtEnd) return wait("diverged-away", T.heartbeatMs);
+    return { turns: FULLTEXT_LEDGER_TAIL, reason: alignment.kind, alignment };
+  };
+
+  let plan;
+  if (mark) {
+    plan = growthOver(mark);
+    if (plan.action) return plan;
+    // A record adopted without proof that it was current may be missing the
+    // exchange before this one; its first real growth Copies a wider tail.
+    if (mark.source === "adopted-unverified" && plan.turns) plan = { ...plan, turns: Math.max(plan.turns, FULLTEXT_LEDGER_TAIL) };
   } else if (ctx.record?.hasPair) {
-    // A record Copied before marks existed, or under another ledger version:
-    // adopt the live ledger when its last prompt is the stored one.
+    // A record Copied before marks existed, or under another ledger version.
     const storedUser = String(ctx.record.lastUserMessage || "");
     if (!live.lastUser || !storedUser || ledgerLastUserOverlaps(live.lastUser, storedUser)) {
-      return { action: "adopt", reason: "legacy" };
+      return { action: "adopt", reason: "legacy", source: "adopted" };
     }
-    reason = "legacy-diverged";
-    turns = FULLTEXT_LEDGER_TAIL;
+    if (restored) return { action: "adopt", reason: "legacy-restored", source: "adopted-unverified" };
+    plan = { turns: FULLTEXT_LEDGER_TAIL, reason: "legacy-diverged", alignment: null };
   } else if (live.granularity === "turns" ? !live.hasPair : live.turnCount < 2 && !sendMatched) {
     return skip("no-pair");
+  } else if (restored) {
+    // Never recorded and already open: remember it, record it once it grows.
+    if (!ctx.baseline) return { action: "baseline", reason: "restored" };
+    plan = growthOver(ctx.baseline);
+    if (plan.action) return plan;
+    plan = { ...plan, turns: 0, reason: `restored-${plan.reason}` };
+  } else {
+    // Navigated to (or sent to) in this frame and never recorded: once.
+    plan = { turns: 0, reason: "first-sight", alignment: null };
   }
+  const alignment = plan.alignment;
   const entry = ctx.state ? normalizeCaptureStateEntry(ctx.state) : null;
   if (entry?.kind && entry.digest === live.digest) {
     if (!entry.nextAt) return skip("parked");
@@ -325,5 +377,5 @@ export function decideFullTextCapture(live, ctx = {}) {
   if (input.editing) return wait("editing", T.userQuietMs);
   if (input.seen && input.idleMs !== null && input.idleMs < T.userQuietMs) return wait("user-busy", T.userQuietMs - input.idleMs);
   if (ctx.visible === false) return wait("hidden", T.heartbeatMs);
-  return { action: "capture", reason, turns, alignment };
+  return { action: "capture", reason: plan.reason, turns: plan.turns, alignment };
 }

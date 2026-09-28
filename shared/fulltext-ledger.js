@@ -135,17 +135,28 @@ export function normalizeLedgerTail(value) {
     .slice(-FULLTEXT_LEDGER_TAIL);
 }
 
+// Character counts aligned with a tail; null when they do not line up, so a
+// mark written before they existed carries no length evidence.
+export function normalizeLedgerTailChars(value, tail) {
+  if (!Array.isArray(value) || !Array.isArray(tail) || !tail.length) return null;
+  const chars = value.slice(-tail.length).map((count) => Math.max(0, Math.floor(Number(count) || 0)));
+  return chars.length === tail.length ? chars : null;
+}
+
 export function normalizeFullTextCaptureMark(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const v = Math.floor(Number(raw.v) || 0);
   const conversationKey = String(raw.conversationKey || "").trim().slice(0, 600);
   if (v <= 0 || !conversationKey) return null;
+  const tail = normalizeLedgerTail(raw.tail);
+  const tailChars = normalizeLedgerTailChars(raw.tailChars, tail);
   return {
     v,
     conversationKey,
     granularity: normalizeLedgerGranularity(raw.granularity),
     digest: /^[0-9a-f]{16}$/.test(String(raw.digest || "")) ? String(raw.digest) : "",
-    tail: normalizeLedgerTail(raw.tail),
+    tail,
+    ...(tailChars ? { tailChars } : {}),
     turnCount: Math.max(0, Math.floor(Number(raw.turnCount) || 0)),
     capturedAt: String(raw.capturedAt || ""),
     source: String(raw.source || "")

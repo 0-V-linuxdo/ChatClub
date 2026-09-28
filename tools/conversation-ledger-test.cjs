@@ -219,6 +219,7 @@ function createObserverClass() {
     assert.equal(first.turnCount, 2);
     assert.equal(first.hasPair, true);
     assert.equal(first.tail.length, 2);
+    assert.deepEqual(first.tailChars, ["Explain ChatClub idle capture".length, "It records conversations.".length], "each tail entry carries its text length");
     assert.match(first.digest, /^[0-9a-f]{16}$/);
     assert.equal(first.lastUser.head, "Explain ChatClub idle capture");
     assert.deepEqual(first.input, { seen: false, idleMs: null, editing: false, at: clock.now() }, "a frame nobody touched reports no input, not busy");

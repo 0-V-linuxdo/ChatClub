@@ -30,6 +30,10 @@ export const FULLTEXT_RECONCILER_DEFAULTS = Object.freeze({
   // frames for this long after it cancelled one.
   cancelPauseMs: 5_000,
   markDebounceMs: 2_000,
+  // A frame's conversation counts as already open (restored, not navigated
+  // to) when it is the first one the watch sees, or appears within this long
+  // of the watch starting on a start page that redirects.
+  restoreSettleMs: 10_000,
   // Other writers (Summary, History, quick save) persist full text too; a
   // short cache keeps one storage read per desk per heartbeat at most.
   recordCacheMs: 10_000,
@@ -82,10 +86,16 @@ export function createFullTextReconciler(deps = {}) {
   const loadCaptureState = typeof deps.loadCaptureState === "function" ? deps.loadCaptureState : async () => null;
   const saveCaptureState = typeof deps.saveCaptureState === "function" ? deps.saveCaptureState : async () => {};
   const recordAnomaly = typeof deps.recordAnomaly === "function" ? deps.recordAnomaly : () => {};
+  // Every idle Copy says why in the ChatClub page console, so a Copy the user
+  // did not expect can be traced to the decision that allowed it.
+  const log = typeof deps.log === "function"
+    ? deps.log
+    : (details) => { try { console.info("[ChatClub] Record Full Text Copy", details); } catch {} };
 
   const watches = new Map();
   const sendHints = new Map();
   const pendingMarks = new Map();
+  const baselines = new Map();
   const cancelledRuns = new Set();
   const sleepers = new Set();
   const deskCaptureTimes = [];
@@ -205,6 +215,8 @@ export function createFullTextReconciler(deps = {}) {
     return decideFullTextCapture(ledger, {
       mark: stored?.mark || null,
       record: stored ? { hasPair: stored.hasPair, lastUserMessage: stored.lastUserMessage } : null,
+      restored: watch.initialKey === undefined || watch.initialKey === ledger.conversationKey,
+      baseline: baselines.get(ledger.conversationKey) || null,
       state: captureStateEntry(state, captureStateKey(desk, ledger.conversationKey)),
       sendHint: activeHint(watch.key),
       now: at,
@@ -242,6 +254,27 @@ export function createFullTextReconciler(deps = {}) {
       }
     }
     invalidateRecord();
+  }
+
+  // The conversation a watch first finds is the one this page opened with.
+  // A frame that is writing a reply was not just restored, and a start page
+  // that stays one past restoreSettleMs makes every later conversation new.
+  function noteInitialKey(watch, ledger) {
+    if (watch.initialKey !== undefined) return;
+    if (ledger && (ledger.generating || ledger.generatingSeenAgoMs !== null)) watch.initialKey = "";
+    else if (ledger?.conversationKey) watch.initialKey = ledger.conversationKey;
+    else if (now() - watch.startedAt >= T.restoreSettleMs) watch.initialKey = "";
+  }
+
+  // Decisions that do not Copy may still remember something: an adopted
+  // mark for a record written before marks, or the baseline of a
+  // conversation that was already open when this page started watching.
+  function settleWithoutCopy(decision, ledger) {
+    if (decision.action === "adopt") queueMark(ledger, decision.source || "adopted");
+    else if (decision.action === "baseline" && !baselines.has(ledger.conversationKey)) {
+      const baseline = markFromLedger(ledger, { source: "baseline", now: now() });
+      if (baseline) baselines.set(ledger.conversationKey, baseline);
+    }
   }
 
   function breakerTripped(at) {
@@ -295,12 +328,23 @@ export function createFullTextReconciler(deps = {}) {
         }
         const again = await decide(watch, pre);
         if (again.action !== "capture") {
-          if (again.action === "adopt") queueMark(pre, "adopted");
+          settleWithoutCopy(again, pre);
           return;
         }
         const at = now();
         if (breakerTripped(at)) return;
         deskCaptureTimes.push(at);
+        try {
+          log({
+            frame: watch.key,
+            conversationKey: pre.conversationKey,
+            reason: again.reason,
+            alignment: again.alignment?.kind || "",
+            turns: again.turns,
+            granularity: pre.granularity,
+            digest: pre.digest
+          });
+        } catch {}
         let item = null;
         try {
           item = await collectFrame(watch.frame, { turns: again.turns, runId, isCancelled });
@@ -380,6 +424,7 @@ export function createFullTextReconciler(deps = {}) {
         break;
       }
       if (!frameCollectable(watch.frame)) {
+        noteInitialKey(watch, null);
         since = null;
         waitMs = 0;
         await wait(T.tickMs);
@@ -403,6 +448,7 @@ export function createFullTextReconciler(deps = {}) {
         continue;
       }
       failures = 0;
+      noteInitialKey(watch, ledger);
       since = { ledgerId: ledger.ledgerId, revision: ledger.revision, conversationKey: ledger.conversationKey };
       const decision = await decide(watch, ledger);
       if (!live(gen, watch)) break;
@@ -412,7 +458,7 @@ export function createFullTextReconciler(deps = {}) {
         waitMs = 0;
         continue;
       }
-      if (decision.action === "adopt") queueMark(ledger, "adopted");
+      settleWithoutCopy(decision, ledger);
       waitMs = decision.action === "wait"
         ? Math.max(T.minPollMs, Math.min(T.heartbeatMs, Number(decision.waitMs) || T.heartbeatMs))
         : T.heartbeatMs;
@@ -439,7 +485,7 @@ export function createFullTextReconciler(deps = {}) {
         existing.frame = frame;
         continue;
       }
-      const watch = { key, frame, alive: true, runId: "" };
+      const watch = { key, frame, alive: true, runId: "", startedAt: now(), initialKey: undefined };
       watches.set(key, watch);
       void watchLoop(watch, gen);
     }
