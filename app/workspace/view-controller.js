@@ -8,6 +8,7 @@ import { buildAppPickerSections, renderAppPickerColumns } from "./app-picker.js"
 import { workspaceGridColumnCount } from "./model.js";
 import { renderPreferredModelSelectionOverlay } from "./preferred-model-selection-overlay.js";
 import { renderWorkspaceTabMenuItems } from "./tab-context-menu.js";
+import { bindWorkspaceGridWheelScroll } from "./workspace-wheel-scroll.js";
 import { createControllerMethodValidator, validateControllerContract } from "../controller-contract.js";
 const LAYOUT_POPOVER_RIGHT_EXTENSION = 40;
 const requireMethods = createControllerMethodValidator("Workspace view", "port");
@@ -248,7 +249,7 @@ export function createWorkspaceViewController(dependencies = {}) {
       );
     }
 
-    workspaceNode = grid;
+    retainWorkspaceNode(grid);
     workspaceRenderSignature = workspaceSignature();
     syncGridColumnClass();
     syncFullscreenLayout();
@@ -284,18 +285,27 @@ export function createWorkspaceViewController(dependencies = {}) {
 
   function renderWorkspace() {
     const cols = workspaceGridColumnCount(state.groups.length, state.options.colMaxCount);
-    return el("main", {
+    const grid = el("main", {
       class: `main-grid grid-cols-${cols}`,
       style: { gridTemplateColumns: workspaceColumnTemplate() }
     },
       state.groups.map((group, index) => renderChatGroup(group, index))
     );
+    bindWorkspaceGridWheelScroll(grid);
+    return grid;
+  }
+
+  function retainWorkspaceNode(grid) {
+    workspaceNode = grid;
+    bindWorkspaceGridWheelScroll(grid);
+    return grid;
   }
 
   function syncWorkspaceIsland(shell) {
     if (!shell?.isConnected) return renderWorkspace();
     const signature = workspaceSignature();
     if (workspaceNode?.isConnected && workspaceRenderSignature === signature) {
+      bindWorkspaceGridWheelScroll(workspaceNode);
       syncWorkspaceDom();
       syncFullscreenLayout();
       return workspaceNode;
@@ -306,7 +316,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     // every live chat iframe.
     syncWorkspaceTabOrder();
     if (workspaceDomMatchesState()) {
-      workspaceNode = workspaceNode?.isConnected ? workspaceNode : document.querySelector(".main-grid");
+      retainWorkspaceNode(workspaceNode?.isConnected ? workspaceNode : document.querySelector(".main-grid"));
       workspaceRenderSignature = signature;
       syncGridColumnClass();
       syncFullscreenLayout();
@@ -315,7 +325,7 @@ export function createWorkspaceViewController(dependencies = {}) {
     const nextWorkspace = renderWorkspace();
     if (workspaceNode?.isConnected) workspaceNode.replaceWith(nextWorkspace);
     else shell.append(nextWorkspace);
-    workspaceNode = nextWorkspace;
+    retainWorkspaceNode(nextWorkspace);
     workspaceRenderSignature = signature;
     syncWorkspaceDom();
     syncFullscreenLayout();
