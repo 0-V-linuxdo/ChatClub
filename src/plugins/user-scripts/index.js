@@ -1,0 +1,42 @@
+import { definePlugin } from "../../kernel/define.js";
+
+export default definePlugin({
+  name: "UserScriptsRuntime",
+  description: "plugin.UserScriptsRuntime.description",
+  authors: ["ChatClub"],
+  icon: "code",
+  tags: ["sites"],
+  required: true,
+  hidden: true,
+  startAt: "init",
+  provides: ["userScripts"],
+  strings: {
+    zh: {
+      "plugin.UserScriptsRuntime.description": "自定义脚本运行时：用浏览器的 userScripts 接口，在聊天页的页面环境里运行你写的 Summary 采集脚本和删除脚本。",
+      "us.card.title": "用户脚本权限",
+      "us.state.granted": "已授予：自定义脚本可以运行。",
+      "us.state.available": "可用：需要时再申请。保存或启用自定义脚本时，浏览器会请你允许“用户脚本”权限。",
+      "us.state.notGranted": "未授予：自定义脚本需要浏览器的“用户脚本”权限才能运行。",
+      "us.state.toggleOff": "已授予，但浏览器的开关未开：请到扩展详情页打开“允许用户脚本”（Chrome / Arc 138 起每个扩展单独设置；更早版本需要打开开发者模式），然后刷新本页。",
+      "us.state.unsupported": "这个浏览器不支持运行自定义脚本（需要 Chrome / Arc 135 或更新版本）。",
+      "us.request": "请求权限",
+      "us.openDetails": "打开扩展详情页",
+      "us.refresh": "重新检查",
+      "us.denied": "没有获得用户脚本权限",
+    },
+    en: {
+      "plugin.UserScriptsRuntime.description": "Custom script runtime: runs your Summary collector and delete scripts in the chat page's own world through the browser's userScripts API.",
+      "us.card.title": "User script permission",
+      "us.state.granted": "Granted: custom scripts can run.",
+      "us.state.available": "Available: requested when needed. Saving or enabling a custom script asks the browser for the user scripts permission.",
+      "us.state.notGranted": "Not granted: custom scripts need the browser's user scripts permission to run.",
+      "us.state.toggleOff": "Granted, but the browser switch is off: open the extension's details page and turn on “Allow User Scripts” (per extension since Chrome / Arc 138; earlier versions need Developer mode), then reload this page.",
+      "us.state.unsupported": "This browser cannot run custom scripts (Chrome / Arc 135 or newer is needed).",
+      "us.request": "Request permission",
+      "us.openDetails": "Open extension details",
+      "us.refresh": "Check again",
+      "us.denied": "The user scripts permission was not granted",
+    },
+  },
+  app: () => import("./app.js"),
+});

@@ -1,0 +1,136 @@
+/* Design tokens (spec v2 01 §4). Components reference tokens only. */
+:root {
+  color-scheme: light;
+  --bg: #f6f7f8;
+  --panel: #ffffff;
+  --panel-2: #fdfefe;
+  --text: #17201c;
+  --muted: #63716c;
+  --line: #d8e0dc;
+  --line-strong: #b8c9c2;
+  --primary: #1f7a5f;
+  --primary-2: color-mix(in srgb, var(--primary) 14%, #ffffff);
+  --on-primary: #ffffff;
+  --danger: #b42318;
+  --danger-soft: #ff8f83;
+  --danger-hover: color-mix(in srgb, var(--danger) 78%, #000000);
+  --danger-active: color-mix(in srgb, var(--danger) 64%, #000000);
+  --success: #15803d;
+  --warning: #a16207;
+  --warning-fill: #ca8a04;
+  --hover: color-mix(in srgb, var(--primary) 9%, var(--panel));
+  --control-hover: var(--hover);
+  --control-pressed: color-mix(in srgb, var(--primary) 16%, var(--panel));
+  --control-selected: color-mix(in srgb, var(--primary-2) 76%, var(--panel));
+  --focus-ring: var(--primary);
+  --drop-indicator: var(--primary);
+  --shadow: 0 16px 40px rgba(24, 36, 32, 0.16);
+  --overlay-backdrop: rgba(13, 19, 17, 0.36);
+  --overlay-border-color: color-mix(in srgb, var(--line) 84%, var(--primary) 16%);
+  --toast-bg: rgba(255, 255, 255, 0.96);
+  --toast-border: rgba(23, 32, 28, 0.14);
+  --tooltip-bg: #4a4a4a;
+  --tooltip-text: #ffffff;
+  --scrollbar-thumb: #c1c1c1;
+  --scrollbar-thumb-hover: #7d7d7d;
+  --image-scrim: rgba(12, 18, 19, 0.82);
+  --image-scrim-opaque: #0c1213;
+  --image-scrim-text: #ffffff;
+  --image-scrim-border: rgba(255, 255, 255, 0.38);
+  --image-scrim-border-strong: rgba(255, 255, 255, 0.48);
+
+  --accent: var(--primary);
+  --link: var(--primary);
+  --info: var(--primary);
+  --soft: var(--primary-2);
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --fs-body: 13px;
+  --fs-small: 12px;
+  --fs-xs: 11px;
+  --fs-tiny: 10px;
+  --fs-page-title: 15px;
+  --fs-title: 18px;
+  --fw-regular: 500;
+  --fw-medium: 600;
+  --fw-semibold: 650;
+  --fw-bold: 760;
+  --fw-heavy: 800;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --radius: 8px;
+  --radius-icon: 4px;
+  --radius-tab: 5px;
+  --radius-nested: 6px;
+  --radius-pill: 999px;
+  --hit-min: 24px;
+  --control-h: 36px;
+  --control-h-compact: 32px;
+  --panel-header-h: 34px;
+  --button-small: 28px;
+  --topbar-h: 51px;
+  --close-button: 30px;
+  --disabled-opacity: 0.48;
+
+  --z-frame-overlay: 2;
+  --z-frame-status: 3;
+  --z-frame-toast: 4;
+  --z-sidebar: 15;
+  --z-topbar: 20;
+  --z-topbar-edit: 30;
+  --z-panel: 70;
+  --z-panel-share: 71;
+  --z-modal: 80;
+  --z-modal-nested: 81;
+  --z-menu-backdrop: 99;
+  --z-menu: 100;
+  --z-toast: 120;
+  --z-tooltip: 2147483000;
+
+  --modal-w: min(720px, calc(100vw - 40px));
+  --modal-w-compact: min(560px, calc(100vw - 40px));
+  --modal-w-wide: min(1120px, calc(100vw - 40px));
+  --modal-w-task: min(1040px, calc(100vw - 40px));
+  --modal-w-workspace: min(1180px, calc(100vw - 40px));
+  --modal-max-h: calc(100vh - 40px);
+  --settings-h: min(760px, calc(100vh - 32px));
+  --modal-header-h: 46px;
+
+  --fade: 160ms ease;
+  --topbar-in: 220ms cubic-bezier(0, 0, 0.2, 1);
+  --topbar-out: 170ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111614;
+  --panel: #181f1c;
+  --panel-2: #202824;
+  --text: #e8efeb;
+  --muted: #a4b2ac;
+  --line: #34413b;
+  --line-strong: #557066;
+  --primary: #40b889;
+  --primary-2: color-mix(in srgb, var(--primary) 22%, #020617);
+  --on-primary: #082018;
+  --danger: #ff8a7a;
+  --danger-soft: #ff8a7a;
+  --danger-hover: color-mix(in srgb, var(--danger) 88%, #000000);
+  --danger-active: color-mix(in srgb, var(--danger) 76%, #000000);
+  --success: #40b889;
+  --warning: #f5c84c;
+  --warning-fill: #f6b933;
+  --hover: color-mix(in srgb, var(--primary) 12%, var(--panel));
+  --shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+  --overlay-backdrop: rgba(8, 12, 11, 0.55);
+  --toast-bg: rgba(17, 22, 20, 0.96);
+  --toast-border: rgba(255, 255, 255, 0.12);
+  --tooltip-bg: #2a322f;
+  --tooltip-text: #e8efeb;
+  --scrollbar-thumb: #5e5e5e;
+  --scrollbar-thumb-hover: #848484;
+}

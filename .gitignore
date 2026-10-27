@@ -1,15 +1,2 @@
-.DS_Store
-Thumbs.db
-
-*.log
-*.tmp
-*.temp
-
 node_modules/
 dist/
-build/
-.cache/
-/output/
-
-.env
-.env.*

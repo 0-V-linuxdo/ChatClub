@@ -1,0 +1,36 @@
+import { definePlugin } from "../../kernel/define.js";
+import { definePluginSettings } from "../../kernel/settings.js";
+import style from "./style.js";
+import strings from "./strings.js";
+
+export default definePlugin({
+  name: "TopbarAPI",
+  description: "plugin.TopbarAPI.description",
+  authors: ["ChatClub"],
+  icon: "customizeTopbar",
+  tags: ["workspace", "appearance"],
+  required: true,
+  startAt: "domReady",
+  dependencies: ["AppShell"],
+  provides: ["topbar.item", "topbar.menu"],
+  managedStyle: style,
+  strings,
+  settings: definePluginSettings({
+    topbarVisibility: {
+      optionKey: "topbarVisibility",
+      type: "select",
+      description: "topbar.visibility.description",
+      options: [
+        { label: "topbar.visibility.always", value: "always", default: true },
+        { label: "topbar.visibility.auto", value: "auto" },
+      ],
+    },
+    topbarLayout: { optionKey: "topbarLayout", type: "custom", default: null },
+    // Legacy markers: buttons added after the layout was first saved (07 §2).
+    topbarDeleteThreadMigrated: { optionKey: "topbarDeleteThreadMigrated", type: "custom", default: false },
+    topbarSearchMigrated: { optionKey: "topbarSearchMigrated", type: "custom", default: false },
+    topbarShareMigrated: { optionKey: "topbarShareMigrated", type: "custom", default: false },
+    topbarHistoryMigrated: { optionKey: "topbarHistoryMigrated", type: "custom", default: false },
+  }),
+  app: () => import("./app.js"),
+});
