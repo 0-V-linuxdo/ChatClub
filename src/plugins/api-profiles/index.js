@@ -14,16 +14,7 @@ export default definePlugin({
   usesExtensionPoints: ["settings.section"],
   settings: definePluginSettings({
     apiProfiles: { optionKey: "apiProfiles", type: "custom", default: [DEFAULT_PROFILE] },
-    apiPromotionChannelsVersion: { optionKey: "apiPromotionChannelsVersion", type: "custom", default: 0 },
-    apiProfileDefaultModelMigrationVersion: { optionKey: "apiProfileDefaultModelMigrationVersion", type: "custom", default: 0 },
-    // Old builds kept one endpoint per feature at the top level (07 §2); read once, then left alone.
-    optimizeEndpoint: { optionKey: "optimizeEndpoint", type: "custom", default: undefined },
-    optimizeApiKey: { optionKey: "optimizeApiKey", type: "custom", default: undefined },
-    optimizeModel: { optionKey: "optimizeModel", type: "custom", default: undefined },
-    summaryEndpoint: { optionKey: "summaryEndpoint", type: "custom", default: undefined },
-    summaryApiKey: { optionKey: "summaryApiKey", type: "custom", default: undefined },
-    summaryModel: { optionKey: "summaryModel", type: "custom", default: undefined },
-    // Profiles made from those fields, waiting for their feature plugin to adopt them.
+    // Profiles made from the old per-feature endpoints (LegacyMigration), waiting for their feature plugin to adopt them.
     legacyAssignments: { type: "custom", default: {} },
   }),
   strings: {

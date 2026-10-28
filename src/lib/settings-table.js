@@ -1,5 +1,5 @@
 // Sortable settings table (v2 06 §1.2 sizes, §1.4 ordering): drag the row handle to reorder;
-// optional move up / down buttons when "settingsClickReorderButtonsEnabled" is on.
+// optional move up / down buttons while the MoveButtons plugin is on.
 
 import { h, icon } from "./dom.js";
 import * as ui from "./ui.js";
@@ -115,5 +115,5 @@ export function settingsTable({ columns, rows, key = (r) => r.id, onReorder, act
   return table;
 }
 
-/** Whether the global "show move up / down" switch is on. */
-export const reorderButtonsOn = (host) => !!host.plugins.SettingsUI?.settings?.store?.settingsClickReorderButtonsEnabled;
+/** Whether sortable lists show move up / down buttons: the MoveButtons plugin is on. */
+export const reorderButtonsOn = (host) => !!host.isPluginEnabled?.("MoveButtons");

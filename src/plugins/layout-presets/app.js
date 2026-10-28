@@ -4,6 +4,7 @@ import { h, icon, uid } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
 import { DEFAULT_PRESETS } from "./index.js";
 import { DEFAULT_LAYOUT_APPS, DEFAULT_LAYOUT_APPS_ZH } from "../apps/catalog.js";
+import { reorderButtonsOn } from "../../lib/settings-table.js";
 
 const sameGroups = (a, b) => JSON.stringify(a ?? []) === JSON.stringify(b ?? []);
 
@@ -140,7 +141,7 @@ export default {
           const { list, active } = state();
           const ws = workspace();
           const info = ws?.getLayoutInfo?.() ?? {};
-          const showMove = ctx.host.plugins.SettingsUI?.settings?.store?.settingsClickReorderButtonsEnabled;
+          const showMove = reorderButtonsOn(ctx.host);
           if (info.type === "temporary") {
             const groups = ws.appIdGroups();
             const row = h("div.cc-layout-row.current",

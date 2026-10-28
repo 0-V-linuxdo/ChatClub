@@ -36,25 +36,35 @@ export function renderSettingsFields(host, plugin, { keys, onRestartNeeded } = {
       control,
     });
     row.dataset.settingKey = key;
-    const refreshDisabled = () => {
-      const disabled = defined.isDisabled(key);
-      control.querySelectorAll?.("input, select, textarea, button").forEach((el) => (el.disabled = disabled));
-      if (control.matches?.("input, select, textarea, button")) control.disabled = disabled;
-    };
-    refreshDisabled();
+    // Like Void++ setting fields: toggles and selects sit beside the label, free-form inputs go below it.
+    if (["number", "slider", "component", "string"].includes(field.type ?? "string")) row.classList.add("stacked");
+    setFieldDisabled(row, defined.isDisabled(key));
     rows.push(row);
   }
   // Re-evaluate disabled() of every row whenever any of this plugin's settings change.
   const refreshAll = () => {
     for (const row of rows) {
       const key = row.dataset.settingKey;
-      const disabled = defined.isDisabled(key);
-      row.querySelectorAll("input, select, textarea, button").forEach((el) => (el.disabled = disabled));
+      setFieldDisabled(row, defined.isDisabled(key));
     }
   };
   disposers.push(defined.use(refreshAll));
   rows.dispose = () => disposers.forEach((fn) => fn());
   return rows;
+}
+
+// Disables a whole field, and on re-enable restores only what it disabled, so a control's own
+// disabled states (e.g. the first row's "move up") survive.
+function setFieldDisabled(row, disabled) {
+  for (const el of row.querySelectorAll("input, select, textarea, button")) {
+    if (disabled && !el.disabled) {
+      el.disabled = true;
+      el.dataset.fieldDisabled = "";
+    } else if (!disabled && "fieldDisabled" in el.dataset) {
+      el.disabled = false;
+      delete el.dataset.fieldDisabled;
+    }
+  }
 }
 
 function buildControl(field, value, write, t) {
@@ -63,7 +73,7 @@ function buildControl(field, value, write, t) {
       return ui.toggleSwitch({ checked: !!value, onChange: (v) => write(v) });
     case "number": {
       const el = ui.textInput({ type: "number", value: value ?? "", placeholder: field.placeholder ? t(field.placeholder) : undefined });
-      el.style.width = "10rem";
+      el.style.width = "6rem";
       el.addEventListener("change", () => {
         if (el.value === "") return;
         if (!write(Number(el.value))) return;

@@ -2,7 +2,6 @@
 
 import { h, icon, clear } from "../../lib/dom.js";
 import * as uiLib from "../../lib/ui.js";
-import { TIP_GROUPS } from "./tip-ids.js";
 import { renderSafely } from "../../kernel/extension-points.js";
 
 const TOAST_MS = { short: 1600, default: 3200, long: 32000 };
@@ -25,12 +24,11 @@ export default {
     const toastHost = h("div.cc-toasts", { attrs: { "aria-hidden": "true" } });
     const livePolite = h("div.cc-sr-only", { attrs: { "aria-live": "polite", role: "status" } });
     const liveAssertive = h("div.cc-sr-only", { attrs: { "aria-live": "assertive", role: "alert" } });
-    const tooltip = h("div.cc-tooltip", { attrs: { role: "tooltip" } });
     clear(mount);
     mount.append(shell);
-    doc.body.append(overlayRoot, menuRoot, toastHost, livePolite, liveAssertive, tooltip);
+    doc.body.append(overlayRoot, menuRoot, toastHost, livePolite, liveAssertive);
     ctx.onDispose(() => {
-      for (const el of [shell, overlayRoot, menuRoot, toastHost, livePolite, liveAssertive, tooltip]) el.remove();
+      for (const el of [shell, overlayRoot, menuRoot, toastHost, livePolite, liveAssertive]) el.remove();
     });
 
     // ------------------------------------------------------------ layer stack
@@ -70,6 +68,53 @@ export default {
     };
     doc.addEventListener("keydown", onKeydown, true);
     ctx.onDispose(() => doc.removeEventListener("keydown", onKeydown, true));
+
+    // ------------------------------------------------------------ focus guard
+    // Chat pages focus themselves (on load, after a reply, on a timer) and can pull the caret out of
+    // a dialog, panel, menu or text field, even while the workspace is inert. Remember where focus
+    // was and hand it back when an iframe takes it without the user going there. The composer is
+    // left to PromptFocus, which leases the caret to it.
+    let lastFocus = null; // { el, layer }
+    let pointerOverFrame = false;
+    let frameFocusOkUntil = 0;
+    const GUARDED_LAYERS = new Set(["modal", "panel", "menu"]);
+    const layerOf = (node) => [...layers].reverse().find((l) => GUARDED_LAYERS.has(l.kind) && l.el.contains(node)) ?? null;
+    const onFocusIn = (event) => {
+      const target = event.target;
+      if (target?.tagName === "IFRAME") return;
+      const layer = layerOf(target);
+      lastFocus = layer || (isTextField(target) && !target.closest(".cc-composer")) ? { el: target, layer } : null;
+    };
+    const onMouseOver = (event) => (pointerOverFrame = event.target?.tagName === "IFRAME");
+    const onWindowBlur = () => {
+      const saved = lastFocus;
+      setTimeout(() => {
+        if (doc.activeElement?.tagName !== "IFRAME" || !doc.hasFocus()) return;
+        const modals = layers.filter((l) => l.kind === "modal");
+        const top = modals[modals.length - 1];
+        const usable = (el) => el?.isConnected && !el.closest("[inert]") && !el.disabled;
+        let target = null;
+        if (top) {
+          // The workspace is inert under a dialog: the user cannot have gone there.
+          target = saved?.layer === top && usable(saved.el) ? saved.el : top.focusTarget?.() ?? firstFocusable(top.el);
+        } else if (saved && !pointerOverFrame && Date.now() > frameFocusOkUntil) {
+          if (saved.layer && !layers.includes(saved.layer)) return;
+          if (usable(saved.el)) target = saved.el;
+        }
+        target?.focus({ preventScroll: true });
+      }, 60);
+    };
+    doc.addEventListener("focusin", onFocusIn, true);
+    doc.addEventListener("mouseover", onMouseOver, true);
+    window.addEventListener("blur", onWindowBlur);
+    /** Lets a deliberate move into a chat frame (a click on it, trusted input) keep the focus. */
+    const allowFrameFocus = (ms = 600) => (frameFocusOkUntil = Math.max(frameFocusOkUntil, Date.now() + ms));
+    ctx.events.on("Frames:userClickedFrame", () => allowFrameFocus());
+    ctx.onDispose(() => {
+      doc.removeEventListener("focusin", onFocusIn, true);
+      doc.removeEventListener("mouseover", onMouseOver, true);
+      window.removeEventListener("blur", onWindowBlur);
+    });
 
     // ------------------------------------------------------------ modals
     const modalsByKey = new Map();
@@ -142,10 +187,8 @@ export default {
       box.addEventListener("keydown", (event) => trapFocus(event, box));
       overlayRoot.append(backdrop);
       if (key) modalsByKey.set(key, handle);
-      queueMicrotask(() => {
-        const target = (initialFocus && box.querySelector(initialFocus)) || box.querySelector("[autofocus]") || firstFocusable(box);
-        target?.focus();
-      });
+      layer.focusTarget = () => (initialFocus && box.querySelector(initialFocus)) || box.querySelector("[autofocus]") || firstTextField(box.querySelector(".cc-modal-body")) || firstFocusable(box);
+      queueMicrotask(() => layer.focusTarget()?.focus({ preventScroll: true }));
       return handle;
     }
 
@@ -513,111 +556,6 @@ export default {
       notice = null;
     }
 
-    // ------------------------------------------------------------ tooltips
-    let tipTarget = null;
-    // Old tip ids map onto their current names (07 §2).
-    const TIP_ALIASES = {
-      "pocket.collapseSidebar": "pocket.sidebar",
-      "pocket.expandSidebar": "pocket.sidebar",
-      "pocket.exitFocusMode": "pocket.focusMode",
-      "pocket.fullscreen": "viewer.fullscreen",
-      "workspace.tabs.unpin": "workspace.tabs.pin",
-      "workspace.tabs.sortTime": "workspace.tabs.sortActivity",
-      "workspace.tabs.sortViewed": "workspace.tabs.sortActivity",
-      "workspace.tabs.sortEdited": "workspace.tabs.sortActivity",
-    };
-    {
-      const stored = Array.isArray(ctx.settings.tooltipDisabledIds) ? ctx.settings.tooltipDisabledIds : [];
-      const mapped = [...new Set(stored.filter((id) => typeof id === "string").map((id) => TIP_ALIASES[id] ?? id))];
-      if (mapped.length !== stored.length || mapped.some((id, i) => id !== stored[i])) ctx.settings.tooltipDisabledIds = mapped;
-    }
-    const disabledTips = () => new Set(ctx.settings.tooltipDisabledIds ?? []);
-    // The text each tip id last showed, so the settings list can name and preview it.
-    const seenTips = new Map();
-    const showTip = (target) => {
-      const text = target.dataset.tip;
-      if (target.dataset.tipId && text) seenTips.set(target.dataset.tipId, text);
-      if (!text || target.disabled && !target.dataset.tipWhenDisabled) return hideTip();
-      if (target.dataset.tipId && disabledTips().has(target.dataset.tipId)) return hideTip();
-      tipTarget = target;
-      tooltip.textContent = text;
-      tooltip.classList.add("show");
-      const rect = target.getBoundingClientRect();
-      const tw = tooltip.offsetWidth;
-      const th = tooltip.offsetHeight;
-      let side = "bottom";
-      let top = rect.bottom + 8;
-      if (top + th > window.innerHeight - 8) {
-        side = "top";
-        top = rect.top - th - 8;
-      }
-      const center = rect.left + rect.width / 2;
-      const left = Math.max(8, Math.min(center - tw / 2, window.innerWidth - tw - 8));
-      tooltip.dataset.side = side;
-      tooltip.style.left = `${left}px`;
-      tooltip.style.top = `${top}px`;
-      tooltip.style.setProperty("--arrow-x", `${Math.max(10, Math.min(tw - 10, center - left))}px`);
-    };
-    const hideTip = () => {
-      tipTarget = null;
-      tooltip.classList.remove("show");
-    };
-    const onOver = (event) => {
-      const target = event.target.closest?.("[data-tip]");
-      if (target === tipTarget) return;
-      if (!target) return hideTip();
-      showTip(target);
-    };
-    const onDownOrScroll = () => hideTip();
-    doc.addEventListener("pointerover", onOver);
-    doc.addEventListener("pointerdown", onDownOrScroll, true);
-    doc.addEventListener("scroll", onDownOrScroll, true);
-    doc.addEventListener("focusin", (event) => {
-      const target = event.target.closest?.("[data-tip]");
-      if (target && target.matches(":focus-visible")) showTip(target);
-    });
-    doc.addEventListener("focusout", hideTip);
-    ctx.onDispose(() => {
-      doc.removeEventListener("pointerover", onOver);
-      doc.removeEventListener("pointerdown", onDownOrScroll, true);
-      doc.removeEventListener("scroll", onDownOrScroll, true);
-    });
-
-    // Appearance → Button tips (06 §3.6): one switch per tip id, grouped, with a hover preview.
-    ctx.contribute("appearance.group", {
-      id: "AppShell:tips",
-      tab: "tips",
-      order: 0,
-      titleKey: "appShell.tips.card",
-      render(container) {
-        for (const el of doc.querySelectorAll("[data-tip-id][data-tip]")) seenTips.set(el.dataset.tipId, el.dataset.tip);
-        const off = () => new Set(ctx.settings.tooltipDisabledIds ?? []);
-        const setOn = (id, on) => {
-          const next = off();
-          if (on) next.delete(id);
-          else next.add(id);
-          ctx.settings.tooltipDisabledIds = [...next];
-        };
-        const t = ctx.t;
-        const allOn = uiLib.button({ label: t("appShell.tips.allOn"), onClick: () => {
-          ctx.settings.tooltipDisabledIds = [];
-          container.querySelectorAll("input[role='switch']").forEach((i) => (i.checked = true));
-        } });
-        container.append(h("div.cc-tips-head", h("p.cc-zones-desc", t("appShell.tips.desc")), allOn));
-        for (const [group, ids] of Object.entries(TIP_GROUPS)) {
-          const rows = ids.map((id) => {
-            const text = seenTips.get(id) ?? "";
-            const preview = h("button.cc-tips-preview", { type: "button", attrs: { "data-tip": text || id, "aria-label": t("appShell.tips.preview") } }, icon("eye", { size: 14 }));
-            return h("div.cc-tips-row",
-              uiLib.toggleSwitch({ checked: !off().has(id), label: id, onChange: (v) => setOn(id, v) }),
-              h("span.cc-tips-text", text ? h("span", text) : null, h("code", id)),
-              preview);
-          });
-          container.append(h("details.cc-tips-group", { attrs: { open: group === "topbar" ? "" : null } }, h("summary", `${t(`appShell.tips.group.${group}`)} · ${ids.length}`), ...rows));
-        }
-      },
-    });
-
     // Rich help cards for (i) buttons.
     let richCard = null;
     let pinnedRich = null;
@@ -750,7 +688,9 @@ export default {
         },
       };
       closeBtn.addEventListener("click", () => handle.close("button"));
-      const removeLayer = pushLayer({ kind: "panel", el: panel, escapeCloses, close: (r) => handle.close(r) });
+      const panelLayer = { kind: "panel", el: panel, escapeCloses, close: (r) => handle.close(r), focusTarget: () => bodyEl.querySelector("[autofocus]") || firstFocusable(bodyEl) };
+      const removeLayer = pushLayer(panelLayer);
+      queueMicrotask(() => bodyEl.querySelector("[autofocus]")?.focus({ preventScroll: true }));
       return handle;
     }
 
@@ -851,11 +791,31 @@ export default {
       );
     }
 
+    ctx.contribute("appearance.field", {
+      id: "AppShell:toastStay",
+      group: "Appearance:general",
+      order: 70,
+      render(container) {
+        container.append(uiLib.field({
+          label: t("appShell.toastStay"),
+          desc: t("appShell.toastStay.description"),
+          control: uiLib.select({
+            value: ctx.settings.toastStay ?? "default",
+            options: ["short", "default", "long"].map((v) => ({ value: v, label: t(`appShell.toastStay.${v}`) })),
+            onChange: (v) => (ctx.settings.toastStay = v),
+          }),
+        }));
+      },
+    });
+
     const ui = {
       toast, dismissToast, showNotice, closeNotice, openModal, closeModal, closeAllModals, confirm, modalLayout,
       openMenu, closeMenus, openPopover, helpButton, openFloatingPanel, panels: panelApi, showFatal,
       hasOpenLayer: () => layers.length > 0,
       topLayerKind: () => layers[layers.length - 1]?.kind ?? null,
+      /** How long a plain toast stays, in ms (the "Toast duration" setting); errors stay twice as long. */
+      toastStayMs: () => TOAST_MS[ctx.settings.toastStay] ?? TOAST_MS.default,
+      allowFrameFocus,
     };
     ctx.services.provide("ui", ui);
     ctx.services.provide("shell", { page, shell, topbarSlot, workspaceSlot, sidebarSlot, overlayRoot, setFullscreen: (on) => (shell.dataset.fullscreen = String(!!on)) });
@@ -864,6 +824,13 @@ export default {
 
 function firstFocusable(root) {
   return root.querySelector('button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])');
+}
+
+const isTextField = (el) => !!el?.matches?.('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="file"]):not([type="color"]), textarea, [contenteditable="true"]');
+
+/** First field the user types into (text inputs and text areas), for dialogs that open on a form. */
+function firstTextField(root) {
+  return root?.querySelector('input:not(:disabled):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="file"]):not([type="color"]):not([readonly]), textarea:not(:disabled):not([readonly])') ?? null;
 }
 
 function trapFocus(event, box) {

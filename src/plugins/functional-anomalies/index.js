@@ -6,7 +6,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "alert",
   tags: ["data"],
-  required: true,
+  enabledByDefault: true,
   startAt: "init",
   usesExtensionPoints: ["settings.section"],
   strings: {

@@ -137,6 +137,14 @@ export class PluginHost {
     if (plugin.required || plugin.isDependency) return true;
     const stored = this.settings.getEnabledSetting(name);
     if (stored !== undefined) return stored;
+    // A function decides from the saved options, so a setting that became a plugin keeps its old value.
+    if (typeof plugin.enabledByDefault === "function") {
+      try {
+        return !!plugin.enabledByDefault(this.settings.optionsBag?.data ?? {});
+      } catch {
+        return false;
+      }
+    }
     return plugin.enabledByDefault === true;
   }
 

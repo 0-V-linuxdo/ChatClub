@@ -49,8 +49,25 @@ export default {
     chrome.runtime.onMessage.addListener(onMessage);
     ctx.onDispose(() => chrome.runtime.onMessage.removeListener(onMessage));
 
+    /** Injects the bundles of enabled capabilities into an already-loaded frame (no reload needed). */
+    const reinject = async (frameKey) => {
+      const plan = await ctx.background.request("contentPlan", {});
+      for (const entry of plan) {
+        if (expected.get(frameKey)?.capabilities?.has(entry.capability)) continue;
+        await ctx.background.request("inject", { binding: frameKey, files: entry.js, world: entry.world }).catch(() => {});
+      }
+    };
+    // A frame can load before the background registers a just-enabled plugin's bundle; inject it on first use.
+    const ensureCapability = async (frameKey, capability) => {
+      const rec = expected.get(frameKey);
+      if (!rec?.registered || capability === "base" || rec.capabilities.has(capability)) return;
+      await reinject(frameKey).catch(() => {});
+      for (let i = 0; i < 15 && !expected.get(frameKey)?.capabilities?.has(capability); i += 1) await new Promise((r) => setTimeout(r, 100));
+    };
+
     const send = async (frameKey, { capability, command, payload }, spec = {}) => {
       if (!expected.has(frameKey)) throw new Error("unknown frame");
+      await ensureCapability(frameKey, capability);
       return ctx.background.request("send", { binding: frameKey, capability, command, payload, timeoutMs: spec.timeoutMs });
     };
 
@@ -110,14 +127,7 @@ export default {
         if (ctx.host.isPluginEnabled?.("CookieBridge")) await ctx.host.requestBackground("CookieBridge", "cookiePreflight", { url }).catch(() => null);
         return result;
       },
-      /** Injects the bundles of enabled capabilities into already-loaded frames (no reload needed). */
-      async reinject(frameKey) {
-        const plan = await ctx.background.request("contentPlan", {});
-        for (const entry of plan) {
-          if (expected.get(frameKey)?.capabilities?.has(entry.capability)) continue;
-          await ctx.background.request("inject", { binding: frameKey, files: entry.js, world: entry.world }).catch(() => {});
-        }
-      },
+      reinject,
       tabId: () => myTabId,
     });
     ctx.services.provide("frames.reloadAll", () => {

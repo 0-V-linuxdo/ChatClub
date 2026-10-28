@@ -14,6 +14,7 @@ export default definePlugin({
   requiresReload: true,
   startAt: "init",
   provides: ["panel"],
+  usesExtensionPoints: ["appearance.field"],
   managedStyle: style + WINDOW_VIEWER_STYLE,
   strings,
   settings: definePluginSettings({
@@ -27,8 +28,6 @@ export default definePlugin({
         { label: "appShell.toastStay.long", value: "long" },
       ],
     },
-    tooltipDisabledIds: { optionKey: "tooltipDisabledIds", type: "custom", default: [] },
-    frameToastPosition: { optionKey: "frameToastPosition", type: "custom", default: { x: 100, y: 100 } },
   }),
   app: () => import("./app.js"),
 });

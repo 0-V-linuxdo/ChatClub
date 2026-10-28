@@ -1,14 +1,13 @@
 // Appearance: applies theme mode and accent color; hosts the Appearance settings section whose
-// sub-tabs are filled by `appearance.group` contributions from other plugins.
+// sub-tabs are filled by `appearance.group` cards and `appearance.field` rows from other plugins.
 
 import { h, clear } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
 import { renderSafely } from "../../kernel/extension-points.js";
-import { renderSettingsFields } from "../../lib/settings-form.js";
 import { normalizeHexColor, onPrimaryFor, mix, DEFAULT_PRIMARY } from "./color.js";
 
-// The four sub-tabs of 06 §3, then the theme list (QuickCSS and themes).
-const TABS = ["workspace", "tabGroup", "chatclubTabs", "tips", "themes"];
+// The four sub-tabs of 06 §3.
+const TABS = ["workspace", "tabGroup", "chatclubTabs", "tips"];
 
 export default {
   start(ctx) {
@@ -38,6 +37,8 @@ export default {
 
     const t = ctx.t;
     const groups = ctx.extensionPoint("appearance.group");
+    // Rows other plugins add to a card: { group: card id, order, render(container, gctx) }.
+    const fields = ctx.extensionPoint("appearance.field");
 
     ctx.contribute("appearance.group", {
       id: "Appearance:general",
@@ -70,77 +71,15 @@ export default {
           },
         });
         colorRow = ui.field({ label: t("setting.Appearance.primaryColor"), desc: t("appearance.primary.description"), control: color });
-        const reorderStore = () => ctx.host.plugins.SettingsUI?.settings?.store;
-        const moveRow = ui.field({
-          label: t("setting.SettingsUI.settingsClickReorderButtonsEnabled"),
-          desc: t("settingsUi.moveButtons.description"),
-          control: ui.toggleSwitch({ checked: !!reorderStore()?.settingsClickReorderButtonsEnabled, onChange: (v) => reorderStore() && (reorderStore().settingsClickReorderButtonsEnabled = v) }),
-        });
-        const rows = [themeRow, colorRow, moveRow];
-        const i18n = ctx.host.plugins.I18n;
-        if (i18n?.settings) {
-          rows.push(ui.field({
-            label: t("appearance.language"),
-            control: ui.select({
-              value: i18n.settings.store.language,
-              options: ["system", "zh_CN", "en"].map((v) => ({ value: v, label: t(`i18n.language.${v}`) })),
-              onChange: (v) => (i18n.settings.store.language = v),
-            }),
-          }));
-        }
-        const workspacePlugin = ctx.host.plugins.Workspace;
-        if (workspacePlugin?.settings) rows.push(...renderSettingsFields(ctx.host, workspacePlugin, { keys: ["colMaxCount"] }));
-        const pocketStore = ctx.host.plugins.Pocket?.settings?.store;
-        if (pocketStore) {
-          rows.push(ui.field({
-            label: t("appearance.pocketIcon"),
-            desc: t("appearance.pocketIcon.desc"),
-            control: ui.segmented({
-              value: pocketStore.pocketIcon === "pocket" ? "pocket" : "star",
-              options: [{ value: "star", label: t("appearance.pocketIcon.star") }, { value: "pocket", label: t("appearance.pocketIcon.pocket") }],
-              onChange: (v) => (pocketStore.pocketIcon = v),
-            }),
-          }));
-        }
+        const rows = [themeRow, colorRow];
         container.append(...rows);
         void gctx;
       },
     });
 
-    // Top bar and composer settings that belong to Workspace · General (06 §3.1).
-    ctx.contribute("appearance.group", {
-      id: "Appearance:topbar",
-      tab: "workspace",
-      order: 10,
-      titleKey: "appearance.card.topbar",
-      render(container, gctx) {
-        const rows = [];
-        for (const [name, keys] of [["TopbarAPI", ["topbarVisibility"]], ["Composer", ["composerPlacement", "topbarPromptInputFontSize"]]]) {
-          const plugin = ctx.host.plugins[name];
-          if (!plugin?.settings) continue;
-          const part = renderSettingsFields(ctx.host, plugin, { keys });
-          if (part.dispose) gctx.onDispose(part.dispose);
-          rows.push(...part);
-        }
-        container.append(...rows);
-      },
-    });
-
-    // Workspace · Overlays (06 §3.2): the loading overlay; the model overlay card comes from ModelPreference.
-    ctx.contribute("appearance.group", {
-      id: "Appearance:overlay",
-      tab: "workspace",
-      order: 20,
-      titleKey: "appearance.card.overlay",
-      render(container) {
-        const store = ctx.host.plugins.Workspace?.settings?.store;
-        if (!store) return;
-        container.append(
-          ui.field({ label: t("appearance.loadingOverlay"), desc: t("workspace.overlay.description"), control: ui.toggleSwitch({ checked: store.frameLoadingOverlayEnabled !== false, onChange: (v) => (store.frameLoadingOverlayEnabled = v) }) }),
-          ui.field({ label: t("appearance.loadingOverlay.opacity"), control: ui.sliderRow({ value: Number(store.frameLoadingOverlayOpacity ?? 82), min: 0, max: 100, onChange: (v) => (store.frameLoadingOverlayOpacity = v), format: (v) => `${v}%` }) }),
-        );
-      },
-    });
+    // Cards whose rows come from other plugins through `appearance.field` (06 §3.1, §3.2).
+    ctx.contribute("appearance.group", { id: "Appearance:topbar", tab: "workspace", order: 10, titleKey: "appearance.card.topbar", render() {} });
+    ctx.contribute("appearance.group", { id: "Appearance:overlay", tab: "workspace", order: 20, titleKey: "appearance.card.overlay", render() {} });
 
     ctx.contribute("settings.section", {
       id: "appearance",
@@ -171,16 +110,21 @@ export default {
             const body = h("div");
             const gctx = { ...sctx, onDispose: (fn) => disposers.push(fn) };
             const ok = renderSafely(ctx.logger, "appearance.group", group.id, () => (group.render(body, gctx), true), false);
-            if (ok) content.append(ui.card({ title: group.titleKey ? t(group.titleKey) : null, body }));
+            for (const field of fields.sorted().filter((f) => f.group === group.id)) {
+              renderSafely(ctx.logger, "appearance.field", field.id, () => field.render(body, gctx));
+            }
+            if (ok && body.childElementCount) content.append(ui.card({ title: group.titleKey ? t(group.titleKey) : null, body }));
           }
         };
         renderStrip();
         renderContent();
         container.append(strip, content);
-        sctx.onDispose(groups.subscribe(() => {
+        const refresh = () => {
           renderStrip();
           renderContent();
-        }));
+        };
+        sctx.onDispose(groups.subscribe(refresh));
+        sctx.onDispose(fields.subscribe(refresh));
         sctx.onDispose(() => disposers.splice(0).forEach((fn) => fn()));
       },
     });

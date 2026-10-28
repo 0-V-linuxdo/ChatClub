@@ -6,7 +6,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "transfer",
   tags: ["data"],
-  required: true,
+  enabledByDefault: true,
   startAt: "init",
   provides: ["dataTransfer"],
   usesExtensionPoints: ["settings.section"],

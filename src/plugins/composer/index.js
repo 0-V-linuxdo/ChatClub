@@ -13,21 +13,12 @@ export default definePlugin({
   requiresReload: true,
   startAt: "domReady",
   dependencies: ["AppShell", "TopbarAPI", "Workspace", "FrameBridge", "SendRuntime"],
-  provides: ["composer.action", "composer.sendPipeline", "composer.targetGate", "composer.keyHandler", "composer.searchProvider", "composer.placeholder"],
-  usesExtensionPoints: ["topbar.item", "shortcut.action"],
+  provides: ["composer.action", "composer.sendPipeline", "composer.targetGate", "composer.keyHandler", "composer.mode", "composer.placeholder"],
+  usesExtensionPoints: ["appearance.field", "topbar.item", "shortcut.action"],
   managedStyle: style,
   strings,
   settings: definePluginSettings({
-    composerPlacement: {
-      optionKey: "composerPlacement",
-      type: "select",
-      options: [
-        { label: "composer.placement.topbar", value: "topbar", default: true },
-        { label: "composer.placement.center", value: "center" },
-      ],
-    },
     topbarPromptInputFontSize: { optionKey: "topbarPromptInputFontSize", type: "slider", min: 13, max: 20, step: 1, default: 16 },
-    topbarPromptInputFontSizeMigrationVersion: { optionKey: "topbarPromptInputFontSizeMigrationVersion", type: "custom", default: 0 },
   }),
   app: () => import("./app.js"),
 });

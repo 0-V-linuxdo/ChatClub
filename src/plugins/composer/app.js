@@ -2,10 +2,10 @@
 // every column, with per-frame serial send queues, images, search mode and docked/floating placement.
 // Library, history, optimize, placeholders and focus keeping plug in through extension points.
 
-import { runLegacyMigration } from "../../lib/legacy.js";
 import { h, clear, icon, uid } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
 import { createStateStore } from "../../kernel/state-ports.js";
+import { renderSettingsFields } from "../../lib/settings-form.js";
 
 const SEND_DEADLINE_MS = 12000;
 const SEND_DEADLINE_IMAGES_MS = 60000;
@@ -14,24 +14,6 @@ const READY_WAIT_MS = 20000;
 const DOC_RETRY_ROUNDS = 3;
 const MAX_REASON = 160;
 const MAX_NAMES = 4;
-const SEARCH_LIMIT = 12;
-
-/** "a.png" → "a (2).png" when taken; no name → prompt-image-N.ext (03 §3). */
-export function uniqueImageName(raw, type, taken, counter) {
-  let name = String(raw || "").split(/[\\/]/).pop().trim();
-  if (!name) {
-    const ext = (String(type || "image/png").split("/")[1] || "png").replace(/[^a-z0-9]/gi, "") || "png";
-    name = `prompt-image-${counter}.${ext}`;
-  }
-  if (!taken.has(name)) return name;
-  const dot = name.lastIndexOf(".");
-  const base = dot > 0 ? name.slice(0, dot) : name;
-  const ext = dot > 0 ? name.slice(dot) : "";
-  for (let n = 2; ; n += 1) {
-    const candidate = `${base} (${n})${ext}`;
-    if (!taken.has(candidate)) return candidate;
-  }
-}
 
 /** Summary toast text and type after a send finished (03 §2.4). */
 export function summarizeResults(results, t) {
@@ -50,9 +32,15 @@ export function summarizeResults(results, t) {
 
 export default {
   start(ctx) {
-    // The old default was 15 px (07 §2).
-    runLegacyMigration(ctx, "topbarPromptInputFontSizeMigrationVersion", 1, (s) => {
-      if (Number(s.topbarPromptInputFontSize) === 15) s.topbarPromptInputFontSize = 16;
+    ctx.contribute("appearance.field", {
+      id: "Composer:settings",
+      group: "Appearance:topbar",
+      order: 10,
+      render(container, gctx) {
+        const rows = renderSettingsFields(ctx.host, ctx.plugin, { keys: ["topbarPromptInputFontSize"] });
+        if (rows.dispose) gctx.onDispose(rows.dispose);
+        container.append(...rows);
+      },
     });
     const t = ctx.t;
     const shellUi = ctx.services.get("ui");
@@ -69,7 +57,7 @@ export default {
     const pipeline = ctx.extensionPoint("composer.sendPipeline");
     const gates = ctx.extensionPoint("composer.targetGate");
     const keyHandlers = ctx.extensionPoint("composer.keyHandler");
-    const searchProviders = ctx.extensionPoint("composer.searchProvider");
+    const modes = ctx.extensionPoint("composer.mode");
     const placeholders = ctx.extensionPoint("composer.placeholder");
     const shortcuts = () => ctx.services.get("shortcuts");
 
@@ -78,47 +66,41 @@ export default {
 
     // ------------------------------------------------------------ DOM
     const textarea = h("textarea", { attrs: { rows: "1", spellcheck: "true", "aria-label": t("composer.placeholder") } });
-    const imageStrip = h("div.cc-composer-images", { hidden: true });
     const modeCompose = h("button.cc-composer-mode", { type: "button", dataset: { tip: t("composer.mode.compose"), tipId: "composer.mode.compose" }, "aria-label": t("composer.mode.compose") }, icon("split"));
-    const modeSearch = h("button.cc-composer-mode", { type: "button", dataset: { tip: t("composer.mode.search"), tipId: "composer.mode.search" }, "aria-label": t("composer.mode.search") }, icon("search"));
+    const modesBox = h("div.cc-composer-modes", { hidden: true });
     const plusBtn = ui.iconButton({ icon: "plus", compact: true, label: t("composer.promptActions"), tipId: "topbar.promptActions", attrs: { "aria-haspopup": "menu" } });
     const clearBtn = ui.iconButton({ icon: "x", compact: true, label: t("composer.clear"), tipId: "topbar.clearPrompt" });
     const statusEl = h("span.cc-composer-status", { hidden: true, dataset: { tipId: "topbar.modelGateStatus" } });
     const queueEl = h("span.cc-composer-queue", { hidden: true });
     const sendBtn = h("button.cc-composer-send", { type: "button", "aria-label": t("composer.send"), dataset: { tip: t("composer.send"), tipId: "topbar.send" } }, icon("send"));
-    const pinBtn = ui.iconButton({ icon: "chevronDown", compact: true, label: t("composer.pin.float"), tipId: "composer.pin" });
-    const searchPanel = h("div.cc-composer-search", { hidden: true, attrs: { role: "listbox" } });
+    // Buttons other plugins add after the send button (e.g. ComposerFloat's pin).
+    const pluginTools = h("span.cc-composer-plugin-tools");
     const row = h("div.cc-composer-row",
-      h("div.cc-composer-modes", modeCompose, modeSearch),
+      modesBox,
       plusBtn,
       h("div.cc-composer-text", textarea),
       h("span.cc-composer-tools-gap"),
-      clearBtn, statusEl, queueEl, sendBtn, pinBtn);
-    const composer = h("div.cc-composer", imageStrip, row, searchPanel);
+      clearBtn, statusEl, queueEl, sendBtn, pluginTools);
+    const composer = h("div.cc-composer", row);
     composer.dataset.mode = "compose";
 
     const slot = h("div.cc-composer-slot", composer);
-    const summonBtn = ui.iconButton({ icon: "keyboard", label: t("composer.pin.dock"), tipId: "composer.open" });
-    const floatHost = h("div.cc-composer-float", { hidden: true });
-    shell.overlayRoot.parentNode?.insertBefore(floatHost, shell.overlayRoot) ?? document.body.append(floatHost);
-    ctx.onDispose(() => floatHost.remove());
 
     // ------------------------------------------------------------ state
     let images = [];
-    let imageCounter = 0;
-    let mode = "compose";
-    let floating = false; // composer currently shown in the floating host
-    let stashedDraft = null; // compose draft while in search mode
+    let activeMode = null; // a mode from another plugin (e.g. search) while it owns the text box
+    let floating = false; // composer currently shown floating (ComposerFloat moves it)
+    let stashedDraft = null; // compose draft while a mode is active
     let draftVersion = 0;
     const statusById = new Map();
 
-    const placement = () => (ctx.settings.composerPlacement === "center" ? "center" : "topbar");
+    const placement = () => ctx.services.get("composerFloat")?.placement?.() ?? "topbar";
     const isEmpty = () => !textarea.value.trim() && !images.length;
     const setStoreState = () =>
       store.update((s) => {
         s.text = textarea.value;
         s.imageCount = images.length;
-        s.mode = mode;
+        s.mode = activeMode?.id ?? "compose";
         s.placement = placement();
         s.floating = floating;
         s.queued = queuedCount();
@@ -133,7 +115,7 @@ export default {
 
     // ------------------------------------------------------------ placeholder (03 §1.4)
     const placeholderText = () => {
-      if (mode === "search") return ctx.services.get("fullText")?.enabled?.() ? t("composer.search.placeholderFull") : t("composer.search.placeholder");
+      if (activeMode) return activeMode.placeholder?.() ?? t("composer.placeholder");
       for (const entry of placeholders.sorted()) {
         try {
           const text = entry.text?.();
@@ -142,19 +124,17 @@ export default {
           ctx.logger.warn(`Placeholder "${entry.id}" failed:`, error);
         }
       }
-      const collapsed = !composer.classList.contains("expanded") && document.activeElement !== textarea;
-      return collapsed && searchProviders.sorted().length ? t("composer.placeholder.tabHint") : t("composer.placeholder");
+      return t("composer.placeholder");
     };
     const refreshPlaceholder = () => (textarea.placeholder = placeholderText());
     ctx.onDispose(placeholders.subscribe(refreshPlaceholder));
-    ctx.onDispose(searchProviders.subscribe(refreshPlaceholder));
 
     // ------------------------------------------------------------ sizing (03 §1.3)
     const maxHeight = () => Math.min(180, Math.max(88, Math.round(window.innerHeight * 0.36)));
     const focusedWithin = () => composer.contains(document.activeElement);
     const layoutDockedExpanded = () => {
       const docked = !floating;
-      const expanded = composer.classList.contains("expanded") || mode === "search";
+      const expanded = composer.classList.contains("expanded") || !!activeMode;
       if (docked && expanded && slot.isConnected) {
         const r = slot.getBoundingClientRect();
         composer.classList.add("docked-expanded");
@@ -167,7 +147,7 @@ export default {
       }
     };
     const autosize = () => {
-      const expanded = focusedWithin() && (textarea.value.length > 0 || images.length > 0) && mode === "compose";
+      const expanded = focusedWithin() && (textarea.value.length > 0 || images.length > 0) && !activeMode;
       composer.classList.toggle("expanded", expanded);
       composer.style.setProperty("--composer-max-h", `${maxHeight()}px`);
       textarea.style.height = "38px";
@@ -185,20 +165,12 @@ export default {
     };
 
     const refreshButtons = () => {
-      const searching = mode === "search";
-      modeCompose.setAttribute("aria-pressed", String(!searching));
-      modeSearch.setAttribute("aria-pressed", String(searching));
-      plusBtn.hidden = searching || !actions.sorted().length;
-      clearBtn.hidden = searching || isEmpty();
-      sendBtn.hidden = searching;
+      const moded = !!activeMode;
+      renderModes();
+      plusBtn.hidden = moded || !actions.sorted().length;
+      clearBtn.hidden = moded || isEmpty();
+      sendBtn.hidden = moded;
       sendBtn.disabled = isEmpty();
-      modeSearch.hidden = !searchProviders.sorted().length;
-      const editing = ctx.services.get("topbar")?.isEditing?.() ?? false;
-      pinBtn.hidden = editing;
-      const center = placement() === "center";
-      pinBtn.replaceChildren(icon(center ? "chevronUp" : "chevronDown", { size: 15 }));
-      pinBtn.setAttribute("aria-label", center ? t("composer.pin.dock") : t("composer.pin.float"));
-      pinBtn.dataset.tip = pinBtn.getAttribute("aria-label");
       const n = queuedCount();
       queueEl.hidden = n === 0;
       queueEl.textContent = String(n);
@@ -228,94 +200,24 @@ export default {
     };
 
     // ------------------------------------------------------------ images (03 §3)
-    const renderImages = () => {
-      clear(imageStrip);
-      imageStrip.hidden = !images.length;
-      for (const image of images) {
-        const remove = h("button", { type: "button", "aria-label": t("composer.removeImage"), dataset: { tip: t("composer.removeImage"), tipId: "topbar.removeImage" } }, icon("x", { size: 11 }));
-        remove.addEventListener("mousedown", (e) => e.preventDefault());
-        remove.addEventListener("click", () => {
-          images = images.filter((x) => x.id !== image.id);
-          renderImages();
-          onDraftChanged();
-        });
-        imageStrip.append(h("div.cc-composer-thumb", { dataset: { tip: image.name } }, h("img", { attrs: { src: image.dataUrl, alt: image.name } }), remove));
-      }
+    // Images are part of the draft; ComposerImages adds the strip, paste, drop and picker. Without it drafts carry none.
+    const imagesOn = () => !!ctx.services.get("composerImages");
+    const setImages = (next) => {
+      images = imagesOn() && Array.isArray(next) ? next.map((img) => ({ ...img, id: img.id ?? uid("img") })) : [];
+      onDraftChanged();
     };
-    const readFile = (file) =>
-      new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
-    const addImageFiles = async (fileList) => {
-      const files = [...(fileList ?? [])].filter((f) => /^image\//.test(f.type));
-      if (!files.length) {
-        shellUi.toast(t("composer.images.none"), "error");
-        return 0;
-      }
-      let added = 0;
-      for (const file of files) {
-        try {
-          const dataUrl = await readFile(file);
-          const taken = new Set(images.map((x) => x.name));
-          imageCounter += 1;
-          images.push({ id: uid("img"), name: uniqueImageName(file.name, file.type, taken, imageCounter), type: file.type, size: file.size, lastModified: file.lastModified, dataUrl });
-          added += 1;
-        } catch (error) {
-          ctx.logger.warn("Reading an image failed:", error);
-          shellUi.toast(t("composer.images.readFailed"), "error");
-        }
-      }
-      if (added) {
-        renderImages();
-        onDraftChanged();
-        shellUi.toast(t("composer.images.added", { count: added, total: images.length }), "success");
-      }
-      return added;
-    };
-    const pickImages = () => {
-      const input = h("input", { type: "file", attrs: { accept: "image/*", multiple: "" } });
-      input.addEventListener("change", () => addImageFiles(input.files));
-      input.click();
-    };
-
-    textarea.addEventListener("paste", (event) => {
-      const files = [...(event.clipboardData?.files ?? [])].filter((f) => /^image\//.test(f.type));
-      if (!files.length) return;
-      event.preventDefault();
-      addImageFiles(files);
-    });
-    composer.addEventListener("dragover", (event) => {
-      if (![...(event.dataTransfer?.types ?? [])].includes("Files")) return;
-      event.preventDefault();
-      composer.classList.add("drop-hover");
-    });
-    composer.addEventListener("dragleave", (event) => {
-      if (!composer.contains(event.relatedTarget)) composer.classList.remove("drop-hover");
-    });
-    composer.addEventListener("drop", (event) => {
-      if (!event.dataTransfer?.files?.length) return;
-      event.preventDefault();
-      composer.classList.remove("drop-hover");
-      addImageFiles(event.dataTransfer.files);
-    });
 
     // ------------------------------------------------------------ text helpers
     const setDraft = ({ text = "", images: nextImages } = {}, { focus = true, caret = "end" } = {}) => {
       textarea.value = String(text);
-      if (Array.isArray(nextImages)) {
-        images = nextImages.map((img) => ({ ...img, id: img.id ?? uid("img") }));
-        renderImages();
-      }
+      if (Array.isArray(nextImages)) images = imagesOn() ? nextImages.map((img) => ({ ...img, id: img.id ?? uid("img") })) : [];
       onDraftChanged();
       if (focus) focusInput();
       const pos = caret === "start" ? 0 : textarea.value.length;
       textarea.setSelectionRange(pos, pos);
     };
     const insertText = (text) => {
-      if (mode === "search") exitSearch();
+      if (activeMode) exitMode();
       const start = textarea.selectionStart ?? textarea.value.length;
       const end = textarea.selectionEnd ?? start;
       textarea.focus();
@@ -325,75 +227,21 @@ export default {
     const clearDraft = () => {
       textarea.value = "";
       images = [];
-      renderImages();
       onDraftChanged();
     };
 
-    // ------------------------------------------------------------ placement (03 §1.2)
-    let topbarSlotEl = null; // the element handed to the top bar
-    const topbarItem = h("div.cc-composer-host", { style: { display: "contents" } });
-    const moveComposer = (toFloat) => {
-      const selStart = textarea.selectionStart;
-      const selEnd = textarea.selectionEnd;
-      const hadFocus = focusedWithin();
-      floating = toFloat;
-      if (toFloat) {
-        floatHost.hidden = false;
-        floatHost.style.top = `calc(var(--topbar-h) + 40px + 12px)`;
-        floatHost.append(composer);
-        slot.replaceChildren(summonBtn);
-        slot.classList.add("floating");
-      } else {
-        floatHost.hidden = true;
-        slot.replaceChildren(composer);
-        slot.classList.remove("floating");
-      }
-      if (hadFocus) {
-        textarea.focus({ preventScroll: true });
-        try {
-          textarea.setSelectionRange(selStart, selEnd);
-        } catch {
-          // ignore
-        }
-      }
+    // ------------------------------------------------------------ floating (03 §1.2)
+    // ComposerFloat moves the element between the top bar and the center and reports it here.
+    const setFloating = (on) => {
+      floating = !!on;
       autosize();
       refreshButtons();
       setStoreState();
     };
-    const editingTopbar = () => ctx.services.get("topbar")?.isEditing?.() ?? false;
-    const summon = () => {
-      if (placement() === "center" && !editingTopbar()) moveComposer(true);
-    };
-    const tuckAway = () => {
-      if (floating) moveComposer(false);
-    };
-    summonBtn.addEventListener("click", () => {
-      moveComposer(true);
-      focusInput();
-    });
-    pinBtn.addEventListener("click", () => {
-      const next = placement() === "center" ? "topbar" : "center";
-      ctx.settings.composerPlacement = next;
-      moveComposer(next === "center");
-      focusInput();
-    });
-    ctx.onDispose(ctx.plugin.settings.use(["composerPlacement"], () => {
-      if (placement() === "topbar") tuckAway();
-      refreshButtons();
-    }));
-    // Clicking outside the floating composer (including into a chat iframe) tucks it away temporarily.
-    const onPointerDown = (event) => {
-      if (!floating || composer.contains(event.target) || event.target.closest?.(".cc-menu, .cc-modal, .cc-menu-backdrop")) return;
-      tuckAway();
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    ctx.onDispose(() => document.removeEventListener("pointerdown", onPointerDown, true));
-    ctx.events.on("Frames:userClickedFrame", () => tuckAway());
-
     const topbarHidden = () => shell.shell.dataset.topbar === "auto" && shell.shell.dataset.topbarShown !== "true";
     /** Puts the caret in the composer (summoning it to the center when that is the preference). */
     const focusInput = ({ summonFloat = true } = {}) => {
-      if (summonFloat) summon();
+      if (summonFloat) ctx.services.get("composerFloat")?.summon?.();
       if (!floating && topbarHidden()) return false;
       textarea.focus({ preventScroll: true });
       return true;
@@ -405,17 +253,11 @@ export default {
       labelKey: "composer.send",
       icon: "keyboard",
       grow: false,
-      render: () => {
-        topbarSlotEl = slot;
-        return slot;
-      },
+      render: () => slot,
     });
-    void topbarItem;
-    void topbarSlotEl;
 
     // ------------------------------------------------------------ "+" menu (03 §4)
     const composerCtx = (anchor) => ({ host: ctx.host, ui: shellUi, t, anchor, composer: api, text: textarea.value, isEmpty: isEmpty() });
-    ctx.contribute("composer.action", { id: "addImage", icon: "paperclip", labelKey: "composer.addImage", order: 0, onClick: () => pickImages() });
     plusBtn.addEventListener("click", () => {
       const cctx = composerCtx(plusBtn);
       const items = actions.sorted().map((entry) => ({
@@ -623,98 +465,41 @@ export default {
     };
     sendBtn.addEventListener("click", () => send());
 
-    // ------------------------------------------------------------ search mode (03 §8)
-    let searchQuery = "";
-    let searchResults = [];
-    let searchIndex = 0;
-    let searchSeq = 0;
-    const highlight = (text, query) => {
-      const s = String(text ?? "");
-      if (!query) return [s];
-      const i = s.toLowerCase().indexOf(query.toLowerCase());
-      if (i < 0) return [s];
-      return [s.slice(0, i), h("mark", s.slice(i, i + query.length)), s.slice(i + query.length)];
-    };
-    const formatTime = (ms) => {
-      if (!ms) return "";
-      const d = new Date(ms);
-      const now = new Date();
-      if (d.toDateString() === now.toDateString()) return t("composer.search.today");
-      return ctx.services.get("i18n")?.formatDate?.(d, { month: "short", day: "numeric" }) ?? d.toLocaleDateString();
-    };
-    const renderSearch = () => {
-      clear(searchPanel);
-      searchPanel.style.setProperty("--composer-search-max", `${Math.max(160, window.innerHeight - composer.getBoundingClientRect().top - 120)}px`);
-      searchPanel.append(h("div.head", searchQuery ? t("composer.search.count", { count: searchResults.length }) : t("composer.search.recent")));
-      if (!searchResults.length) searchPanel.append(h("div.empty", t("composer.search.empty")));
-      searchResults.forEach((result, i) => {
-        const el = h("button.cc-composer-result", { type: "button", attrs: { role: "option", "aria-selected": String(i === searchIndex) } },
-          h("span.icons", (result.icons ?? []).slice(0, 4).map((src) => h("img", { attrs: { src, alt: "" } }))),
-          h("span.main", h("span.title", highlight(result.title, searchQuery)), result.snippet ? h("span.snippet", highlight(result.snippet, searchQuery)) : null),
-          h("span.meta", h("span", formatTime(result.time)), result.status ? h("span", result.status === "open" ? t("composer.search.open") : t("composer.search.closed")) : null));
-        el.addEventListener("mousedown", (e) => e.preventDefault());
-        el.addEventListener("click", () => openResult(i));
-        searchPanel.append(el);
+    // ------------------------------------------------------------ modes (03 §8)
+    // A mode (search comes from TabSearch) takes over the text box; the compose draft waits until it ends.
+    const renderModes = () => {
+      const entries = modes.sorted();
+      modesBox.hidden = !entries.length;
+      modeCompose.setAttribute("aria-pressed", String(!activeMode));
+      const buttons = entries.map((entry) => {
+        const label = t(entry.labelKey ?? entry.id);
+        const btn = h("button.cc-composer-mode", { type: "button", dataset: { tip: label, tipId: entry.tipId ?? "" }, "aria-label": label, attrs: { "aria-pressed": String(activeMode?.id === entry.id) } }, icon(entry.icon ?? "plug"));
+        btn.addEventListener("click", () => entry.enter?.());
+        return btn;
       });
-      const provider = searchProviders.sorted()[0];
-      const openWindow = provider?.openWindow ? h("button", { type: "button", onclick: () => {
-        const q = searchQuery;
-        exitSearch();
-        provider.openWindow(q);
-      } }, t("composer.search.openWindow")) : null;
-      openWindow?.addEventListener("mousedown", (e) => e.preventDefault());
-      searchPanel.append(h("div.foot", h("span", t("composer.search.hint")), openWindow));
+      modesBox.replaceChildren(modeCompose, ...buttons);
     };
-    const runSearch = async () => {
-      const seq = ++searchSeq;
-      const query = textarea.value.trim();
-      const provider = searchProviders.sorted()[0];
-      let results = [];
-      try {
-        results = provider ? (await provider.search(query, { limit: SEARCH_LIMIT })) ?? [] : [];
-      } catch (error) {
-        ctx.logger.warn("Search failed:", error);
-      }
-      if (seq !== searchSeq || mode !== "search") return; // a newer query won
-      searchQuery = query;
-      searchResults = results.slice(0, SEARCH_LIMIT);
-      searchIndex = 0;
-      renderSearch();
-    };
-    const openResult = (i) => {
-      const result = searchResults[i];
-      if (!result) return;
-      exitSearch();
-      try {
-        result.open?.();
-      } catch (error) {
-        ctx.logger.error("Opening a search result failed:", error);
-      }
-    };
-    const enterSearch = (query = "") => {
-      if (!searchProviders.sorted().length) return false;
-      if (mode !== "search") {
-        stashedDraft = { text: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd };
-        mode = "search";
-        composer.dataset.mode = "search";
-        composer.classList.add("searching");
-        textarea.value = query;
-        searchPanel.hidden = false;
-      } else textarea.value = query || textarea.value;
+    const enterMode = (def, text = "") => {
+      if (!def?.id) return false;
+      if (!activeMode) stashedDraft = { text: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd };
+      else if (activeMode !== def) activeMode.onExit?.();
+      const same = activeMode === def;
+      activeMode = def;
+      composer.dataset.mode = def.id;
+      textarea.value = same ? text || textarea.value : text;
       focusInput();
       autosize();
       refreshButtons();
       setStoreState();
-      runSearch();
+      def.onEnter?.();
       return true;
     };
-    const exitSearch = () => {
-      if (mode !== "search") return;
-      mode = "compose";
+    const exitMode = () => {
+      if (!activeMode) return;
+      const def = activeMode;
+      activeMode = null;
       composer.dataset.mode = "compose";
-      composer.classList.remove("searching");
-      searchPanel.hidden = true;
-      searchSeq += 1;
+      def.onExit?.();
       textarea.value = stashedDraft?.text ?? "";
       const { start = textarea.value.length, end = start } = stashedDraft ?? {};
       stashedDraft = null;
@@ -727,43 +512,22 @@ export default {
         // ignore
       }
     };
-    modeSearch.addEventListener("click", () => enterSearch(""));
     modeCompose.addEventListener("click", () => {
-      exitSearch();
+      exitMode();
       focusInput();
     });
+    ctx.onDispose(modes.subscribe(() => {
+      if (activeMode && !modes.has(activeMode.id)) exitMode();
+      refreshButtons();
+    }));
 
     // ------------------------------------------------------------ keyboard
     const sendKeyMode = () => shortcuts()?.sendKeyMode?.() ?? "enter";
     const isMac = () => shortcuts()?.isMac?.() ?? /Mac/.test(navigator.platform);
     textarea.addEventListener("keydown", (event) => {
       if (event.isComposing || event.keyCode === 229) return;
-      if (mode === "search") {
-        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-          event.preventDefault();
-          if (!searchResults.length) return;
-          searchIndex = (searchIndex + (event.key === "ArrowDown" ? 1 : -1) + searchResults.length) % searchResults.length;
-          renderSearch();
-          return;
-        }
-        if (event.key === "Enter") {
-          event.preventDefault();
-          openResult(searchIndex);
-          return;
-        }
-        if (event.key === "Escape") {
-          event.preventDefault();
-          event.stopPropagation();
-          if (textarea.value) {
-            textarea.value = "";
-            runSearch();
-          } else exitSearch();
-          return;
-        }
-        if (event.key === "Tab" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-          event.preventDefault();
-          exitSearch();
-        }
+      if (activeMode) {
+        if (activeMode.onKeyDown?.(event)) event.preventDefault();
         return;
       }
       for (const handler of keyHandlers.sorted()) {
@@ -776,18 +540,6 @@ export default {
           ctx.logger.warn(`Composer key handler "${handler.id}" failed:`, error);
         }
       }
-      if (event.key === "Tab" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && searchProviders.sorted().length) {
-        event.preventDefault();
-        enterSearch("");
-        return;
-      }
-      if (event.key === "Escape" && floating) {
-        event.preventDefault();
-        event.stopPropagation();
-        tuckAway();
-        textarea.blur();
-        return;
-      }
       if (event.key === "Enter") {
         const mod = isMac() ? event.metaKey : event.ctrlKey;
         const wantsSend = sendKeyMode() === "mod-enter" ? mod : !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
@@ -798,8 +550,8 @@ export default {
       }
     });
     textarea.addEventListener("input", () => {
-      if (mode === "search") {
-        runSearch();
+      if (activeMode) {
+        activeMode.onInput?.(textarea.value);
         autosize();
         return;
       }
@@ -807,13 +559,13 @@ export default {
     });
     textarea.addEventListener("focus", () => {
       autosize();
-      if (mode === "search") renderSearch();
+      activeMode?.onFocus?.();
     });
     composer.addEventListener("focusout", (event) => {
       if (composer.contains(event.relatedTarget)) return;
       setTimeout(() => {
         if (focusedWithin()) return;
-        if (mode === "search" && !textarea.value) exitSearch();
+        if (activeMode && !textarea.value) exitMode();
         autosize();
       }, 0);
     });
@@ -821,32 +573,37 @@ export default {
       clearDraft();
       textarea.focus();
     });
-    window.addEventListener("resize", () => {
-      autosize();
-      if (floating && placement() !== "center") tuckAway();
-    });
+    window.addEventListener("resize", () => autosize());
 
     // ------------------------------------------------------------ service
     const api = {
       element: composer,
       textarea,
-      getDraft: () => ({ text: mode === "search" ? stashedDraft?.text ?? "" : textarea.value, images: images.map((x) => ({ ...x })) }),
+      slot,
+      getDraft: () => ({ text: activeMode ? stashedDraft?.text ?? "" : textarea.value, images: images.map((x) => ({ ...x })) }),
       setDraft,
       insertText,
       clear: clearDraft,
-      isEmpty: () => (mode === "search" ? !(stashedDraft?.text ?? "").trim() && !images.length : isEmpty()),
+      isEmpty: () => (activeMode ? !(stashedDraft?.text ?? "").trim() && !images.length : isEmpty()),
       draftVersion: () => draftVersion,
       send,
-      addImages: addImageFiles,
-      pickImages,
+      images: () => images.map((x) => ({ ...x })),
+      setImages,
       focus: focusInput,
       blur: () => textarea.blur(),
       hasFocus: focusedWithin,
       isFloating: () => floating,
-      tuckAway,
-      mode: () => mode,
-      enterSearchMode: enterSearch,
-      exitSearchMode: exitSearch,
+      setFloating,
+      /** True while the box is a single line (not focused, not expanded). */
+      isCollapsed: () => !composer.classList.contains("expanded") && document.activeElement !== textarea,
+      /** Adds a button after the send button; returns a remover. */
+      addTool: (el) => {
+        pluginTools.append(el);
+        return () => el.remove();
+      },
+      mode: () => activeMode?.id ?? "compose",
+      enterMode,
+      exitMode,
       queuedCount,
       /** Status chip next to the send button (e.g. preferred model preparation). */
       setStatus: (id, status) => {
@@ -865,10 +622,8 @@ export default {
       refreshButtons();
       refreshPlaceholder();
     });
-    ctx.onDispose(searchProviders.subscribe(() => refreshButtons()));
     refreshButtons();
     autosize();
     setStoreState();
-    if (placement() === "center") queueMicrotask(() => moveComposer(true));
   },
 };

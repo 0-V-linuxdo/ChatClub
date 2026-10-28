@@ -1,3 +1,4 @@
+import * as ui from "../../lib/ui.js";
 // Translation service: merges every registered plugin's `strings` and resolves the active language.
 
 /** Stored values are system / en / zh_CN (06 §1.5); "auto" and "zh" from early 2.0 builds are aliases. */
@@ -17,6 +18,21 @@ export function formatTemplate(text, vars) {
 
 export default {
   start(ctx) {
+    ctx.contribute("appearance.field", {
+      id: "I18n:language",
+      group: "Appearance:general",
+      order: 40,
+      render(container) {
+        container.append(ui.field({
+          label: ctx.t("appearance.language"),
+          control: ui.select({
+            value: ctx.settings.language,
+            options: ["system", "zh_CN", "en"].map((v) => ({ value: v, label: ctx.t(`i18n.language.${v}`) })),
+            onChange: (v) => (ctx.settings.language = v),
+          }),
+        }));
+      },
+    });
     const host = ctx.host;
     if (LANGUAGE_ALIASES[ctx.settings.language]) ctx.settings.language = LANGUAGE_ALIASES[ctx.settings.language];
     let tables = null;

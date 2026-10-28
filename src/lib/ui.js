@@ -160,6 +160,8 @@ export function field({ label, desc, help, control, error } = {}) {
   const errorEl = h("div.cc-field-error", { hidden: !error, attrs: { role: "alert" } }, error ?? "");
   controlBox.append(errorEl);
   const row = h("div.cc-field", name, controlBox);
+  // Sliders sit under their label, as slider settings do (settings-form).
+  if (control?.classList?.contains("cc-slider-row")) row.classList.add("stacked");
   row.setError = (message) => {
     errorEl.textContent = message || "";
     errorEl.hidden = !message;

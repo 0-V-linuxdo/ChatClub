@@ -2,13 +2,9 @@
 
 import { h, clear, icon, uid } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
-import { runLegacyMigration } from "../../lib/legacy.js";
 import { settingsTable, reorderButtonsOn } from "../../lib/settings-table.js";
 import { chatCompletion } from "./client.js";
-import {
-  DEFAULT_MODEL, DEFAULT_PROFILE_ID, PROMOTION_CHANNELS, PROMOTION_CHANNELS_VERSION,
-  normalizeProfiles, normalizeProfile, resolveModel, resolveProfile, legacyProfiles, isUntouchedDefault,
-} from "./model.js";
+import { DEFAULT_MODEL, normalizeProfiles, normalizeProfile, resolveModel, resolveProfile } from "./model.js";
 
 export default {
   start(ctx) {
@@ -16,37 +12,6 @@ export default {
     const consumers = ctx.extensionPoint("apiConsumer");
     const profiles = () => normalizeProfiles(ctx.settings.apiProfiles);
     const saveProfiles = (list) => (ctx.settings.apiProfiles = normalizeProfiles(list));
-
-    // ------------------------------------------------------------ legacy data (07 §2)
-    runLegacyMigration(ctx, "apiProfileDefaultModelMigrationVersion", 1, (s) => {
-      const list = profiles();
-      const def = list.find((p) => p.id === DEFAULT_PROFILE_ID);
-      if (def && isUntouchedDefault(def) && def.model === "gpt-3.5-turbo") {
-        saveProfiles(list.map((p) => (p === def ? { ...p, model: DEFAULT_MODEL, models: [DEFAULT_MODEL, ...p.models.filter((m) => m !== "gpt-3.5-turbo" && m !== DEFAULT_MODEL)] } : p)));
-      }
-      void s;
-    });
-    {
-      const storedProfiles = ctx.host.settings.optionsBag?.data?.apiProfiles;
-      if (!Array.isArray(storedProfiles)) {
-        const legacy = legacyProfiles(ctx.settings);
-        if (legacy.length) {
-          const list = profiles();
-          const assignments = { ...(ctx.settings.legacyAssignments ?? {}) };
-          for (const { feature, profile } of legacy) {
-            if (!list.some((p) => p.id === profile.id)) list.push(profile);
-            assignments[feature] = profile.id;
-          }
-          saveProfiles(list);
-          ctx.settings.legacyAssignments = assignments;
-        }
-      }
-    }
-    runLegacyMigration(ctx, "apiPromotionChannelsVersion", PROMOTION_CHANNELS_VERSION, () => {
-      const list = profiles();
-      for (const channel of PROMOTION_CHANNELS) if (!list.some((p) => p.id === channel.id)) list.push(channel);
-      saveProfiles(list);
-    });
 
     // ------------------------------------------------------------ service
     const consumerSelection = (consumer) => {

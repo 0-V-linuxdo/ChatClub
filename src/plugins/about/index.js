@@ -12,7 +12,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "info",
   tags: ["data"],
-  required: true,
+  enabledByDefault: true,
   startAt: "init",
   usesExtensionPoints: ["settings.section"],
   strings: {

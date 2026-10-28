@@ -4,6 +4,7 @@ import { h, clear } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
 import { appIconImg } from "../../lib/app-icon.js";
 import { SECTION_IDS } from "./index.js";
+import { reorderButtonsOn } from "../../lib/settings-table.js";
 
 const DRAG_THRESHOLD = 6;
 
@@ -52,7 +53,7 @@ export default {
     };
     const appOrder = (section) => ctx.settings.appPickerAppOrders?.[section] ?? [];
     const saveAppOrder = (section, ids) => (ctx.settings.appPickerAppOrders = { ...(ctx.settings.appPickerAppOrders ?? {}), [section]: ids });
-    const showMove = () => !!ctx.host.plugins.SettingsUI?.settings?.store?.settingsClickReorderButtonsEnabled;
+    const showMove = () => reorderButtonsOn(ctx.host);
 
     /** Generic pointer drag inside a container: returns the new index or null. */
     const makeSortable = (container, itemSelector, axis, onDrop) => {
