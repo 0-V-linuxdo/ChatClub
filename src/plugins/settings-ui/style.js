@@ -20,9 +20,25 @@ export default String.raw`
 .cc-settings-head h2 { margin: 0; font-size: var(--fs-title); font-weight: var(--fw-bold); }
 .cc-settings-head p { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-small); }
 .cc-settings-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 20px 24px 24px; }
-.cc-subtabs { display: inline-flex; gap: 2px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: color-mix(in srgb, var(--line) 22%, var(--panel)); }
-.cc-subtabs button { min-height: 30px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--radius-nested); background: transparent; font-weight: var(--fw-semibold); }
-.cc-subtabs button:hover { background: var(--hover); }
-.cc-subtabs button[aria-selected="true"] { background: var(--control-selected); border-color: var(--primary); }
+/* Inner tab strip: underlined text tabs, as on the Void++ plugin page. */
+.cc-subtabs { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.cc-subtabs button { position: relative; min-height: 32px; padding: 0 10px; border: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); font-weight: var(--fw-medium); }
+.cc-subtabs button:hover { color: var(--text); background: var(--hover); }
+.cc-subtabs button[aria-selected="true"] { color: var(--text); }
+.cc-subtabs button[aria-selected="true"]::after { content: ""; position: absolute; inset-inline: 8px; bottom: -1px; height: 2px; border-radius: 1px; background: var(--primary); }
+/* Settings cards follow the Void++ card: 8px radius, hairline border, a slightly raised surface,
+   a header split from the body by a hairline. */
+.cc-settings { --settings-card-bg: color-mix(in srgb, var(--text) 3%, var(--panel)); --settings-card-line: color-mix(in srgb, var(--text) 8%, transparent); }
+.cc-settings .cc-card { border: 1px solid var(--settings-card-line); border-radius: 8px; background: var(--settings-card-bg); overflow: hidden; }
+.cc-settings .cc-card + .cc-card { margin-top: 16px; }
+.cc-settings .cc-card-title { padding: 10px 12px; border-bottom: 1px solid var(--settings-card-line); font-size: 14px; font-weight: var(--fw-medium); }
+.cc-settings .cc-card-body { padding: 0 12px; }
+.cc-settings .cc-field { padding: 12px 0; border-bottom-color: var(--settings-card-line); }
+.cc-settings .cc-field-name .label { font-size: 14px; font-weight: var(--fw-medium); }
+.cc-settings .cc-field-name .desc { font-size: var(--fs-small); line-height: 1.5; }
 ${TABLE_STYLE}
+.cc-settings .cc-stable { border-color: var(--settings-card-line); background: var(--settings-card-bg); }
+.cc-settings .cc-stable-head { background: transparent; border-bottom-color: var(--settings-card-line); }
+.cc-settings .cc-stable-row { background: transparent; border-bottom-color: var(--settings-card-line); }
+.cc-settings .cc-card .cc-stable { background: var(--panel); }
 `;

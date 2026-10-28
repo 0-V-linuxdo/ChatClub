@@ -7,7 +7,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "fileCog",
   tags: ["sites"],
-  required: true,
+  enabledByDefault: true,
   dependencies: ["Sites"],
   usesExtensionPoints: ["settings.section"],
   storageKeys: [STATE_KEY],

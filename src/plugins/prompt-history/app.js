@@ -340,9 +340,31 @@ export default {
       }
     };
     let searchInput = null;
+    let focusSearch = false;
+    let searchHasFocus = false;
     const renderMainHead = (el) => {
       const cur = current();
-      searchInput = h("input.cc-input", { type: "search", value: query, placeholder: t("history.search"), attrs: { "aria-label": t("history.search") } });
+      // The head is redrawn on every refresh: keep the caret in the search box (it gets it on open).
+      // The old box is already detached here, so whether it had focus is tracked by its own events.
+      const keepFocus = focusSearch || searchHasFocus;
+      searchInput = h("input.cc-input", { type: "search", value: query, placeholder: t("history.search"), attrs: { "aria-label": t("history.search"), autofocus: "" } });
+      {
+        const input = searchInput;
+        input.addEventListener("focus", () => (searchHasFocus = true));
+        // Removal blurs the box while it is still attached; only a blur that leaves it in place counts.
+        input.addEventListener("blur", () => queueMicrotask(() => {
+          if (input.isConnected) searchHasFocus = false;
+        }));
+      }
+      if (keepFocus) {
+        const input = searchInput;
+        requestAnimationFrame(() => {
+          if (!input.isConnected) return;
+          input.focus({ preventScroll: true });
+          input.setSelectionRange?.(input.value.length, input.value.length);
+          focusSearch = false;
+        });
+      }
       const clearBtn = ui.iconButton({ icon: "x", compact: true, label: t("history.searchClear"), className: "clear", onClick: () => {
         query = "";
         searchInput.value = "";
@@ -400,6 +422,8 @@ export default {
       await ready;
       opsOpen = false;
       matches.clear();
+      focusSearch = true;
+      searchHasFocus = false;
       viewer = openWindowViewer(ctx, {
         key: "history",
         sizeKey: SIZE_KEY,

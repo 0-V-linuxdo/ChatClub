@@ -6,7 +6,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "history",
   tags: ["workspace"],
-  required: true,
+  enabledByDefault: true,
   requiresReload: true,
   startAt: "domReady",
   dependencies: ["Workspace"],

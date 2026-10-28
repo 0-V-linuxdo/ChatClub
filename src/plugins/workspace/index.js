@@ -4,7 +4,7 @@ import style from "./style.js";
 import strings from "./strings.js";
 
 export const GROUP_BUTTON_ORDER = ["addApp", "refreshPage", "newChat", "messageNavigator", "deleteThread", "reload", "fullscreen", "copyLink", "openInNewTab", "goToUrl", "removeGroup"];
-export const CONTEXT_MENU_ORDER = ["addApp", "refreshPage", "newChat", "messageNavigator", "deleteThread", "reload", "fullscreen", "copyLink", "openInNewTab", "goToUrl", "closeTab"];
+export const CONTEXT_MENU_ORDER = ["addApp", "refreshPage", "newChat", "messageNavigator", "deleteThread", "reload", "fullscreen", "copyLink", "openInNewTab", "goToUrl", "moveToNewGroup", "closeTab"];
 
 export default definePlugin({
   name: "Workspace",
@@ -17,7 +17,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["AppShell", "Apps", "FrameBridge"],
   provides: ["tabGroup.button", "tab.contextMenu", "workspace.contentProvider", "fullscreen.target"],
-  usesExtensionPoints: ["shortcut.action", "appearance.group"],
+  usesExtensionPoints: ["appearance.field", "shortcut.action", "appearance.group"],
   managedStyle: style,
   strings,
   settings: definePluginSettings({
@@ -32,15 +32,10 @@ export default definePlugin({
         { label: "4", value: 4 },
       ],
     },
-    frameLoadingOverlayEnabled: { optionKey: "frameLoadingOverlayEnabled", type: "boolean", default: true, description: "workspace.overlay.description" },
-    frameLoadingOverlayOpacity: { optionKey: "frameLoadingOverlayOpacity", type: "slider", min: 0, max: 100, step: 1, default: 82 },
     tabGroupButtonPlacement: { optionKey: "tabGroupButtonPlacement", type: "custom", default: {} },
     tabGroupButtonOrder: { optionKey: "tabGroupButtonOrder", type: "custom", default: GROUP_BUTTON_ORDER },
     tabContextMenuOrder: { optionKey: "tabContextMenuOrder", type: "custom", default: CONTEXT_MENU_ORDER },
     tabContextMenuHiddenIds: { optionKey: "tabContextMenuHiddenIds", type: "custom", default: [] },
-    // Legacy markers (07 §2).
-    tabGroupButtonsMode: { optionKey: "tabGroupButtonsMode", type: "custom", default: null },
-    tabGroupButtonOrderMigrationVersion: { optionKey: "tabGroupButtonOrderMigrationVersion", type: "custom", default: 0 },
   }),
   app: () => import("./app.js"),
 });

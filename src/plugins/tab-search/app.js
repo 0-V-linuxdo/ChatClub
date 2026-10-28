@@ -4,6 +4,7 @@ import { h, clear } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
 import { appIconUrl, appIconImg } from "../../lib/app-icon.js";
 import { activityTime, sectionOf, SECTION_IDS } from "../workspace-tabs/model.js";
+import { installSearchMode } from "./composer-mode.js";
 
 const SNIPPET_MAX = 96;
 
@@ -77,8 +78,7 @@ export default {
     };
 
     // ------------------------------------------------------------ composer search mode (03 §8)
-    ctx.contribute("composer.searchProvider", {
-      id: "TabSearch:tabs",
+    const searchMode = installSearchMode(ctx, composer, {
       async search(q, { limit = 12 } = {}) {
         const ranked = await query(q);
         return ranked.slice(0, limit).map(({ item, snippet }) => ({
@@ -93,6 +93,7 @@ export default {
       },
       openWindow: (q) => openWindow(q),
     });
+    ctx.onDispose(searchMode.dispose);
 
     // ------------------------------------------------------------ search window (02 §11)
     const openWindow = (initial = "") => {
@@ -209,8 +210,8 @@ export default {
       return modal;
     };
 
-    ctx.contribute("topbar.item", { id: "search", labelKey: "tabSearch.button", icon: "search", shortcutAction: "enterSearchMode", onClick: () => composer.enterSearchMode() });
-    ctx.contribute("shortcut.action", { id: "enterSearchMode", labelKey: "tabSearch.shortcut", run: () => composer.enterSearchMode() });
+    ctx.contribute("topbar.item", { id: "search", labelKey: "tabSearch.button", icon: "search", shortcutAction: "enterSearchMode", onClick: () => searchMode.enter() });
+    ctx.contribute("shortcut.action", { id: "enterSearchMode", labelKey: "tabSearch.shortcut", run: () => searchMode.enter() });
     ctx.services.provide("tabSearch", { openWindow, query });
   },
 };

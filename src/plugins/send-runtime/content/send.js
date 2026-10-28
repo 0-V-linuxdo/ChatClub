@@ -217,12 +217,19 @@ if (cc && !cc.has("send")) {
     input.dispatchEvent(new KeyboardEvent("keyup", init));
   };
 
+  // Attachment previews in the composer around the input; sites drop them once the message goes out.
+  const composerOf = (input) => input.closest("form") ?? input.parentElement?.parentElement?.parentElement ?? input;
+  const previewCount = (box) => box.querySelectorAll('img[src^="blob:"], img[src^="data:"]').length;
+
   const confirmSubmitted = async (input, text, before, until) => {
+    const box = composerOf(input);
+    const previewsBefore = previewCount(box);
     while (Date.now() < until) {
       await sleep(150);
       const current = input.isConnected ? norm(readInput(input)) : "";
       if (!input.isConnected || current === "" || (text && current !== norm(text))) return "cleared";
       if (location.href !== before) return "navigated";
+      if (previewsBefore > 0 && (!box.isConnected || previewCount(box) === 0)) return "attachments-cleared";
     }
     return null;
   };
@@ -304,7 +311,8 @@ if (cc && !cc.has("send")) {
       pressEnter(input, opts);
     }
     // From here on the message may have been submitted: never report "not-sent".
-    const confirmed = await confirmSubmitted(input, opts.text, before, Math.min(deadline, Date.now() + 6000));
+    // Sites with images often hold the text until the upload is done, so give them longer.
+    const confirmed = await confirmSubmitted(input, opts.text, before, Math.min(deadline, Date.now() + (hasImages ? 20000 : 6000)));
     if (!confirmed) return result("unknown", { method, reason: "submission was not confirmed" });
     const nav = location.href !== before ? { from: before, to: location.href } : null;
     return result("sent", { method, verified: true, submissionNavigation: nav });

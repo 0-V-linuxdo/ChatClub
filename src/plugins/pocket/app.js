@@ -30,6 +30,22 @@ const POCKET_STYLE = String.raw`
 
 export default {
   start(ctx) {
+    ctx.contribute("appearance.field", {
+      id: "Pocket:icon",
+      group: "Appearance:general",
+      order: 60,
+      render(container) {
+        container.append(ui.field({
+          label: ctx.t("appearance.pocketIcon"),
+          desc: ctx.t("appearance.pocketIcon.desc"),
+          control: ui.segmented({
+            value: ctx.settings.pocketIcon === "pocket" ? "pocket" : "star",
+            options: [{ value: "star", label: ctx.t("appearance.pocketIcon.star") }, { value: "pocket", label: ctx.t("appearance.pocketIcon.pocket") }],
+            onChange: (v) => (ctx.settings.pocketIcon = v),
+          }),
+        }));
+      },
+    });
     const t = ctx.t;
     const shellUi = ctx.services.get("ui");
     const workspace = ctx.services.get("workspace");

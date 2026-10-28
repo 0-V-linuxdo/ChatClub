@@ -1,6 +1,6 @@
 // Themes: online and local CSS themes stored in the kernel metadata namespace (spec v1.2 §9.5, §12.3).
 
-import { h, clear, uid } from "../../lib/dom.js";
+import { h, clear, uid, icon } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
 import { checkThemeUrl, parseThemeMeta, nameFromUrl } from "./model.js";
 
@@ -111,11 +111,15 @@ export default {
       }, { key: "theme-editor", kind: "editor", size: "wide" });
     };
 
-    ctx.contribute("appearance.group", {
-      id: "Themes:list",
-      tab: "themes",
-      order: 0,
+    // Its own section next to Plugins, like the Themes tab of Void++.
+    ctx.contribute("settings.section", {
+      id: "themes",
       titleKey: "themes.card",
+      descKey: "plugin.Themes.description",
+      icon: "palette",
+      order: -990,
+      group: "plugins",
+      topbarItem: false,
       render(container, gctx) {
         const list = h("div");
         const urlInput = ui.textInput({ placeholder: t("themes.urlPlaceholder") });
@@ -141,22 +145,32 @@ export default {
             list.append(h("div", { style: { padding: "12px 0" } }, ui.emptyState(t("themes.empty"))));
             return;
           }
+          // Theme cards share the Void++ card layout with plugin cards.
+          const grid = h("div.cc-plugins-grid");
           for (const theme of all) {
             const toggle = ui.toggleSwitch({ checked: theme.enabled, label: theme.name, onChange: (on) => {
               saveThemes(themes().map((th) => (th.id === theme.id ? { ...th, enabled: on } : th)));
             } });
-            const actions = h("div", { style: { display: "flex", gap: "4px", alignItems: "center" } },
-              theme.kind === "local" ? ui.iconButton({ icon: "edit", compact: true, label: t("themes.edit"), onClick: () => editLocal(theme) }) : null,
-              ui.iconButton({ icon: "trash", compact: true, label: t("themes.delete"), onClick: () => {
+            const controls = h("div.controls",
+              theme.kind === "local"
+                ? ui.iconButton({ icon: "edit", compact: true, size: 14, label: t("themes.edit"), onClick: () => editLocal(theme) })
+                : ui.iconButton({ icon: "copy", compact: true, size: 14, label: t("themes.copyUrl"), onClick: () => navigator.clipboard?.writeText(theme.url).then(() => shellUi.toast(t("themes.copied"), "success"), () => {}) }),
+              ui.iconButton({ icon: "trash", compact: true, size: 14, label: t("themes.delete"), onClick: () => {
                 saveThemes(themes().filter((th) => th.id !== theme.id));
                 ctx.styles.disable(styleId(theme));
                 ctx.storage.remove(`css:${theme.id}`);
                 shellUi.toast(t("themes.deleted", { name: theme.name }), "message");
               } }),
               toggle);
-            const desc = [theme.author || (theme.kind === "local" ? t("themes.local") : ""), theme.description, theme.url].filter(Boolean).join(" · ");
-            list.append(ui.field({ label: theme.name, desc, control: actions }));
+            const desc = theme.description || (theme.kind === "local" ? "" : theme.url);
+            grid.append(h("article.cc-plugin-card", { dataset: { theme: theme.id } },
+              h("div.body",
+                h("div.row", h("div.name", h("span.glyph", icon("palette", { size: 14 })), h("span.title", { dataset: { tip: theme.name } }, theme.name)), controls),
+                desc ? h("div.desc", desc) : null),
+              h("div.sep"),
+              h("div.footer", h("span.hint", icon(theme.kind === "local" ? "folder" : "globe", { size: 12 })), h("span.authors", theme.author || (theme.kind === "local" ? t("themes.local") : " ")))));
           }
+          list.append(h("div", { style: { paddingTop: "16px" } }, grid));
         };
         const settingsStore = meta;
         const topRows = [

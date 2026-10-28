@@ -1,7 +1,5 @@
 export default {
   zh: {
-    "setting.SettingsUI.settingsClickReorderButtonsEnabled": "显示上移 / 下移",
-    "settingsUi.moveButtons.description": "在可排序列表里显示上移 / 下移按钮。关掉后改用拖动。",
     "plugin.SettingsUI.description": "设置对话框与选项页外壳。",
     "settings.title": "设置",
     "settings.table.actions": "操作",
@@ -14,8 +12,6 @@ export default {
     "settings.sectionFailed": "这个分区没能显示。",
   },
   en: {
-    "setting.SettingsUI.settingsClickReorderButtonsEnabled": "Show move up / down",
-    "settingsUi.moveButtons.description": "Show move up/down buttons in sortable lists. When off, drag to reorder.",
     "plugin.SettingsUI.description": "Settings dialog and options page shell.",
     "settings.title": "Settings",
     "settings.table.actions": "Actions",

@@ -11,7 +11,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["Summary", "Workspace"],
   storageKeys: ["pocketHistory"],
-  usesExtensionPoints: ["topbar.item", "shortcut.action", "panel", "fullscreen.target", "tabsSidebar.button", "dataTransfer"],
+  usesExtensionPoints: ["appearance.field", "topbar.item", "shortcut.action", "panel", "fullscreen.target", "tabsSidebar.button", "dataTransfer"],
   settings: definePluginSettings({
     pocketCardSize: { optionKey: "pocketCardSize", type: "custom", default: { width: 460, height: 560 } },
     pocketIcon: { optionKey: "pocketIcon", type: "custom", default: "star" },
@@ -19,6 +19,10 @@ export default definePlugin({
   strings: {
     zh: {
       "plugin.Pocket.description": "收藏（Pocket）：把采集到的问答按批次保存，浏览、复制、在工作区里打开或一键恢复整组。",
+      "appearance.pocketIcon": "收藏图标",
+      "appearance.pocketIcon.desc": "顶部栏收藏按钮和收藏夹使用的图标。",
+      "appearance.pocketIcon.star": "星标",
+      "appearance.pocketIcon.pocket": "口袋",
       "pocket.name.star": "收藏",
       "pocket.name.pocket": "Pocket",
       "pocket.shortcut": "打开收藏",
@@ -54,6 +58,10 @@ export default definePlugin({
     },
     en: {
       "plugin.Pocket.description": "Pocket: save collected Q&A in batches; browse, copy, open in the workspace or restore a whole batch.",
+      "appearance.pocketIcon": "Saved-items icon",
+      "appearance.pocketIcon.desc": "Icon used by the top bar save button and the saved items window.",
+      "appearance.pocketIcon.star": "Star",
+      "appearance.pocketIcon.pocket": "Pocket",
       "pocket.name.star": "Favorites",
       "pocket.name.pocket": "Pocket",
       "pocket.shortcut": "Open Pocket",

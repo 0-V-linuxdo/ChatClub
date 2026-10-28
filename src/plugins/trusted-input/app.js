@@ -19,11 +19,17 @@ export default {
       if (px < r.left || py < r.top || px > r.right || py > r.bottom) throw new Error("target is outside the visible iframe");
       return { x: Math.round(px), y: Math.round(py) };
     };
+    // Trusted input moves the real focus into the frame on purpose: the shell must not take it back.
+    const allowFocus = () => ctx.services.get("ui")?.allowFrameFocus?.(3000);
     ctx.services.provide("trustedInput", {
       available: () => ctx.host?.env?.debugger !== false,
-      click: (frameKey, pointInFrame) => ctx.background.request("dispatchTrustedClick", toPage(frameKey, pointInFrame)),
+      click: (frameKey, pointInFrame) => {
+        allowFocus();
+        return ctx.background.request("dispatchTrustedClick", toPage(frameKey, pointInFrame));
+      },
       move: (frameKey, pointInFrame) => ctx.background.request("dispatchTrustedMouseMove", toPage(frameKey, pointInFrame)),
       keys: (frameKey, keys) => {
+        allowFocus();
         iframeFor(frameKey)?.focus();
         return ctx.background.request("dispatchTrustedKeySequence", { keys });
       },

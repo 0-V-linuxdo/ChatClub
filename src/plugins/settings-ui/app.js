@@ -3,14 +3,22 @@
 import { h, icon, clear } from "../../lib/dom.js";
 import { renderSafely } from "../../kernel/extension-points.js";
 
-const sectionItemId = (id) => `settings${id.charAt(0).toUpperCase()}${id.slice(1)}`;
-
 export default {
   start(ctx) {
     const ui = ctx.services.get("ui");
     const shell = ctx.services.get("shell");
     const t = ctx.t;
     const sections = ctx.extensionPoint("settings.section");
+    // Other plugins may reorder or hide sidebar entries; each layout maps the sorted list to a new one.
+    const layouts = ctx.extensionPoint("settings.navLayout");
+    const navEntries = () => {
+      let list = sections.sorted();
+      for (const layout of layouts.sorted()) {
+        const next = renderSafely(ctx.logger, "settings.navLayout", layout.id, () => layout.apply(list), null);
+        if (Array.isArray(next)) list = next;
+      }
+      return list;
+    };
     let view = null; // { root, nav, main, current, dispose[] , modal }
     let lastSection = null;
 
@@ -37,7 +45,7 @@ export default {
       const renderNav = () => {
         clear(nav);
         let lastGroup;
-        for (const entry of sections.sorted()) {
+        for (const entry of navEntries()) {
           if (lastGroup !== undefined && entry.group !== lastGroup) nav.append(h("div.cc-settings-sep"));
           lastGroup = entry.group;
           nav.append(h("button.cc-settings-link", {
@@ -87,8 +95,10 @@ export default {
           return;
         }
         head.append(h("div.titles", h("h2", entry.titleKey ? t(entry.titleKey) : entry.id), entry.descKey ? h("p", t(entry.descKey)) : null), ...actions);
-        const rerender = () => show(entry.id, opts);
+        const rerender = () => show(entry.id, { ...opts, rerender: true });
         renderSafely(ctx.logger, "settings.section", entry.id, () => entry.render(body, { ...sectionCtx(entry, state.disposers, rerender), args: opts.args ?? state.options.args }), () => body.append(h("div.cc-empty", t("settings.sectionFailed"))));
+        // A section that opens on a search box (Plugins) gets the caret, once the dialog has placed its own.
+        if (!opts.rerender) requestAnimationFrame(() => body.querySelector("[autofocus]")?.focus({ preventScroll: true }));
       };
 
       state.show = show;
@@ -134,10 +144,11 @@ export default {
       if (view.current && !sections.has(view.current)) view.show(null);
       else view.renderNav();
     }));
+    ctx.onDispose(layouts.subscribe(() => view?.renderNav()));
     ctx.events.on("I18n:languageChanged", () => view?.show(view.current));
     ctx.onDispose(() => close());
 
-    // Top bar: the gear and one shortcut item per section.
+    // Top bar: the gear (SettingsShortcuts adds one item per section).
     ctx.contribute("topbar.item", {
       id: "settings",
       labelKey: "settings.open",
@@ -146,33 +157,6 @@ export default {
       shortcutAction: "openSettings",
       onClick: () => open(),
     });
-    const sectionItems = new Map();
-    const syncSectionItems = () => {
-      const ids = new Set();
-      for (const entry of sections.sorted()) {
-        if (entry.topbarItem === false) continue;
-        const itemId = sectionItemId(entry.id);
-        ids.add(itemId);
-        if (sectionItems.get(itemId)?.entry === entry) continue;
-        sectionItems.get(itemId)?.off();
-        const off = ctx.contribute("topbar.item", {
-          id: itemId,
-          labelKey: entry.titleKey,
-          icon: entry.icon ?? "settings",
-          tipId: `topbar.settings.${entry.id}`,
-          onClick: () => open(entry.id),
-        });
-        sectionItems.set(itemId, { entry, off });
-      }
-      for (const [itemId, rec] of sectionItems) {
-        if (ids.has(itemId)) continue;
-        rec.off();
-        sectionItems.delete(itemId);
-      }
-    };
-    ctx.onDispose(sections.subscribe(syncSectionItems));
-    syncSectionItems();
-
     ctx.contribute("shortcut.action", { id: "openSettings", labelKey: "settings.open", run: () => open() });
     ctx.services.provide("settingsUI", {
       open,

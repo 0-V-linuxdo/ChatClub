@@ -8,7 +8,7 @@ export default definePlugin({
   tags: ["appearance"],
   enabledByDefault: true,
   startAt: "init",
-  usesExtensionPoints: ["appearance.group"],
+  usesExtensionPoints: ["settings.section"],
   strings: {
     zh: {
       "plugin.QuickCSS.description": "随手写几行 CSS，输入即生效。",

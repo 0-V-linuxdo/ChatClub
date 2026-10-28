@@ -6,8 +6,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "code",
   tags: ["sites"],
-  required: true,
-  hidden: true,
+  enabledByDefault: true,
   startAt: "init",
   provides: ["userScripts"],
   strings: {

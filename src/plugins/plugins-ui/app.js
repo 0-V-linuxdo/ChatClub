@@ -145,7 +145,7 @@ export default {
         const rows = renderSettingsFields(host, plugin, { onRestartNeeded: () => host.events.dispatch("reloadNeeded", { reason: name }) });
         const body = [
           plugin.authors?.length ? h("div.cc-plugin-dialog-meta", t("plugins.authors", { names: plugin.authors.join(", ") })) : null,
-          keys.length ? ui.card({ body: rows }) : ui.emptyState(t("plugins.noSettings")),
+          keys.length ? h("div.cc-plugin-dialog-list", rows) : ui.emptyState(t("plugins.noSettings")),
         ];
         const reset = h("button.cc-btn.danger", { type: "button", disabled: keys.length === 0 }, t("plugins.reset"));
         reset.addEventListener("click", async () => {
@@ -159,12 +159,11 @@ export default {
         return shellUi.modalLayout({
           title: name,
           subtitle: t(plugin.description),
-          icon: plugin.icon ?? "plug",
           body,
           footer: [reset, h("span.spacer"), h("button.cc-btn.tall", { type: "button", onclick: () => onClose("done") }, t("common.close"))],
           onClose,
         });
-      }, { key: `plugin-settings:${name}`, kind: "editor" });
+      }, { key: `plugin-settings:${name}`, kind: "editor", className: "cc-plugin-dialog" });
       return true;
     };
 
@@ -176,12 +175,12 @@ export default {
       const state = { tab: sctx.args?.tab ?? "favorites", query: "", filter: "all" };
       const bannerHost = h("div");
       reload.bannerHost = bannerHost;
-      const tabsBar = h("div.cc-plugins-tabs", { attrs: { role: "tablist" } });
+      const tabsBar = h("div.cc-subtabs.cc-plugins-tabs", { attrs: { role: "tablist" } });
       const search = ui.textInput({ onInput: (v) => {
         state.query = v;
         renderList();
       } });
-      const filter = ui.segmented({
+      const filter = ui.select({
         value: "all",
         options: ["all", "enabled", "disabled"].map((v) => ({ value: v, label: t(`plugins.filter.${v}`) })),
         onChange: (v) => {
@@ -189,6 +188,8 @@ export default {
           renderList();
         },
       });
+      search.setAttribute("autofocus", "");
+      filter.classList.add("cc-plugins-filter");
       const list = h("div");
       container.append(bannerHost, h("div.cc-plugins-top", tabsBar, h("div.cc-plugins-tools", search, filter)), list);
 
@@ -204,6 +205,8 @@ export default {
         }
       };
 
+      // Card layout follows the Void++ plugin card: icon + name + badges | controls, description,
+      // then a hairline and the authors footer.
       const card = (plugin) => {
         const name = plugin.name;
         const enabled = host.isPluginEnabled(name);
@@ -213,7 +216,12 @@ export default {
         const starred = (meta.starredPlugins ?? []).includes(name);
         const pinned = (meta.pinnedPlugins ?? []).includes(name);
         const failed = !plugin.required && host.hasFailed(name);
+        const hintIcon = (iconName, tip, cls) => h(`span.hint.${cls}`, { dataset: { tip }, attrs: { tabindex: "0", role: "img", "aria-label": tip } }, icon(iconName, { size: 14 }));
         const badges = [];
+        if (failed) badges.push(hintIcon("alert", t("plugins.failed"), "failed-icon"));
+        // Plugins kept on by others look like required ones (Void++ dims both and explains why).
+        const lockTip = plugin.required ? t("plugins.required") : plugin.isDependency ? t("plugins.dependedBy", { names: (dependents.length ? dependents : host.dependents(name)).join(", ") }) : null;
+        if (lockTip) badges.push(hintIcon("circleAlert", lockTip, "required-icon"));
         if (plugin.dev) badges.push(ui.badge(t("plugins.badge.dev"), "muted"));
         if (unmet.length) {
           const b = ui.badge(t("plugins.badge.requires", { req: unmet.join(", ") }), "warning");
@@ -227,34 +235,30 @@ export default {
           label: t("plugins.toggle", { name }),
           onChange: async () => {
             const result = await host.togglePlugin(name);
-            if (result.toggled) {
-              shellUi.toast(t(result.enabled ? "plugins.toggled.on" : "plugins.toggled.off", { name }), "success");
-              if (result.reloadNeeded) evaluateReload();
-            }
+            if (result.toggled && result.reloadNeeded) evaluateReload();
             renderList();
           },
         });
-        if (plugin.required) toggle.dataset.tip = t("plugins.required");
-        else if (plugin.isDependency) toggle.dataset.tip = t("plugins.dependedBy", { names: (dependents.length ? dependents : host.dependents(name)).join(", ") });
+        if (lockTip) toggle.dataset.tip = lockTip;
         toggle.dataset.tipWhenDisabled = "1";
-        const actions = h("div.actions",
-          ui.iconButton({ icon: starred ? "starFilled" : "star", compact: true, label: t(starred ? "plugins.unstar" : "plugins.star"), className: starred ? "active" : "", onClick: () => {
+        const controls = h("div.controls",
+          ui.iconButton({ icon: starred ? "starFilled" : "star", compact: true, size: 14, label: t(starred ? "plugins.unstar" : "plugins.star"), className: starred ? "active" : "", onClick: () => {
             toggleListMember("starredPlugins", name, "pluginStar");
             renderList();
           } }),
-          plugin.required ? null : ui.iconButton({ icon: pinned ? "pinOff" : "pin", compact: true, label: t(pinned ? "plugins.unpin" : "plugins.pin"), className: pinned ? "active" : "", onClick: () => {
+          plugin.required ? null : ui.iconButton({ icon: pinned ? "pinOff" : "pin", compact: true, size: 14, label: t(pinned ? "plugins.unpin" : "plugins.pin"), className: pinned ? "active" : "", onClick: () => {
             toggleListMember("pinnedPlugins", name, "pluginPin");
             renderList();
           } }),
-          host.visibleSettingKeys(name).length ? ui.iconButton({ icon: "settings", compact: true, label: t("plugins.settings"), onClick: () => openPluginSettings(name, { fromSection: true }) }) : null,
-          plugin.required ? h("span.lock", { dataset: { tip: t("plugins.required") }, attrs: { tabindex: "0", "aria-label": t("plugins.required") } }, icon("shield", { size: 15 })) : null,
+          host.visibleSettingKeys(name).length ? ui.iconButton({ icon: "settings", compact: true, size: 14, label: t("plugins.settings"), onClick: () => openPluginSettings(name, { fromSection: true }) }) : null,
           toggle,
         );
-        return h("article.cc-plugin-card", { class: failed ? "failed" : "", dataset: { plugin: name } },
-          h("div.row", h("span.glyph", icon(plugin.icon ?? "plug", { size: 17 })), h("div.name", h("span", name), badges), actions),
-          h("div.desc", t(plugin.description)),
-          failed ? h("div.failed-note", icon("alert", { size: 14 }), t("plugins.failed")) : null,
-          h("div.authors", plugin.authors?.length ? t("plugins.authors", { names: plugin.authors.join(", ") }) : " "),
+        return h("article.cc-plugin-card", { class: [locked ? "required" : "", failed ? "failed" : ""].filter(Boolean).join(" "), dataset: { plugin: name } },
+          h("div.body",
+            h("div.row", h("div.name", h("span.glyph", icon(plugin.icon ?? "plug", { size: 14 })), h("span.title", { dataset: { tip: name } }, name), badges), controls),
+            plugin.description ? h("div.desc", t(plugin.description)) : null),
+          h("div.sep"),
+          h("div.footer", h("span.authors", plugin.authors?.length ? plugin.authors.join(", ") : " ")),
         );
       };
 
@@ -271,7 +275,7 @@ export default {
         }
         groups.forEach((group, i) => {
           if (!group.length) return;
-          if (i > 0) list.append(h("div.cc-plugins-divider", t("plugins.requiredGroup")));
+          if (i > 0) list.append(h("div.cc-plugins-divider", { attrs: { role: "separator", "aria-label": t("plugins.requiredGroup") } }));
           list.append(h("div.cc-plugins-grid", group.map(card)));
         });
       };

@@ -7,6 +7,7 @@ import { isGenericTitle } from "../../lib/titles.js";
 import { SIDEBAR_BUTTON_ORDER } from "./index.js";
 import { zoneBoard } from "../../lib/zone-board.js";
 import { displayName, buildSections, normalizeFolders, normalizeSort, moveIntoFolder, SORTS } from "./model.js";
+import { reorderButtonsOn } from "../../lib/settings-table.js";
 
 const OPEN_KEY = "chatclubWorkspaceTabsSidebarOpenV1";
 const WIDTH_KEY = "chatclubWorkspaceTabsSidebarWidthV1";
@@ -302,7 +303,7 @@ export default {
     };
 
     // ------------------------------------------------------------ rendering
-    const reorderOn = () => !!ctx.host.plugins.SettingsUI?.settings?.store?.settingsClickReorderButtonsEnabled;
+    const reorderOn = () => reorderButtonsOn(ctx.host);
     let lastFlat = [];
     const flatOrder = () => lastFlat;
 

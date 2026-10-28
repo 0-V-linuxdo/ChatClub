@@ -1,10 +1,9 @@
 // TopbarAPI: renders `topbar.item` contributions in the user's layout, the settings jump menu,
 // customize mode and auto-hide (spec v2 01 §6.2–§6.4).
 
-import { runLegacyMigration } from "../../lib/legacy.js";
 import { h, icon, clear } from "../../lib/dom.js";
 import { renderSafely, guardCallback } from "../../kernel/extension-points.js";
-import { BASE_CATALOG, DEFAULT_LAYOUT, REQUIRED_ITEMS, normalizeLayout, parseStoredLayout, serializeLayout, splitLayout, isFlex, SETTINGS_ITEM_IDS } from "./layout.js";
+import { BASE_CATALOG, DEFAULT_LAYOUT, REQUIRED_ITEMS, normalizeLayout, serializeLayout, splitLayout, isFlex, SETTINGS_ITEM_IDS } from "./layout.js";
 
 export default {
   start(ctx) {
@@ -12,21 +11,6 @@ export default {
     const ui = ctx.services.get("ui");
     if (!shellService || !ui) throw new Error("AppShell is not ready");
     if (shellService.page !== "workspace") return;
-    // Older saved layouts lack some buttons; add each once, next to its default neighbour (07 §2).
-    for (const [marker, id, after] of [
-      ["topbarDeleteThreadMigrated", "deleteThread", "newChat"],
-      ["topbarSearchMigrated", "search", "settings"],
-      ["topbarShareMigrated", "share", "summary"],
-      ["topbarHistoryMigrated", "history", "pocket"],
-    ]) {
-      runLegacyMigration(ctx, marker, true, (s) => {
-        const stored = parseStoredLayout(s.topbarLayout);
-        if (!stored || !stored.length || stored.includes(id)) return;
-        const at = stored.indexOf(after);
-        stored.splice(at < 0 ? stored.length : at + 1, 0, id);
-        s.topbarLayout = serializeLayout(stored);
-      });
-    }
     const t = ctx.t;
     const items = ctx.extensionPoint("topbar.item");
     const extraMenu = ctx.extensionPoint("topbar.menu");
@@ -194,7 +178,6 @@ export default {
       ui.closeMenus();
       editing = { layout: currentLayout() };
       shellService.shell.dataset.topbarEditing = "true";
-      updateAutoHide();
       render();
     };
     const exitCustomize = (save) => {
@@ -207,7 +190,6 @@ export default {
       bar.classList.remove("editing");
       clear(bar);
       nodes.clear();
-      updateAutoHide();
       render();
     };
     let palette = null;
@@ -328,72 +310,10 @@ export default {
     };
     ctx.onDispose(() => palette?.remove());
 
-    // ---- auto-hide (§6.4) ----
-    const shellEl = shellService.shell;
-    let shown = false;
-    let hideTimer = null;
-    let showTimer = null;
-    const setShown = (on) => {
-      shown = on;
-      shellEl.dataset.topbarShown = String(on);
-    };
-    const keepOpen = () => bar.contains(document.activeElement) || ui.topLayerKind() === "menu" || bar.matches(":hover");
-    const scheduleHide = (ms) => {
-      clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => {
-        if (shellEl.dataset.topbar !== "auto" || editing) return;
-        if (keepOpen()) return scheduleHide(250);
-        setShown(false);
-      }, ms);
-    };
-    const onMove = (event) => {
-      if (shellEl.dataset.topbar !== "auto" || editing) return;
-      if (event.clientY <= 3) {
-        clearTimeout(hideTimer);
-        if (!shown && !showTimer) {
-          showTimer = setTimeout(() => {
-            showTimer = null;
-            setShown(true);
-          }, 60);
-        }
-      } else {
-        clearTimeout(showTimer);
-        showTimer = null;
-        const barBottom = bar.getBoundingClientRect().bottom;
-        if (shown && event.clientY > barBottom) scheduleHide(250);
-      }
-    };
-    const onLeave = () => {
-      if (shellEl.dataset.topbar === "auto" && shown) scheduleHide(900);
-    };
-    document.addEventListener("pointermove", onMove);
-    document.documentElement.addEventListener("pointerleave", onLeave);
-    const onFocusIn = () => {
-      if (shellEl.dataset.topbar === "auto" && bar.contains(document.activeElement)) setShown(true);
-    };
-    bar.addEventListener("focusin", onFocusIn);
-    ctx.onDispose(() => {
-      document.removeEventListener("pointermove", onMove);
-      document.documentElement.removeEventListener("pointerleave", onLeave);
-      clearTimeout(hideTimer);
-      clearTimeout(showTimer);
-      delete shellEl.dataset.topbar;
-      delete shellEl.dataset.topbarShown;
-    });
-    const updateAutoHide = () => {
-      const auto = ctx.settings.topbarVisibility === "auto" && !editing;
-      shellEl.dataset.topbar = auto ? "auto" : "always";
-      if (!auto) setShown(true);
-    };
-    updateAutoHide();
-    ctx.events.on("Frames:userClickedFrame", () => {
-      if (shellEl.dataset.topbar === "auto" && !keepOpen()) setShown(false);
-    });
-
-    const toggleVisibility = () => {
-      const next = ctx.settings.topbarVisibility === "auto" ? "always" : "auto";
-      ctx.settings.topbarVisibility = next;
-      if (next === "auto") ui.toast(t("topbar.autoHideOn"), "info");
+    // ---- auto-hide (§6.4) lives in the TopbarAutoHide plugin; the shortcut turns that plugin on or off. ----
+    const toggleVisibility = async () => {
+      const result = await ctx.host.togglePlugin("TopbarAutoHide");
+      if (result?.toggled && ctx.host.isPluginEnabled("TopbarAutoHide")) ui.toast(t("topbar.autoHideOn"), "info");
     };
 
     ctx.contribute("shortcut.action", { id: "toggleTopbar", labelKey: "topbar.visibility.auto", run: () => toggleVisibility() });
@@ -402,7 +322,6 @@ export default {
     // ---- reactivity ----
     ctx.onDispose(items.subscribe(() => render()));
     ctx.onDispose(ctx.plugin.settings.use(["topbarLayout"], () => render()));
-    ctx.onDispose(ctx.plugin.settings.use(["topbarVisibility"], () => updateAutoHide()));
     ctx.events.on("I18n:languageChanged", () => {
       clear(bar);
       nodes.clear();

@@ -1,10 +1,7 @@
 export default {
   zh: {
     "plugin.TopbarAPI.description": "顶部栏：渲染各插件登记的按钮，支持排序、隐藏、弹性空白、自动隐藏。",
-    "setting.TopbarAPI.topbarVisibility": "顶部栏显示",
-    "topbar.visibility.description": "自动隐藏时，鼠标移到页面顶部才出现。",
-    "topbar.visibility.always": "始终显示",
-    "topbar.visibility.auto": "自动隐藏",
+    "topbar.visibility.auto": "自动隐藏顶部栏",
     "topbar.autoHideOn": "已开启顶部栏自动隐藏：鼠标移到页面顶部时出现，离开后收起。",
     "topbar.settingsJumpMenu": "设置菜单",
     "topbar.customize": "自定义顶部栏",
@@ -15,10 +12,7 @@ export default {
   },
   en: {
     "plugin.TopbarAPI.description": "Top bar: renders buttons contributed by plugins, with reordering, hiding, flexible space and auto-hide.",
-    "setting.TopbarAPI.topbarVisibility": "Top bar visibility",
-    "topbar.visibility.description": "When auto-hidden, the top bar appears when the pointer reaches the top edge.",
-    "topbar.visibility.always": "Always visible",
-    "topbar.visibility.auto": "Auto-hide",
+    "topbar.visibility.auto": "Auto-hide top bar",
     "topbar.autoHideOn": "Top bar auto-hide is on: it appears when the pointer reaches the top edge and hides when it leaves.",
     "topbar.settingsJumpMenu": "Settings menu",
     "topbar.customize": "Customize top bar",

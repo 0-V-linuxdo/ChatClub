@@ -18,7 +18,8 @@ export default String.raw`
 .cc-tabs-row .icons { flex: none; display: inline-flex; }
 .cc-tabs-row .icons img { width: 16px; height: 16px; border-radius: 4px; background: var(--panel); box-shadow: 0 0 0 2px var(--panel); }
 .cc-tabs-row .icons img + img { margin-left: -5px; }
-.cc-tabs-row .actions { display: none; gap: 2px; }
+/* The hover buttons are taller than the row content: a 0-height box keeps them from growing the row. */
+.cc-tabs-row .actions, .cc-tabs-folder .actions { display: none; gap: 2px; flex: none; height: 0; align-items: center; overflow: visible; }
 .cc-tabs-row:hover .actions, .cc-tabs-row:focus-within .actions, .cc-tabs-row.menu-open .actions { display: inline-flex; }
 .cc-tabs-row:hover .icons, .cc-tabs-row:focus-within .icons { display: none; }
 .cc-tabs-row.editing { cursor: default; }
@@ -27,7 +28,6 @@ export default String.raw`
 .cc-tabs-folder:hover { background: var(--hover); }
 .cc-tabs-folder .name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cc-tabs-folder .n { color: var(--muted); font-size: 12px; }
-.cc-tabs-folder .actions { display: none; gap: 2px; }
 .cc-tabs-folder:hover .actions { display: inline-flex; }
 .cc-tabs-folder.drop-into { box-shadow: inset 0 0 0 2px var(--primary); }
 .cc-tabs-row.drop-before::before, .cc-tabs-folder.drop-before::before, .cc-tabs-row.drop-after::after, .cc-tabs-folder.drop-after::after { content: ""; position: absolute; left: 6px; right: 6px; height: 2px; background: var(--primary); border-radius: 1px; }

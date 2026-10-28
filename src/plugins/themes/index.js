@@ -9,7 +9,7 @@ export default definePlugin({
   tags: ["appearance"],
   enabledByDefault: true,
   startAt: "init",
-  usesExtensionPoints: ["appearance.group"],
+  usesExtensionPoints: ["settings.section"],
   strings,
   app: () => import("./app.js"),
 });

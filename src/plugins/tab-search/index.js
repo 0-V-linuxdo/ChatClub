@@ -9,8 +9,26 @@ export default definePlugin({
   enabledByDefault: true,
   startAt: "domReady",
   dependencies: ["WorkspaceTabs", "Composer"],
-  usesExtensionPoints: ["composer.searchProvider", "topbar.item", "shortcut.action"],
+  usesExtensionPoints: ["composer.mode", "composer.keyHandler", "composer.placeholder", "topbar.item", "shortcut.action"],
   managedStyle: String.raw`
+.cc-composer-search { border-top: 1px solid var(--line); padding: 6px; max-height: var(--composer-search-max, 420px); overflow-y: auto; }
+.cc-composer-search[hidden] { display: none; }
+.cc-composer.searching { border-radius: 12px; }
+.cc-composer-search .head { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 4px 8px 6px; }
+.cc-composer-result { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text); text-align: left; }
+.cc-composer-result:hover { background: var(--hover); }
+.cc-composer-result[aria-selected="true"] { background: var(--control-selected); border-color: var(--primary); }
+.cc-composer-result .icons { display: flex; flex: none; }
+.cc-composer-result .icons img { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--panel); margin-left: -5px; background: var(--panel); }
+.cc-composer-result .icons img:first-child { margin-left: 0; }
+.cc-composer-result .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cc-composer-result .title, .cc-composer-result .snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-composer-result .snippet { color: var(--muted); font-size: var(--fs-small); }
+.cc-composer-result mark { background: color-mix(in srgb, var(--primary) 26%, transparent); color: inherit; border-radius: 2px; }
+.cc-composer-result .meta { flex: none; color: var(--muted); font-size: var(--fs-small); display: flex; gap: 8px; }
+.cc-composer-search .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 8px 2px; color: var(--muted); font-size: var(--fs-small); }
+.cc-composer-search .foot button { border: 0; background: transparent; color: var(--primary); padding: 2px 4px; font: inherit; }
+.cc-composer-search .empty { padding: 14px 8px; color: var(--muted); text-align: center; }
 .cc-tabsearch { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); height: min(720px, calc(100vh - 160px)); }
 .cc-modal.maximized .cc-tabsearch { height: calc(100vh - var(--modal-header-h) - 2px); }
 .cc-tabsearch-left { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
@@ -53,6 +71,18 @@ export default definePlugin({
       "tabSearch.maximize": "全屏",
       "tabSearch.button": "搜索对话",
       "tabSearch.shortcut": "进入搜索模式",
+      "composer.placeholder.tabHint": "按下 Tab 搜索对话",
+      "composer.mode.search": "搜索",
+      "composer.search.placeholder": "搜索对话",
+      "composer.search.placeholderFull": "搜索对话或全文",
+      "composer.search.recent": "最近",
+      "composer.search.count": "{count} 个结果",
+      "composer.search.empty": "没有匹配的对话",
+      "composer.search.hint": "回车打开 · Esc 退出",
+      "composer.search.openWindow": "在搜索窗口中打开",
+      "composer.search.open": "已打开",
+      "composer.search.closed": "已关闭",
+      "composer.search.today": "今天",
     },
     en: {
       "plugin.TabSearch.description": "Search ChatClub tabs and memories: the composer's search mode and a search window (titles and recorded full text).",
@@ -72,6 +102,18 @@ export default definePlugin({
       "tabSearch.maximize": "Full screen",
       "tabSearch.button": "Search conversations",
       "tabSearch.shortcut": "Enter search mode",
+      "composer.placeholder.tabHint": "Press Tab to search chats",
+      "composer.mode.search": "Search",
+      "composer.search.placeholder": "Search chats",
+      "composer.search.placeholderFull": "Search chats or full text",
+      "composer.search.recent": "Recent",
+      "composer.search.count": "{count} results",
+      "composer.search.empty": "No matching chats",
+      "composer.search.hint": "Enter to open · Esc to exit",
+      "composer.search.openWindow": "Open in search window",
+      "composer.search.open": "Open",
+      "composer.search.closed": "Closed",
+      "composer.search.today": "Today",
     },
   },
   app: () => import("./app.js"),

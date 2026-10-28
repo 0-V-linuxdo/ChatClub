@@ -2,7 +2,6 @@
 // tabs; every tab owns one chat iframe that stays loaded while hidden. Everything around it
 // (presets, app picker, session memory, new chat, sidebar) plugs in through services and extension points.
 
-import { runLegacyMigration } from "../../lib/legacy.js";
 import { h, clear, icon, uid } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
 import { createStateStore } from "../../kernel/state-ports.js";
@@ -10,34 +9,14 @@ import { GROUP_BUTTON_ORDER, CONTEXT_MENU_ORDER } from "./index.js";
 import { DEFAULT_LAYOUT_APPS } from "../apps/catalog.js";
 import { appIconImg } from "../../lib/app-icon.js";
 import { restorableHref } from "../../lib/route-safety.js";
+import { isHttpUrl } from "../../lib/url.js";
 import { zoneBoard } from "../../lib/zone-board.js";
-
-// The two default placements shipped by older builds (07 §2).
-const LEGACY_FULLSCREEN_PINNED = { addApp: "pinned", reload: "pinned", messageNavigator: "pinned", deleteThread: "pinned", fullscreen: "pinned", openInNewTab: "menu", copyLink: "menu", removeGroup: "menu", more: "pinned" };
-const LEGACY_HOME_PINNED = { addApp: "pinned", newChat: "pinned", refreshPage: "pinned", reload: "pinned", messageNavigator: "pinned", deleteThread: "pinned", fullscreen: "menu", openInNewTab: "menu", copyLink: "menu", removeGroup: "menu", more: "pinned" };
+import { renderSettingsFields } from "../../lib/settings-form.js";
 
 const MAX_VISIBLE = 4;
 const MIN_COL_WIDTH = 280;
-const DRAG_THRESHOLD = 6;
 const NEW_TOPIC_FADE_MS = 900;
 
-export const isHttpUrl = (value) => {
-  try {
-    const url = new URL(String(value || ""));
-    return (url.protocol === "http:" || url.protocol === "https:") && !!url.hostname;
-  } catch {
-    return false;
-  }
-};
-
-/** URL dialog normalization (02 §3.2). Returns a URL string or null. */
-export function normalizeUserUrl(raw) {
-  let value = String(raw || "").trim();
-  if (!value) return null;
-  if (value.startsWith("//")) value = `https:${value}`;
-  else if (!/^[a-z][a-z0-9+.-]*:/i.test(value)) value = `https://${value}`;
-  return isHttpUrl(value) ? new URL(value).href : null;
-}
 
 /** "New topic" when the URL is the app home or a known empty-conversation address (02 §2.6). */
 export function isNewTopicUrl(app, href) {
@@ -60,6 +39,16 @@ export function isNewTopicUrl(app, href) {
 
 export default {
   start(ctx) {
+    ctx.contribute("appearance.field", {
+      id: "Workspace:colMaxCount",
+      group: "Appearance:general",
+      order: 50,
+      render(container, gctx) {
+        const rows = renderSettingsFields(ctx.host, ctx.plugin, { keys: ["colMaxCount"] });
+        if (rows.dispose) gctx.onDispose(rows.dispose);
+        container.append(...rows);
+      },
+    });
     const t = ctx.t;
     const shellUi = ctx.services.get("ui");
     const shell = ctx.services.get("shell");
@@ -74,35 +63,6 @@ export default {
       ctx.services.provide("workspace", null);
       return;
     }
-
-    // ---- legacy group-button data (07 §2)
-    const storedOption = (key) => ctx.host.settings.optionsBag?.data?.[key];
-    runLegacyMigration(ctx, "tabGroupButtonOrderMigrationVersion", 1, (s) => {
-      const savedPlacement = storedOption("tabGroupButtonPlacement");
-      const stored = savedPlacement && typeof savedPlacement === "object" ? { ...savedPlacement } : null;
-      if (s.tabGroupButtonsMode === "hidden") {
-        const placement = { ...(s.tabGroupButtonPlacement ?? {}) };
-        for (const id of GROUP_BUTTON_ORDER) if (!(id in placement)) placement[id] = "menu";
-        s.tabGroupButtonPlacement = placement;
-      }
-      // A placement equal to one of the two old default sets moves reload (and fullscreen) into More.
-      if (stored) {
-        const matches = (set) => Object.entries(set).every(([id, value]) => id === "more" || stored[id] === value);
-        const next = { ...(s.tabGroupButtonPlacement ?? {}) };
-        if (matches(LEGACY_FULLSCREEN_PINNED)) {
-          next.fullscreen = "menu";
-          next.reload = "menu";
-          s.tabGroupButtonPlacement = next;
-        } else if (matches(LEGACY_HOME_PINNED)) {
-          next.reload = "menu";
-          s.tabGroupButtonPlacement = next;
-        }
-      }
-      if (storedOption("tabContextMenuOrder") === undefined && Array.isArray(storedOption("tabGroupButtonOrder"))) {
-        const fromGroup = storedOption("tabGroupButtonOrder").filter((id) => id !== "removeGroup" && id !== "more" && CONTEXT_MENU_ORDER.includes(id));
-        s.tabContextMenuOrder = [...fromGroup, ...CONTEXT_MENU_ORDER.filter((id) => !fromGroup.includes(id))];
-      }
-    });
 
     // ------------------------------------------------------------ state
     /** @type {{id:string, tabs:any[], activeIndex:number}[]} */
@@ -204,13 +164,6 @@ export default {
     const resizeObserver = new ResizeObserver(() => layoutColumns());
     resizeObserver.observe(root);
     ctx.onDispose(() => resizeObserver.disconnect());
-
-    const applyOverlayOpacity = () => {
-      const on = ctx.settings.frameLoadingOverlayEnabled !== false;
-      root.style.setProperty("--overlay-opacity", `${on ? Number(ctx.settings.frameLoadingOverlayOpacity ?? 82) : 0}%`);
-    };
-    applyOverlayOpacity();
-    ctx.onDispose(ctx.plugin.settings.use(["frameLoadingOverlayEnabled", "frameLoadingOverlayOpacity"], applyOverlayOpacity));
 
     // ------------------------------------------------------------ iframes
     const frameAttributes = (app, url) => apps.iframeAttributes(app.id, url) ?? { allow: null, sandbox: null, referrerPolicy: "no-referrer", attributes: [] };
@@ -443,7 +396,6 @@ export default {
       group.head = h("div.cc-ws-head", group.strip, group.buttons);
       group.body = h("div.cc-ws-body");
       group.col = h("section.cc-ws-col", { dataset: { groupId: group.id } }, group.head, group.body);
-      group.head.addEventListener("pointerdown", (event) => onHeadPointerDown(event, group));
     };
 
     const renderTab = (group, tab, index) => {
@@ -465,10 +417,7 @@ export default {
         attrs: { role: "tab", tabindex: selected ? "0" : "-1", "aria-selected": String(selected), draggable: "false" },
         dataset: { tabId: tab.id },
       }, img, h("span.name", name), close);
-      el.addEventListener("click", () => {
-        if (dragState?.suppressClick) return;
-        setActive(group.id, tab.id);
-      });
+      el.addEventListener("click", () => setActive(group.id, tab.id));
       el.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -544,8 +493,12 @@ export default {
 
     /** Places the columns and iframes in the DOM without reloading existing iframes. */
     const renderAll = () => {
+      // New columns go into the page first, so iframes can move into them without reloading.
       for (const group of groups) {
         ensureColumn(group);
+        if (!group.col.isConnected) root.append(group.col);
+      }
+      for (const group of groups) {
         group.col.dataset.fullscreen = String(group.id === fullscreenGroupId);
         for (const tab of group.tabs) {
           tab.body = group.body;
@@ -717,7 +670,8 @@ export default {
       if (!group.tabs.length) {
         const gi = groups.indexOf(group);
         groups.splice(gi, 1);
-        group.col?.remove();
+        // The empty column is dropped by renderAll after the iframe has moved out: removing it here
+        // would disconnect the iframe and reload its page.
         if (fullscreenGroupId === group.id) fullscreenGroupId = null;
       } else if (index < group.activeIndex || (wasActive && group.activeIndex >= group.tabs.length)) {
         group.activeIndex = Math.max(0, group.activeIndex - (index < group.activeIndex ? 1 : 0));
@@ -845,99 +799,27 @@ export default {
       return groupById(lastActiveGroupId) ?? groups[0] ?? null;
     };
 
-    // ------------------------------------------------------------ URL dialog (02 §3.2)
-    const openGoToUrl = async (group) => {
-      const tab = activeTab(group);
-      if (!tab) return;
-      const initial = await currentHref(tab.id);
-      shellUi.openModal(({ onClose }) => {
-        const input = ui.textInput({ value: initial, placeholder: "https://" });
-        input.setAttribute("aria-label", "URL");
-        const go = () => {
-          const url = normalizeUserUrl(input.value);
-          if (!url) {
-            input.setAttribute("aria-invalid", "true");
-            shellUi.toast(t("workspace.goto.invalid"), "error");
-            input.focus();
-            return;
-          }
-          navigateTab(tab.id, url, { replace: true });
-          onClose("go");
-        };
-        input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" && !event.isComposing) {
-            event.preventDefault();
-            go();
-          }
-        });
-        input.addEventListener("input", () => input.removeAttribute("aria-invalid"));
-        requestAnimationFrame(() => input.select());
-        return shellUi.modalLayout({
-          title: t("workspace.goto.title"),
-          body: [input],
-          footer: [
-            h("button.cc-btn.tall", { type: "button", onclick: () => onClose("cancel") }, t("common.cancel")),
-            h("button.cc-btn.tall.primary", { type: "button", onclick: go }, t("workspace.goto.go")),
-          ],
-          onClose,
-        });
-      }, { key: "workspace-goto", kind: "editor", initialFocus: "input" });
-    };
-
     // ------------------------------------------------------------ built-in group buttons (02 §3)
+    // Page tools (refresh, home, copy link, new tab, URL dialog) come from GroupButtons.
     const builtin = [
-      {
-        id: "refreshPage", icon: "reload", labelKey: "workspace.group.refreshPage", defaultPlacement: "pinned", shortcutAction: "refreshPage",
-        busy: (g) => !!g.tab?.loading,
-        onClick: (g) => g.tab && refreshTab(g.tab.id),
-      },
-      {
-        id: "reload", icon: "home", labelKey: "workspace.group.reload", defaultPlacement: "menu", shortcutAction: "reloadChat",
-        onClick: (g) => g.tab && homeTab(g.tab.id),
-      },
       {
         id: "fullscreen", icon: (g) => (fullscreenGroupId === g.groupId ? "minimize" : "maximize"),
         labelKey: (g) => (fullscreenGroupId === g.groupId ? "workspace.group.exitFullscreen" : "workspace.group.fullscreen"),
-        defaultPlacement: "menu", shortcutAction: "enterFullscreen",
+        defaultPlacement: "menu", shortcutAction: "enterFullscreen", order: 30,
         onClick: (g) => toggleFullscreen(g.groupId),
       },
       {
-        id: "copyLink", icon: "copy", labelKey: "workspace.group.copyLink", defaultPlacement: "menu",
-        async onClick(g) {
-          if (!g.tab) return;
-          const href = await currentHref(g.tab.id);
-          try {
-            await navigator.clipboard.writeText(href);
-            shellUi.toast(t("workspace.linkCopied"), "success");
-          } catch {
-            shellUi.toast(t("workspace.copyFailed"), "error");
-          }
-        },
-      },
-      {
-        id: "openInNewTab", icon: "external", labelKey: "workspace.group.openInNewTab", defaultPlacement: "menu",
-        async onClick(g) {
-          if (!g.tab) return;
-          const href = await currentHref(g.tab.id);
-          try {
-            if (!isHttpUrl(href)) throw new Error("bad url");
-            await chrome.tabs.create({ url: href, active: true });
-          } catch {
-            shellUi.toast(t("workspace.openFailed"), "error");
-          }
-        },
-      },
-      {
-        id: "goToUrl", icon: "link", labelKey: "workspace.group.goToUrl", defaultPlacement: "menu",
-        onClick: (g) => openGoToUrl(g.group),
-      },
-      {
-        id: "removeGroup", icon: "x", labelKey: "workspace.group.remove", defaultPlacement: "menu", danger: true, contextMenu: false,
+        id: "removeGroup", icon: "x", labelKey: "workspace.group.remove", defaultPlacement: "menu", danger: true, contextMenu: false, order: 70,
         disabled: () => groups.length <= 1,
         onClick: (g) => removeGroup(g.groupId),
       },
     ];
-    builtin.forEach((entry, order) => ctx.contribute("tabGroup.button", { ...entry, order: (order + 1) * 10 }));
+    builtin.forEach((entry) => ctx.contribute("tabGroup.button", entry));
+    ctx.contribute("tab.contextMenu", {
+      id: "moveToNewGroup", icon: "split", labelKey: "workspace.moveToNewGroup", order: 900,
+      disabled: (g) => g.group.tabs.length <= 1,
+      onClick: (g) => moveTabToNewGroup(g.contextTab?.id ?? g.tabId),
+    });
     ctx.contribute("tab.contextMenu", {
       id: "closeTab", icon: "x", labelKey: "workspace.closeTabMenu", danger: true, order: 1000,
       disabled: (g) => groups.length === 1 && g.group.tabs.length === 1,
@@ -951,20 +833,6 @@ export default {
       run: (_m, source) => {
         const tab = activeTab(groupFor(source));
         if (tab) closeTab(tab.id);
-      },
-    });
-    ctx.contribute("shortcut.action", {
-      id: "refreshPage", labelKey: "workspace.shortcut.refreshPage",
-      run: (_m, source) => {
-        const tab = activeTab(groupFor(source));
-        if (tab) refreshTab(tab.id);
-      },
-    });
-    ctx.contribute("shortcut.action", {
-      id: "reloadChat", labelKey: "workspace.shortcut.reloadChat",
-      run: (_m, source) => {
-        const tab = activeTab(groupFor(source));
-        if (tab) homeTab(tab.id);
       },
     });
     ctx.contribute("shortcut.action", {
@@ -991,127 +859,6 @@ export default {
         if (tab) setActive(group.id, tab.id);
       },
     });
-
-    // ------------------------------------------------------------ drag and drop (02 §5)
-    let dragState = null;
-    const onHeadPointerDown = (event, group) => {
-      if (event.button !== 0) return;
-      const tabEl = event.target.closest?.(".cc-ws-tab");
-      if (!tabEl || event.target.closest("button")) return;
-      const tabId = tabEl.dataset.tabId;
-      dragState = { tabId, groupId: group.id, startX: event.clientX, startY: event.clientY, started: false, pointerId: event.pointerId, suppressClick: false, drop: null };
-      const onMove = (e) => onDragMove(e);
-      const onUp = (e) => finish(e.type === "pointercancel");
-      const onKey = (e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          finish(true);
-        }
-      };
-      const finish = (cancelled) => {
-        window.removeEventListener("pointermove", onMove, true);
-        window.removeEventListener("pointerup", onUp, true);
-        window.removeEventListener("pointercancel", onUp, true);
-        window.removeEventListener("keydown", onKey, true);
-        endDrag(cancelled);
-      };
-      window.addEventListener("pointermove", onMove, true);
-      window.addEventListener("pointerup", onUp, true);
-      window.addEventListener("pointercancel", onUp, true);
-      window.addEventListener("keydown", onKey, true);
-    };
-
-    const clearDropMarks = () => {
-      root.querySelectorAll(".drop-left, .drop-right, .drop-target, .drop-before, .drop-after, .dragging-col, .drag-ghost").forEach((el) => el.classList.remove("drop-left", "drop-right", "drop-target", "drop-before", "drop-after", "dragging-col", "drag-ghost"));
-      document.querySelectorAll("[data-ws-drop].drop-hover").forEach((el) => el.classList.remove("drop-hover"));
-    };
-
-    const onDragMove = (event) => {
-      if (!dragState) return;
-      if (!dragState.started) {
-        if (Math.hypot(event.clientX - dragState.startX, event.clientY - dragState.startY) < DRAG_THRESHOLD) return;
-        dragState.started = true;
-        root.classList.add("dragging");
-        findTab(dragState.tabId)?.tab.tabEl?.classList.add("drag-ghost");
-      }
-      clearDropMarks();
-      findTab(dragState.tabId)?.tab.tabEl?.classList.add("drag-ghost");
-      dragState.drop = computeDrop(event.clientX, event.clientY);
-      const drop = dragState.drop;
-      if (!drop) return;
-      if (drop.kind === "tab") {
-        const target = groupById(drop.groupId);
-        target?.strip.classList.add("drop-target");
-        const tabs = target?.tabs ?? [];
-        if (drop.index < tabs.length) tabs[drop.index].tabEl?.classList.add("drop-left");
-        else tabs[tabs.length - 1]?.tabEl?.classList.add("drop-right");
-      } else if (drop.kind === "newGroup") {
-        drop.el.classList.add("drop-hover");
-      } else if (drop.kind === "column") {
-        const source = groupById(dragState.groupId);
-        source?.col.classList.add("dragging-col");
-        const ref = groups[drop.index] ?? null;
-        if (ref) ref.col.classList.add("drop-before");
-        else groups[groups.length - 1]?.col.classList.add("drop-after");
-      }
-    };
-
-    const computeDrop = (x, y) => {
-      const newGroupEl = [...document.querySelectorAll('[data-ws-drop="new-group"]')].find((el) => {
-        const r = el.getBoundingClientRect();
-        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-      });
-      if (newGroupEl) return { kind: "newGroup", el: newGroupEl };
-      const tolerance = 8;
-      for (const group of groups) {
-        if (!group.col || group.col.offsetParent === null) continue;
-        const r = group.head.getBoundingClientRect();
-        if (x < r.left || x > r.right || y < r.top - tolerance || y > r.bottom + tolerance) continue;
-        let index = group.tabs.length;
-        for (let i = 0; i < group.tabs.length; i += 1) {
-          const tr = group.tabs[i].tabEl?.getBoundingClientRect();
-          if (tr && x < tr.left + tr.width / 2) {
-            index = i;
-            break;
-          }
-        }
-        return { kind: "tab", groupId: group.id, index };
-      }
-      const source = groupById(dragState.groupId);
-      if (source && source.tabs.length === 1) {
-        let index = groups.length;
-        for (let i = 0; i < groups.length; i += 1) {
-          const r = groups[i].col.getBoundingClientRect();
-          if (x < r.left + r.width / 2) {
-            index = i;
-            break;
-          }
-        }
-        return { kind: "column", index };
-      }
-      return null;
-    };
-
-    const endDrag = (cancelled) => {
-      const state = dragState;
-      clearDropMarks();
-      root.classList.remove("dragging");
-      if (!state) return;
-      if (state.started) {
-        // Swallow the click that follows the drag.
-        state.suppressClick = true;
-        setTimeout(() => {
-          if (dragState === state) dragState = null;
-        }, 0);
-      } else dragState = null;
-      if (!state.started || cancelled || !state.drop) return;
-      const drop = state.drop;
-      if (drop.kind === "tab") moveTab(state.tabId, drop.groupId, drop.index);
-      else if (drop.kind === "newGroup") moveTabToNewGroup(state.tabId);
-      else if (drop.kind === "column") moveGroup(state.groupId, drop.index);
-      ctx.events.emit("Workspace:dragFinished", {});
-    };
 
     // ------------------------------------------------------------ frame events
     ctx.events.on("Frames:location", ({ frameKey, href }) => {
@@ -1216,109 +963,13 @@ export default {
     ctx.events.on("Shortcuts:changed", () => renderHeads());
 
     // ------------------------------------------------------------ frame toast
-    const FRAME_TOAST_INSET = 12;
-    const shellStore = () => ctx.host.plugins.AppShell?.settings?.store;
-    // Same lengths as the page toasts (06 §3.3); errors stay twice as long. 0 keeps a toast until dismissed.
-    const STAY_MS = { short: 1600, default: 3200, long: 32000 };
-    const frameToast = (groupOrFrame, text, { type = "message", spinner = false, duration } = {}) => {
-      const group = groupById(groupOrFrame) ?? findByFrame(groupOrFrame)?.group ?? currentGroup();
-      if (!group?.body) return () => {};
-      const stay = STAY_MS[shellStore()?.toastStay] ?? STAY_MS.default;
-      if (duration !== 0) duration = type === "error" ? stay * 2 : stay;
-      const position = shellStore()?.frameToastPosition ?? {};
-      const el = h("div.cc-ws-frame-toast", { dataset: { type }, attrs: { role: "status" } },
-        spinner ? ui.spinner() : type === "success" ? icon("check", { size: 14 }) : type === "error" ? icon("circleAlert", { size: 14 }) : null,
-        h("span", text));
-      const pct = (v, d) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Number(v))) : d);
-      // The point is where the toast sits inside the column: 0/0 is the top-left corner, 100/100 the
-      // bottom-right; the toast is shifted by the same share of its own size so it never leaves the column.
-      const x = pct(position.x, 100);
-      const y = pct(position.y, 100);
-      el.style.left = `calc(${FRAME_TOAST_INSET}px + (100% - ${2 * FRAME_TOAST_INSET}px) * ${x / 100})`;
-      el.style.top = `calc(${FRAME_TOAST_INSET}px + (100% - ${2 * FRAME_TOAST_INSET}px) * ${y / 100})`;
-      el.style.transform = `translate(-${x}%, -${y}%)`;
-      group.body.append(el);
-      let timer = duration > 0 ? setTimeout(() => el.remove(), duration) : null;
-      return () => {
-        clearTimeout(timer);
-        timer = null;
-        el.remove();
-      };
+    // The in-column notice comes from the FrameToast plugin; without it only errors show, as page toasts.
+    const frameToast = (groupOrFrame, text, opts = {}) => {
+      const impl = ctx.services.get("frameToast");
+      if (impl) return impl(groupOrFrame, text, opts);
+      if (opts.type === "error") shellUi.toast(text, "error");
+      return () => {};
     };
-
-    // Appearance → Site toast: drag the sample toast inside a small column preview (06 §3.3).
-    ctx.contribute("appearance.group", {
-      id: "Workspace:frameToast",
-      tab: "workspace",
-      order: 40,
-      titleKey: "workspace.toast.card",
-      render(container, gctx) {
-        const store = shellStore();
-        if (!store) return;
-        const pct = (v, d) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Math.round(Number(v)))) : d);
-        let pos = { x: pct(store.frameToastPosition?.x, 100), y: pct(store.frameToastPosition?.y, 100) };
-        const sample = h("div.cc-ws-frame-toast.cc-ws-toast-sample", { dataset: { type: "success" } }, icon("check", { size: 14 }), h("span", t("workspace.toast.sample")));
-        const preview = h("div.cc-ws-toast-preview", { attrs: { tabindex: "0", role: "slider", "aria-label": t("workspace.toast.position") } }, h("div.cc-ws-toast-preview-head"), sample);
-        const coords = h("span.cc-ws-toast-coords");
-        const place = () => {
-          sample.style.left = `calc(${FRAME_TOAST_INSET}px + (100% - ${2 * FRAME_TOAST_INSET}px) * ${pos.x / 100})`;
-          sample.style.top = `calc(${FRAME_TOAST_INSET}px + (100% - ${2 * FRAME_TOAST_INSET}px) * ${pos.y / 100})`;
-          sample.style.transform = `translate(-${pos.x}%, -${pos.y}%)`;
-          coords.textContent = t("workspace.toast.coords", { x: pos.x, y: pos.y });
-          preview.setAttribute("aria-valuetext", coords.textContent);
-        };
-        const save = () => (store.frameToastPosition = { ...pos });
-        const fromPointer = (e) => {
-          const r = preview.getBoundingClientRect();
-          pos = { x: pct(((e.clientX - r.left) / r.width) * 100, pos.x), y: pct(((e.clientY - r.top) / r.height) * 100, pos.y) };
-          place();
-        };
-        preview.addEventListener("pointerdown", (e) => {
-          if (e.button !== 0) return;
-          preview.setPointerCapture?.(e.pointerId);
-          preview.focus();
-          fromPointer(e);
-          const move = (ev) => fromPointer(ev);
-          const up = () => {
-            preview.removeEventListener("pointermove", move);
-            preview.removeEventListener("pointerup", up);
-            preview.removeEventListener("pointercancel", up);
-            save();
-          };
-          preview.addEventListener("pointermove", move);
-          preview.addEventListener("pointerup", up);
-          preview.addEventListener("pointercancel", up);
-        });
-        preview.addEventListener("keydown", (e) => {
-          const step = e.shiftKey ? 5 : 1;
-          const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
-          if (!d) return;
-          e.preventDefault();
-          pos = { x: pct(pos.x + d[0], pos.x), y: pct(pos.y + d[1], pos.y) };
-          place();
-          save();
-        });
-        const reset = ui.button({ label: t("workspace.toast.reset"), onClick: () => {
-          pos = { x: 100, y: 100 };
-          place();
-          save();
-        } });
-        place();
-        container.append(
-          ui.field({ label: t("workspace.toast.position"), desc: t("workspace.toast.position.desc"), control: h("div.cc-ws-toast-setting", preview, h("div.cc-ws-toast-meta", coords, reset)) }),
-          ui.field({
-            label: t("appShell.toastStay"),
-            desc: t("appShell.toastStay.description"),
-            control: ui.select({
-              value: store.toastStay ?? "default",
-              options: ["short", "default", "long"].map((v) => ({ value: v, label: t(`appShell.toastStay.${v}`) })),
-              onChange: (v) => (store.toastStay = v),
-            }),
-          }),
-        );
-        void gctx;
-      },
-    });
 
     // Appearance → Tab Group (06 §3.4): group buttons in three zones, the tab context menu in two.
     ctx.contribute("appearance.group", {
@@ -1505,6 +1156,8 @@ export default {
       toggleFullscreen,
       isNewTopicUrl: (appId, href) => isNewTopicUrl(apps.get(appId), href),
       frameToast,
+      /** The column body of a group id or frame key (current group when neither matches). */
+      columnBody: (groupOrFrame) => (groupById(groupOrFrame) ?? findByFrame(groupOrFrame)?.group ?? currentGroup())?.body ?? null,
       waitForFramesLoaded,
       refreshButtons: () => renderHeads(),
       groupColumn: (groupId) => groupById(groupId)?.col ?? null,

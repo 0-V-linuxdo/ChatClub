@@ -289,7 +289,7 @@ export function createSummaryPanel(ctx, { collector, templates, activeTemplate, 
     els = { ask, saveBtn, previewBtn, sumBtn, askBtn, tabs, content };
     handle = shellUi.openFloatingPanel({
       id: "summary",
-      title: "Summary",
+      title: t("summary.topbar"),
       icon: "summary",
       body,
       width: Math.min(900, window.innerWidth - 24),
