@@ -10,6 +10,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["Workspace", "FrameBridge"],
   usesExtensionPoints: ["topbar.item", "shortcut.action", "panel", "fullscreen.target"],
+  shortcutActions: [{ id: "openSharePanel", labelKey: "share.shortcut" }],
   strings: {
     zh: {
       "plugin.Share.description": "分享：把聊天 iframe 拼成长图，或导出为纯文本，可复制、下载或在新标签打开。",

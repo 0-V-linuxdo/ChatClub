@@ -9,6 +9,8 @@ export default definePlugin({
   enabledByDefault: true,
   startAt: "init",
   provides: ["dataTransfer"],
+  // Plugins only register what they export; with Import / export off nothing reads those entries.
+  optionalProvider: true,
   usesExtensionPoints: ["settings.section"],
   strings: {
     zh: {

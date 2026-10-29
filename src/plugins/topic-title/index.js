@@ -9,7 +9,8 @@ export default definePlugin({
   tags: ["workspace"],
   enabledByDefault: true,
   startAt: "domReady",
-  dependencies: ["Workspace", "ApiProfiles", "FrameBridge"],
+  dependencies: ["Workspace", "FrameBridge"],
+  softDependencies: ["ApiProfiles"],
   usesExtensionPoints: ["apiConsumer"],
   settings: definePluginSettings({
     topicTitleApiProfileId: { optionKey: "topicTitleApiProfileId", type: "custom", default: "default-openai" },

@@ -2,7 +2,7 @@
 
 import { h, clear } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
-import { normalizeTemplates, activeTemplate, renderTemplateCard, apiChoices } from "../../lib/prompt-templates.js";
+import { normalizeTemplates, activeTemplate, renderTemplateCard, apiChoices, apiService, apiOffNotice } from "../../lib/prompt-templates.js";
 import { settingsTable, reorderButtonsOn } from "../../lib/settings-table.js";
 import { MARKDOWN_STYLE } from "../../lib/markdown.js";
 import { SUMMARY_DEFAULT } from "./index.js";
@@ -17,11 +17,11 @@ export default {
     const t = ctx.t;
     const shellUi = ctx.services.get("ui");
     const sites = ctx.services.get("sites");
-    const api = ctx.services.get("apiProfiles");
+    const api = () => apiService(ctx);
     const workspace = ctx.services.get("workspace");
     ctx.styles.register("summary", SUMMARY_STYLE + MARKDOWN_STYLE);
 
-    const legacy = api.takeLegacyAssignment("summary");
+    const legacy = api().takeLegacyAssignment("summary");
     if (legacy) ctx.settings.summaryApiProfileId = legacy;
     const selection = () => ({ profileId: ctx.settings.summaryApiProfileId, model: ctx.settings.summaryApiModel });
     ctx.contribute("apiConsumer", {
@@ -222,8 +222,8 @@ export default {
 
     const renderAi = (container, sctx) => {
       const fullTextToggle = ctx.services.get("fullText")?.renderToggle?.();
-      const choices = apiChoices(api);
-      const current = `${api.resolve(selection()).profile?.id ?? ""}\n${ctx.settings.summaryApiModel ?? ""}`;
+      const choices = apiChoices(api());
+      const current = `${api().resolve(selection()).profile?.id ?? ""}\n${ctx.settings.summaryApiModel ?? ""}`;
       const select = ui.select({ value: current, options: choices, onChange: (v) => {
         const [profileId, model] = v.split("\n");
         ctx.settings.summaryApiProfileId = profileId;
@@ -238,7 +238,7 @@ export default {
         } }),
         ui.button({ label: t("templates.manageApi"), variant: "primary", onClick: () => sctx.openSection("profiles") }));
       if (fullTextToggle) container.append(ui.card({ title: t("summary.recordFullText"), body: ui.field({ label: t("summary.recordFullText"), desc: t("summary.recordFullText.desc"), control: fullTextToggle }) }));
-      container.append(ui.card({ title: t("summary.card"), body: h("div", head, h("div", { style: { fontWeight: "600", fontSize: "12px", margin: "4px 0 6px" } }, t("templates.api")), select) }));
+      container.append(ui.card({ title: t("summary.card"), body: api().off ? apiOffNotice(ctx, sctx) : h("div", head, h("div", { style: { fontWeight: "600", fontSize: "12px", margin: "4px 0 6px" } }, t("templates.api")), select) }));
       draw = renderTemplateCard(container, {
         host: ctx.host,
         t,

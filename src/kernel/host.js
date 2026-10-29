@@ -17,10 +17,10 @@ export const NEW_BADGE_MS = 2 * 24 * 60 * 60 * 1000;
 
 const RESERVED_KEYS = new Set([
   "name", "description", "authors", "icon", "tags", "enabledByDefault", "required", "hidden", "dev",
-  "requires", "dependencies", "optionalDependencies", "startAt", "requiresReload", "updatedAt", "settings",
+  "requires", "dependencies", "optionalDependencies", "softDependencies", "optionalProvider", "startAt", "requiresReload", "updatedAt", "settings",
   "managedStyle", "cleanupSelectors", "events", "stateSubscriptions", "contributes", "onSettingsChange",
   "app", "background", "content", "permissions", "storageKeys", "optionKeys", "provides",
-  "usesExtensionPoints", "started", "isDependency",
+  "usesExtensionPoints", "shortcutActions", "started", "isDependency",
 ]);
 
 const BOUND = Symbol("chatclub.bound");
@@ -109,6 +109,20 @@ export class PluginHost {
     return true;
   }
 
+  /** Removes a plugin registered at runtime (user plugins): stops it and, unless kept, forgets its stored settings. */
+  async unregisterPlugin(name, { keepData = false } = {}) {
+    const plugin = this.plugins[name];
+    if (!plugin) return false;
+    if (plugin.required || plugin.isDependency) return false;
+    await this.stopPlugin(plugin);
+    for (const [pointId, owner] of this.providers) if (owner === name) this.providers.delete(pointId);
+    delete this.plugins[name];
+    this.order.splice(this.order.indexOf(name), 1);
+    this.runtime.delete(name);
+    if (!keepData) this.settings.deletePluginData(name);
+    return true;
+  }
+
   registerPlugins(defs) {
     for (const def of defs) {
       try {
@@ -173,7 +187,21 @@ export class PluginHost {
     return [...new Set([...Object.keys(plugin.contributes ?? {}), ...(plugin.usesExtensionPoints ?? [])])];
   }
 
+  /** Providers of the extension points a plugin uses; they are pulled in and locked on. */
   _apiProvidersFor(plugin) {
+    return this._providersFor(plugin).filter((name) => !this.plugins[name]?.optionalProvider);
+  }
+
+  /**
+   * Plugins used only when they are on: `softDependencies` and providers marked `optionalProvider`.
+   * They start first when enabled, but are never locked on, so the user can still turn them off.
+   */
+  _softDependenciesFor(plugin) {
+    const soft = [...(plugin.softDependencies ?? []), ...this._providersFor(plugin).filter((name) => this.plugins[name]?.optionalProvider)];
+    return [...new Set(soft)];
+  }
+
+  _providersFor(plugin) {
     const out = [];
     for (const pointId of this.usedExtensionPoints(plugin)) {
       const provider = this.providers.get(pointId);
@@ -269,7 +297,9 @@ export class PluginHost {
 
     step("orphans", () => {
       const stored = Object.keys(this.settings.plain.plugins);
-      const orphans = stored.filter((name) => !this.plugins[name]);
+      // Plugins registered later at runtime (user plugins) keep their data.
+      const dynamic = new Set(this.meta.dynamicPlugins ?? []);
+      const orphans = stored.filter((name) => !this.plugins[name] && !dynamic.has(name));
       if (!orphans.length) return;
       for (const name of orphans) this.settings.deletePluginData(name);
       this.logger.info(`Removed stored settings of ${orphans.length} plugin(s) that no longer exist: ${orphans.join(", ")}`);
@@ -379,8 +409,9 @@ export class PluginHost {
       ...(plugin.dependencies ?? []).map((name) => ({ name, optional: false })),
       ...(plugin.optionalDependencies ?? []).map((name) => ({ name, optional: true })),
       ...this._apiProvidersFor(plugin).map((name) => ({ name, optional: false })),
+      ...this._softDependenciesFor(plugin).filter((name) => this.isPluginEnabled(name)).map((name) => ({ name, optional: true, soft: true })),
     ];
-    for (const { name, optional } of deps) {
+    for (const { name, optional, soft } of deps) {
       const dep = this.plugins[name];
       if (!dep) {
         if (optional) continue;
@@ -389,6 +420,7 @@ export class PluginHost {
       }
       if (this._rt(name).started) continue;
       if (chain.includes(name)) {
+        if (soft) continue;
         this.logger.error(`Circular dependency detected: ${[...chain, name].join(" → ")}`);
         return false;
       }
@@ -397,7 +429,7 @@ export class PluginHost {
         this.logger.warn(`Plugin "${plugin.name}" depends on "${name}", which cannot run here`);
         return false;
       }
-      this._markDependency(name, plugin.name);
+      if (!soft) this._markDependency(name, plugin.name);
       const ok = await this._start(dep, chain, { silent });
       if (!ok) {
         if (optional) continue;
@@ -696,7 +728,7 @@ export class PluginHost {
   _contribute(plugin, pointId, def) {
     if (!def || typeof def !== "object") throw new TypeError(`${plugin.name}: contribution to "${pointId}" must be an object`);
     const provider = this.providers.get(pointId);
-    if (provider && provider !== plugin.name && !this._rt(provider).started) {
+    if (provider && provider !== plugin.name && !this._rt(provider).started && !this.plugins[provider].optionalProvider) {
       this._markDependency(provider, plugin.name);
       this._start(this.plugins[provider], [], { silent: true });
     }

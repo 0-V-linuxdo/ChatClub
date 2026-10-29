@@ -12,6 +12,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["FrameBridge", "Sites", "Workspace"],
   usesExtensionPoints: ["tabGroup.button", "shortcut.action", "settings.section"],
+  shortcutActions: [{ id: "toggleMessageNavigator", labelKey: "nav.shortcut" }],
   settings: definePluginSettings({
     messageNavigatorEffectMode: {
       optionKey: "messageNavigatorEffectMode",

@@ -2,7 +2,7 @@
 
 import { h, clear } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
-import { normalizeTemplates, activeTemplate, renderTemplateCard, apiChoices } from "../../lib/prompt-templates.js";
+import { normalizeTemplates, activeTemplate, renderTemplateCard, apiChoices, apiService, apiOffNotice } from "../../lib/prompt-templates.js";
 import { OPTIMIZE_DEFAULT } from "./index.js";
 
 export default {
@@ -10,8 +10,8 @@ export default {
     const t = ctx.t;
     const shellUi = ctx.services.get("ui");
     const composer = ctx.services.get("composer");
-    const api = ctx.services.get("apiProfiles");
-    const legacy = api.takeLegacyAssignment("optimize");
+    const api = () => apiService(ctx);
+    const legacy = api().takeLegacyAssignment("optimize");
     if (legacy) ctx.settings.optimizeApiProfileId = legacy;
 
     const selection = () => ({ profileId: ctx.settings.optimizeApiProfileId, model: ctx.settings.optimizeApiModel });
@@ -29,7 +29,10 @@ export default {
 
     const open = () => {
       const original = composer.getDraft().text;
-      if (!original.trim()) return null;
+      if (!original.trim()) {
+        shellUi.toast(t("optimize.empty"), "warning");
+        return null;
+      }
       let controller = null;
       let streaming = false;
       return shellUi.openModal(({ onClose }) => {
@@ -66,12 +69,12 @@ export default {
           streaming = true;
           status.textContent = t("optimize.streaming");
           refresh();
-          const { profile, model } = api.resolve(selection());
+          const { profile, model } = api().resolve(selection());
           modelBadge.textContent = model;
           try {
             if (!profile?.apiKey && /api\.openai\.com/.test(profile?.endpoint ?? "")) throw Object.assign(new Error(t("optimize.noKey")), { code: "NO_KEY" });
             const template = activeTemplate(templates(), ctx.settings.optimizePromptTemplateId);
-            await api.chat(selection(), {
+            await api().chat(selection(), {
               stream: true,
               signal: mine.signal,
               messages: [{ role: "system", content: template.prompt }, { role: "user", content: original }],
@@ -92,7 +95,8 @@ export default {
             error.textContent = message;
             error.hidden = false;
             shellUi.toast(message, "error");
-            ctx.reportAnomaly?.({ feature: "optimize", operation: "optimizePrompt", errorName: err?.name, errorCode: err?.code, message });
+            // A plugin the user turned off is not an anomaly.
+            if (err?.code !== "API_OFF") ctx.reportAnomaly?.({ feature: "optimize", operation: "optimizePrompt", errorName: err?.name, errorCode: err?.code, message });
           }
           refresh();
         };
@@ -117,8 +121,8 @@ export default {
       order: 80,
       group: "features",
       render(container, sctx) {
-        const choices = apiChoices(api);
-        const current = `${api.resolve(selection()).profile?.id ?? ""}\n${ctx.settings.optimizeApiModel ?? ""}`;
+        const choices = apiChoices(api());
+        const current = `${api().resolve(selection()).profile?.id ?? ""}\n${ctx.settings.optimizeApiModel ?? ""}`;
         const select = ui.select({ value: current, options: choices, onChange: (v) => {
           const [profileId, model] = v.split("\n");
           ctx.settings.optimizeApiProfileId = profileId;
@@ -131,7 +135,7 @@ export default {
             draw?.();
           } }),
           ui.button({ label: t("templates.manageApi"), variant: "primary", onClick: () => sctx.openSection("profiles") }));
-        container.append(ui.card({ title: t("optimize.card"), body: h("div", head, h("div", { style: { fontWeight: "600", fontSize: "12px", margin: "4px 0 6px" } }, t("templates.api")), select) }));
+        container.append(ui.card({ title: t("optimize.card"), body: api().off ? apiOffNotice(ctx, sctx) : h("div", head, h("div", { style: { fontWeight: "600", fontSize: "12px", margin: "4px 0 6px" } }, t("templates.api")), select) }));
         const draw = renderTemplateCard(container, {
           host: ctx.host,
           t,

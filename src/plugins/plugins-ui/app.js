@@ -23,6 +23,8 @@ export function listForTab(host, tab, { query = "", filter = "all", now = Date.n
     groups = [starred.map((n) => host.plugins[n]).filter((p) => p && !p.hidden)];
   } else if (tab === "recent") {
     groups = [visible.filter((p) => typeof p.updatedAt === "number" && now - p.updatedAt < RECENT_MS).sort((a, b) => b.updatedAt - a.updatedAt || byName(a, b))];
+  } else if (tab === "user") {
+    groups = [pinnedFirst(visible.filter((p) => p.userPlugin))];
   } else if (tab === "all") {
     groups = [pinnedFirst(visible.filter((p) => !p.required)), pinnedFirst(visible.filter((p) => p.required))];
   } else {
@@ -41,9 +43,10 @@ export function listForTab(host, tab, { query = "", filter = "all", now = Date.n
   return groups.map((g) => g.filter(matches));
 }
 
-export function tabsFor(host) {
+/** `extraTabs`: tabs that have toolbar actions (the user tab shows its import button even when empty). */
+export function tabsFor(host, extraTabs = []) {
   const visible = host.order.map((n) => host.plugins[n]).filter((p) => !p.hidden);
-  return ["favorites", "recent", "all", ...TAGS.filter((tag) => visible.some((p) => p.tags?.includes(tag)))];
+  return ["favorites", "recent", "all", ...(visible.some((p) => p.userPlugin) || extraTabs.includes("user") ? ["user"] : []), ...TAGS.filter((tag) => visible.some((p) => p.tags?.includes(tag)))];
 }
 
 export default {
@@ -52,6 +55,8 @@ export default {
     const t = ctx.t;
     const shellUi = ctx.services.get("ui");
     const meta = host.meta;
+    const toolbar = ctx.extensionPoint("plugins.toolbar");
+    const cardActions = ctx.extensionPoint("plugins.cardAction");
 
     // ---------------------------------------------------------------- reload prompt (§15.5)
     const reload = {
@@ -191,12 +196,24 @@ export default {
       search.setAttribute("autofocus", "");
       filter.classList.add("cc-plugins-filter");
       const list = h("div");
+      // Toolbar actions belong to one tab (e.g. Import plugin → User plugins) and sit in a bar
+      // above that tab's cards, not in the search row shared by every tab.
+      const toolTabs = () => [...new Set(toolbar.sorted().map((a) => a.tab).filter(Boolean))];
+      const tabs = () => tabsFor(host, toolTabs());
+      const toolbarFor = (tab) => {
+        const actions = toolbar.sorted().filter((a) => a.tab === tab);
+        if (!actions.length) return null;
+        const hintKey = actions.find((a) => a.hintKey)?.hintKey;
+        return h("div.cc-section-toolbar.cc-plugins-toolbar",
+          h("span.desc", hintKey ? t(hintKey) : ""),
+          ...actions.map((a) => ui.button({ label: t(a.labelKey), icon: a.icon, variant: "primary", onClick: () => a.onClick() })));
+      };
       container.append(bannerHost, h("div.cc-plugins-top", tabsBar, h("div.cc-plugins-tools", search, filter)), list);
 
       const renderTabs = () => {
         clear(tabsBar);
-        for (const tab of tabsFor(host)) {
-          const label = ["favorites", "recent", "all"].includes(tab) ? t(`plugins.tab.${tab}`) : t(`plugins.tag.${tab}`);
+        for (const tab of tabs()) {
+          const label = ["favorites", "recent", "all", "user"].includes(tab) ? t(`plugins.tab.${tab}`) : t(`plugins.tag.${tab}`);
           tabsBar.append(h("button", { type: "button", attrs: { role: "tab", "aria-selected": String(tab === state.tab) }, onclick: () => {
             state.tab = tab;
             renderTabs();
@@ -251,6 +268,7 @@ export default {
             renderList();
           } }),
           host.visibleSettingKeys(name).length ? ui.iconButton({ icon: "settings", compact: true, size: 14, label: t("plugins.settings"), onClick: () => openPluginSettings(name, { fromSection: true }) }) : null,
+          ...cardActions.sorted().filter((a) => a.appliesTo?.(plugin) ?? true).map((a) => ui.iconButton({ icon: a.icon, compact: true, size: 14, label: t(a.labelKey), onClick: () => a.onClick(plugin) })),
           toggle,
         );
         return h("article.cc-plugin-card", { class: [locked ? "required" : "", failed ? "failed" : ""].filter(Boolean).join(" "), dataset: { plugin: name } },
@@ -268,8 +286,10 @@ export default {
         const total = listForTab(host, state.tab).reduce((n, g) => n + g.length, 0);
         search.placeholder = t("plugins.search", { count: total });
         const count = groups.reduce((n, g) => n + g.length, 0);
+        const bar = toolbarFor(state.tab);
+        if (bar) list.append(bar);
         if (count === 0) {
-          const key = state.query ? "plugins.empty.search" : state.tab === "favorites" ? "plugins.empty.favorites" : state.tab === "recent" ? "plugins.empty.recent" : "plugins.empty.other";
+          const key = state.query ? "plugins.empty.search" : state.tab === "favorites" ? "plugins.empty.favorites" : state.tab === "recent" ? "plugins.empty.recent" : state.tab === "user" ? "plugins.empty.user" : "plugins.empty.other";
           list.append(ui.emptyState(t(key)));
           return;
         }
@@ -285,9 +305,24 @@ export default {
       renderBanner();
       const offToggle = host.events.subscribe("pluginToggle", () => renderList());
       const offConfig = host.events.subscribe("configReloaded", () => renderList());
+      // Plugins added or removed at runtime (user plugins) change the tabs as well as the list.
+      const syncTabs = () => {
+        if (!tabs().includes(state.tab)) state.tab = "all";
+        renderTabs();
+        renderList();
+      };
+      const offChanged = host.events.subscribe("pluginsChanged", (data) => {
+        if (data?.showTab && tabs().includes(data.showTab)) state.tab = data.showTab;
+        syncTabs();
+      });
+      const offActions = cardActions.subscribe(() => renderList());
+      const offToolbar = toolbar.subscribe(syncTabs);
       sctx.onDispose(() => {
         offToggle();
         offConfig();
+        offChanged();
+        offActions();
+        offToolbar();
         reload.bannerHost = null;
         reload.initial = null;
       });

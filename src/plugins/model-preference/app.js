@@ -29,7 +29,8 @@ export default {
     const sites = ctx.services.get("sites");
     const workspace = ctx.services.get("workspace");
     const transport = ctx.services.get("frames.transport");
-    if (!workspace || !transport) return;
+    // Without a workspace (the options page) only the settings section is useful; the rest stays off.
+    const live = !!(workspace && transport);
     ctx.styles.register("model-preference", STYLE);
     const s = ctx.settings;
 
@@ -87,7 +88,7 @@ export default {
 
     // ------------------------------------------------------------ applying
     const lastSubmit = new Map(); // tabId → time of the last accepted send
-    ctx.events.on("Composer:accepted", ({ targets = [] }) => {
+    if (live) ctx.events.on("Composer:accepted", ({ targets = [] }) => {
       for (const tg of targets) lastSubmit.set(tg.tabId, Date.now());
     });
 
@@ -149,20 +150,20 @@ export default {
       return run;
     };
 
-    ctx.events.on("frameRegistered", ({ frameKey }) => {
+    if (live) ctx.events.on("frameRegistered", ({ frameKey }) => {
       apply(frameKey, { schedule: SCHEDULES.immediate });
     });
-    ctx.events.on("Workspace:ready", ({ restored }) => {
+    if (live) ctx.events.on("Workspace:ready", ({ restored }) => {
       if (!restored) return;
       for (const tg of workspace.activeTargets()) if (tg.registered) apply(tg.frameKey, { schedule: SCHEDULES.ready });
     });
-    ctx.events.on("frameUnloaded", ({ frameKey }) => {
+    if (live) ctx.events.on("frameUnloaded", ({ frameKey }) => {
       failures.delete(frameKey);
       refreshStatus();
     });
 
     // Send gate (03 §2.3 step 1): wait for the frame's preparation, then apply the failure policy.
-    ctx.contribute("composer.targetGate", {
+    if (live) ctx.contribute("composer.targetGate", {
       id: "modelPreference",
       order: 10,
       before: async (target) => {
@@ -175,7 +176,7 @@ export default {
       },
     });
 
-    ctx.services.provide("modelPreference", { apply, isApplying: (frameKey) => pending.has(frameKey), catalogs: CATALOGS });
+    if (live) ctx.services.provide("modelPreference", { apply, isApplying: (frameKey) => pending.has(frameKey), catalogs: CATALOGS });
 
     // ------------------------------------------------------------ appearance: selection overlay (06 §3.2)
     ctx.contribute("appearance.group", {

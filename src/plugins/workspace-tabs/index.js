@@ -16,6 +16,7 @@ export default definePlugin({
   dependencies: ["Workspace", "WorkspaceSession", "TopbarAPI"],
   provides: ["tabsSidebar.button"],
   usesExtensionPoints: ["topbar.item", "shortcut.action", "appearance.group"],
+  shortcutActions: [{ id: "toggleWorkspaceTabsSidebar", labelKey: "tabs.shortcut.toggle" }, { id: "openNewWorkspaceTab", labelKey: "tabs.shortcut.newTab" }],
   managedStyle: style,
   strings,
   settings: definePluginSettings({

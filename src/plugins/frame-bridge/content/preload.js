@@ -74,18 +74,45 @@
   window.addEventListener("pointerdown", markUser, true);
   window.addEventListener("keydown", markUser, true);
   const leaseActive = () => Date.now() < Math.max(leases.caret, leases.guard);
-  const originalFocus = HTMLElement.prototype.focus;
-  HTMLElement.prototype.focus = function focus(...args) {
-    if (leaseActive() && Date.now() - lastUserInput > 800) {
-      toIsolated("focusBlocked", {});
-      return undefined;
+  const blocking = () => leaseActive() && Date.now() - lastUserInput > 800;
+  // Programmatic focus and select() (which also focuses) are refused during a lease.
+  for (const [proto, method] of [[HTMLElement.prototype, "focus"], [SVGElement.prototype, "focus"], [HTMLInputElement.prototype, "select"], [HTMLTextAreaElement.prototype, "select"]]) {
+    const original = proto[method];
+    if (typeof original !== "function") continue;
+    proto[method] = function patched(...args) {
+      if (blocking()) {
+        toIsolated("focusBlocked", {});
+        return undefined;
+      }
+      return original.apply(this, args);
+    };
+  }
+  // Focus that skips those calls (autofocus, focus moved by the browser) is undone as it lands, during
+  // the caret lease only. Our own content scripts announce their focus calls (base.js) and are let through.
+  let ownFocusUntil = 0;
+  window.addEventListener("chatclub:ownFocus", () => {
+    ownFocusUntil = Date.now() + 1500;
+  });
+  window.addEventListener("focusin", (event) => {
+    if (Date.now() >= leases.caret || Date.now() - lastUserInput <= 800 || Date.now() < ownFocusUntil) return;
+    try {
+      event.target?.blur?.();
+    } catch {
+      // ignore
     }
-    return originalFocus.apply(this, args);
-  };
+    toIsolated("focusBlocked", {});
+  }, true);
   window.addEventListener("chatclub:lease", (event) => {
     try {
       const data = JSON.parse(event.detail);
-      if (data.kind === "caret" || data.kind === "guard") leases[data.kind] = Number(data.until) || 0;
+      if (data.kind !== "caret" && data.kind !== "guard") return;
+      leases[data.kind] = Number(data.until) || 0;
+      // window.name survives reloads and navigations in this frame, so the next document
+      // starts with the current caret lease instead of the one from when the frame was created.
+      if (data.kind === "caret") {
+        params.set("chatclub_caret_lease", String(leases.caret));
+        window.name = params.toString();
+      }
     } catch {
       // ignore
     }

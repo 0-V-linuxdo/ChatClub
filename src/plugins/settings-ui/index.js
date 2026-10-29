@@ -8,6 +8,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "settings",
   tags: ["appearance"],
+  shortcutActions: [{ id: "openSettings", labelKey: "settings.open" }],
   required: true,
   startAt: "domReady",
   dependencies: ["AppShell"],

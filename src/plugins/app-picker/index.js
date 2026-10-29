@@ -9,6 +9,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "apps",
   tags: ["workspace"],
+  shortcutActions: [{ id: "openAppPicker", labelKey: "picker.shortcut" }],
   enabledByDefault: true,
   startAt: "domReady",
   dependencies: ["Apps", "Workspace", "TopbarAPI"],

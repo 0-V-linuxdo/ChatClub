@@ -9,7 +9,8 @@ export default definePlugin({
   tags: ["capture", "data"],
   enabledByDefault: true,
   startAt: "domReady",
-  dependencies: ["Summary", "Workspace"],
+  dependencies: ["Workspace"],
+  softDependencies: ["Summary"],
   settings: definePluginSettings({
     recordFullText: { optionKey: "recordFullText", type: "boolean", description: "fullText.setting.desc", default: false },
   }),

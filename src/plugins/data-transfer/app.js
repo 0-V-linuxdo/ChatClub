@@ -99,7 +99,7 @@ export default {
             modeControl = ui.segmented({ value, options: b.modes.map((m) => ({ value: m.value, label: t(m.labelKey) })), onChange: (v) => (value = v) });
             modes.set(b.id, () => value);
           }
-          rows.push(h("div", { style: { display: "flex", flexDirection: "column", gap: "6px", padding: "10px 0", borderBottom: "1px solid var(--line)" } },
+          rows.push(h("div", { style: { display: "flex", flexDirection: "column", gap: "6px", padding: "10px 0", borderBottom: rows.length < present.length - 1 ? "1px solid var(--line)" : "0" } },
             h("div", { style: { display: "flex", alignItems: "center", gap: "12px", justifyContent: "space-between" } }, box, h("span", { style: { color: "var(--muted)", fontSize: "13px" } }, status)),
             modeControl,
             ...warnings.map((w) => h("div", { style: { color: "var(--warning, #b45309)", fontSize: "12px" } }, w))));

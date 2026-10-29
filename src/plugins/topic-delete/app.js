@@ -20,7 +20,8 @@ export default {
     const workspace = ctx.services.get("workspace");
     const transport = ctx.services.get("frames.transport");
     const frames = ctx.services.get("frames");
-    if (!workspace || !transport) return;
+    // Without a workspace (the options page) only the settings section is useful; the rest stays off.
+    const live = !!(workspace && transport);
 
     const builtins = () => sites.capability("delete").map(({ data }) => ({ ...data }));
     const configs = () => effectiveConfigs(builtins(), ctx.settings.topicDeleteSiteConfigs);
@@ -156,7 +157,7 @@ export default {
       }
     };
 
-    ctx.contribute("tabGroup.button", {
+    if (live) ctx.contribute("tabGroup.button", {
       id: "deleteThread",
       icon: "trash",
       labelKey: "del.group",
@@ -169,7 +170,7 @@ export default {
       disabled: (g) => !g.tab?.frameKey || running.has(g.tab.id),
       onClick: (g) => deleteTopic(g.contextTab ?? g.tab),
     });
-    ctx.contribute("shortcut.action", {
+    if (live) ctx.contribute("shortcut.action", {
       id: "deleteThread",
       labelKey: "del.shortcut",
       run: (_match, source) => {
@@ -179,7 +180,7 @@ export default {
         else deleteTopic(tab);
       },
     });
-    ctx.contribute("topbar.item", {
+    if (live) ctx.contribute("topbar.item", {
       id: "deleteThread",
       labelKey: "del.topbar",
       icon: "trash",
@@ -190,9 +191,9 @@ export default {
       onClick: () => deleteAll(),
     });
     const refreshTopbar = () => ctx.services.get("topbar")?.refresh?.();
-    ctx.events.on("Workspace:changed", refreshTopbar);
-    ctx.events.on("Frames:location", refreshTopbar);
-    ctx.services.provide("topicDelete", { deleteTopic, deleteAll, configs, supports: (tab) => !!resolveFor(tab).config });
+    if (live) ctx.events.on("Workspace:changed", refreshTopbar);
+    if (live) ctx.events.on("Frames:location", refreshTopbar);
+    if (live) ctx.services.provide("topicDelete", { deleteTopic, deleteAll, configs, supports: (tab) => !!resolveFor(tab).config });
 
     // ------------------------------------------------------------ settings section (06 §8)
     const lines = (el) => el.value.split(/\n+/).map((s) => s.trim()).filter(Boolean);

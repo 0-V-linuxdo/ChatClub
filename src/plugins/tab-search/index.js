@@ -10,6 +10,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["WorkspaceTabs", "Composer"],
   usesExtensionPoints: ["composer.mode", "composer.keyHandler", "composer.placeholder", "topbar.item", "shortcut.action"],
+  shortcutActions: [{ id: "enterSearchMode", labelKey: "tabSearch.shortcut" }],
   managedStyle: String.raw`
 .cc-composer-search { border-top: 1px solid var(--line); padding: 6px; max-height: var(--composer-search-max, 420px); overflow-y: auto; }
 .cc-composer-search[hidden] { display: none; }

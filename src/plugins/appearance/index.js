@@ -13,6 +13,8 @@ export default definePlugin({
   enabledByDefault: true,
   startAt: "init",
   provides: ["appearance.group"],
+  // Other plugins only add rows to the Appearance page; with it off the page follows the system theme.
+  optionalProvider: true,
   // `appearance.field` has no provider on purpose: SettingsUI and I18n add rows to it, and Appearance depends on them.
   usesExtensionPoints: ["settings.section", "appearance.field"],
   managedStyle: ZONE_BOARD_STYLE,

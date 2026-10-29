@@ -11,6 +11,8 @@ export default definePlugin({
   enabledByDefault: true,
   startAt: "init",
   provides: ["apiConsumer"],
+  // Consumers ask for the service when they call an API and explain when it is off.
+  optionalProvider: true,
   usesExtensionPoints: ["settings.section"],
   settings: definePluginSettings({
     apiProfiles: { optionKey: "apiProfiles", type: "custom", default: [DEFAULT_PROFILE] },

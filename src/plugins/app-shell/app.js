@@ -11,6 +11,14 @@ export default {
   start(ctx) {
     const doc = document;
     const t = ctx.t;
+    // Light or dark from the system; the Appearance plugin takes over while it is on.
+    const themeMedia = window.matchMedia?.("(prefers-color-scheme: dark)");
+    const followSystem = () => {
+      if (!doc.documentElement.dataset.themeOwner) doc.documentElement.dataset.theme = themeMedia?.matches ? "dark" : "light";
+    };
+    followSystem();
+    themeMedia?.addEventListener?.("change", followSystem);
+    ctx.onDispose(() => themeMedia?.removeEventListener?.("change", followSystem));
     const page = doc.body.dataset.page === "options" ? "options" : "workspace";
     const mount = doc.getElementById("chatclub-root") ?? doc.body.appendChild(h("div#chatclub-root"));
 

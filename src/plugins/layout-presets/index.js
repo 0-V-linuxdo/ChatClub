@@ -10,6 +10,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "layout",
   tags: ["workspace"],
+  shortcutActions: [{ id: "switchLayout", labelKey: "layout.shortcut.switch" }],
   enabledByDefault: true,
   startAt: "domReady",
   dependencies: ["Workspace", "TopbarAPI"],

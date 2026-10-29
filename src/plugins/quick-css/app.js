@@ -30,7 +30,7 @@ export default {
           meta.customCSSEnabled = on;
           area.disabled = !on;
         } });
-        container.append(ui.field({ label: t("quickcss.enabled"), desc: t("quickcss.enabled.desc"), control: toggle }), h("div", { style: { paddingTop: "16px" } }, area));
+        container.append(ui.card({ title: t("quickcss.card"), body: [ui.field({ label: t("quickcss.enabled"), desc: t("quickcss.enabled.desc"), control: toggle }), h("div", { style: { paddingTop: "4px" } }, area)] }));
       },
     });
   },

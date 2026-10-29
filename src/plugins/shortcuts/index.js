@@ -6,7 +6,9 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "keyboard",
   tags: ["navigation"],
-  required: true,
+  enabledByDefault: true,
+  // Plugins only register actions here; with Shortcuts off they keep working without key bindings.
+  optionalProvider: true,
   startAt: "init",
   provides: ["shortcut.action"],
   storageKeys: ["shortcutConfig"],

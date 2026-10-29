@@ -46,14 +46,23 @@ export default {
     };
 
     // Fixed table order first (first match wins, 06 §2.3), then actions from other plugins.
+    // Plugins also declare their actions statically (`shortcutActions`), so pages where a plugin does
+    // not run its app part, such as the options page, still list them for binding. Live contributions
+    // win; a declared-only entry has no `run` and is never dispatched.
+    const declaredEntries = () => ctx.host.order
+      .filter((name) => ctx.host.isPluginEnabled(name))
+      .flatMap((name) => (ctx.host.plugins[name].shortcutActions ?? []).map((a) => ({ ...a, pluginName: name })));
     const orderedEntries = () => {
-      const all = actions.sorted();
+      const live = actions.sorted();
+      const ids = new Set(live.map((e) => e.id));
+      const all = [...live, ...declaredEntries().filter((e) => !ids.has(e.id))];
       const rank = new Map(ACTION_IDS.map((id, i) => [id, i]));
       return all.map((e, i) => ({ e, r: rank.has(e.id) ? rank.get(e.id) : 1000 + i })).sort((a, b) => a.r - b.r).map((x) => x.e);
     };
 
     const find = (combo) => {
       for (const entry of orderedEntries()) {
+        if (typeof entry.run !== "function") continue;
         for (const pattern of bindingsFor(entry.id)) {
           const match = matchCombo(pattern, combo);
           if (match) return { entry, match };
@@ -128,7 +137,7 @@ export default {
       format: (combo) => formatCombo(combo, platform === "mac"),
       handle,
       /** All active combos, for content scripts that forward shortcuts from chat frames. */
-      activeCombos: () => orderedEntries().flatMap((e) => bindingsFor(e.id)),
+      activeCombos: () => orderedEntries().filter((e) => typeof e.run === "function").flatMap((e) => bindingsFor(e.id)),
       actionIds: () => orderedEntries().map((e) => e.id),
       entries: () => orderedEntries().map((e) => ({ id: e.id, labelKey: e.labelKey, icon: e.icon })),
       comboOf: (p, actionId) => {

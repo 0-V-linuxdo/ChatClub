@@ -119,7 +119,7 @@ export default {
       quickBusy = true;
       btn?.setAttribute("aria-busy", "true");
       try {
-        const live = await summary().collectAll({ userInitiated: true });
+        const live = (await summary()?.collectAll({ userInitiated: true })) ?? [];
         const ok = live.filter((s) => s.status === "ok" && s.messages?.some((m) => m.role === "assistant"));
         if (ok.length && fullText()?.enabled?.()) fullText().recordSources?.(ok, { mark: "fresh" })?.catch?.(() => {});
         let sources = ok;
@@ -322,7 +322,7 @@ export default {
     const renderMain = (el) => {
       const b = currentBatch();
       if (!b) {
-        el.append(h("div.cc-wv-empty", icon(iconName(), { size: 32 }), h("strong", t("pocket.empty.title")), h("span", t("pocket.empty.desc"))));
+        el.append(h("div.cc-wv-empty", icon(iconName(), { size: 32 }), h("strong", t("pocket.empty.title")), h("span", t(ctx.services.get("summary") ? "pocket.empty.desc" : "pocket.empty.descNoSummary"))));
         return;
       }
       if (opsOpen) el.append(h("div.cc-pocket-ops", slider("pocket.cardWidth", "width", 360, 760), slider("pocket.cardHeight", "height", 420, 820)));
@@ -382,7 +382,7 @@ export default {
       onClick: async (item) => {
         let sources = sourcesFromFrames(await fullText()?.framesFor?.(item.workspaceId));
         if (!sources.length && item.workspaceId === workspace.workspaceId()) {
-          const live = await summary().collectAll({ userInitiated: true });
+          const live = (await summary()?.collectAll({ userInitiated: true })) ?? [];
           sources = live.filter((s) => s.status === "ok");
         }
         await saveSources(sources, { noneKey: "pocket.sidebar.none" });

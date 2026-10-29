@@ -13,6 +13,7 @@ export default {
   start(ctx) {
     const root = document.documentElement;
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    root.dataset.themeOwner = "appearance";
     const apply = () => {
       const mode = ctx.settings.themeMode;
       const dark = mode === "dark" || (mode !== "light" && !!media?.matches);
@@ -31,7 +32,9 @@ export default {
     ctx.onDispose(() => media?.removeEventListener?.("change", apply));
     ctx.onDispose(ctx.plugin.settings.use(["themeMode", "primaryColor"], apply));
     ctx.onDispose(() => {
-      delete root.dataset.theme;
+      // Hand the theme back to AppShell, which follows the system while Appearance is off.
+      delete root.dataset.themeOwner;
+      root.dataset.theme = media?.matches ? "dark" : "light";
       for (const prop of ["--primary", "--primary-2", "--on-primary"]) root.style.removeProperty(prop);
     });
 

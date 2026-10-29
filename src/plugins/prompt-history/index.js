@@ -6,6 +6,7 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "history",
   tags: ["composer", "data"],
+  shortcutActions: [{ id: "openHistoryPanel", labelKey: "history.shortcut" }],
   enabledByDefault: true,
   startAt: "domReady",
   dependencies: ["Composer", "Workspace"],

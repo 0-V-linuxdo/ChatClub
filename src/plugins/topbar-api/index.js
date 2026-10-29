@@ -11,6 +11,7 @@ export default definePlugin({
   tags: ["workspace", "appearance"],
   required: true,
   startAt: "domReady",
+  shortcutActions: [{ id: "toggleTopbar", labelKey: "topbar.visibility.auto" }, { id: "openSettingsMenu", labelKey: "topbar.settingsJumpMenu" }],
   dependencies: ["AppShell"],
   provides: ["topbar.item", "topbar.menu"],
   managedStyle: style,

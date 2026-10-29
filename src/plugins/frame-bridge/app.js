@@ -118,6 +118,7 @@ export default {
         ctx.events.emit("frameUnloaded", { frameKey, appId: rec.appId, url: rec.url });
       },
       isRegistered: (frameKey) => !!expected.get(frameKey)?.registered,
+      frameKeyOf: (iframe) => [...expected].find(([, rec]) => rec.iframe === iframe)?.[0] ?? null,
       hasCapability: (frameKey, cap) => !!expected.get(frameKey)?.capabilities?.has(cap),
       lastUrl: (frameKey) => expected.get(frameKey)?.url ?? "",
       appIdOf: (frameKey) => expected.get(frameKey)?.appId ?? null,

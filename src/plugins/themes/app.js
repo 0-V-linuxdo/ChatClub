@@ -142,7 +142,7 @@ export default {
           clear(list);
           const all = themes();
           if (!all.length) {
-            list.append(h("div", { style: { padding: "12px 0" } }, ui.emptyState(t("themes.empty"))));
+            list.append(ui.emptyState(t("themes.empty")));
             return;
           }
           // Theme cards share the Void++ card layout with plugin cards.
@@ -170,7 +170,7 @@ export default {
               h("div.sep"),
               h("div.footer", h("span.hint", icon(theme.kind === "local" ? "folder" : "globe", { size: 12 })), h("span.authors", theme.author || (theme.kind === "local" ? t("themes.local") : " ")))));
           }
-          list.append(h("div", { style: { paddingTop: "16px" } }, grid));
+          list.append(grid);
         };
         const settingsStore = meta;
         const topRows = [
@@ -179,7 +179,7 @@ export default {
           addRow,
           ui.field({ label: t("themes.addLocal"), control: ui.button({ label: t("themes.addLocal"), icon: "plus", onClick: () => editLocal(null) }) }),
         ];
-        container.append(...topRows, list);
+        container.append(ui.card({ title: t("themes.card"), body: topRows }), ui.card({ title: t("themes.installed"), body: list }));
         renderList();
         gctx.onDispose(ctx.host.plugins.Settings.settings.use(["themes"], renderList));
       },

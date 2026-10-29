@@ -11,7 +11,8 @@ export default {
   start(ctx) {
     const workspace = ctx.services.get("workspace");
     if (!workspace) return;
-    const api = ctx.services.get("apiProfiles");
+    // ApiProfiles is optional: without it titles come from the prompt.
+    const api = () => ctx.services.get("apiProfiles");
     const apps = ctx.services.get("apps");
     const transport = ctx.services.get("frames.transport");
     const frames = ctx.services.get("frames");
@@ -32,14 +33,14 @@ export default {
 
     /** An API is "available" when the chosen provider is configured beyond the empty default. */
     const apiAvailable = () => {
-      const { profile } = api?.resolve("topicTitle") ?? {};
+      const { profile } = api()?.resolve("topicTitle") ?? {};
       return !!profile && (!!profile.apiKey || profile.endpoint !== DEFAULT_ENDPOINT);
     };
     const generate = async (text) => {
       const fallback = titleFromText(text);
       if (!apiAvailable()) return fallback;
       try {
-        const { text: answer } = await api.chat("topicTitle", { messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: String(text).slice(0, 4000) }] });
+        const { text: answer } = await api().chat("topicTitle", { messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: String(text).slice(0, 4000) }] });
         return titleFromText(answer) || fallback;
       } catch (error) {
         ctx.logger.warn("Generating a topic title failed; using the prompt:", error?.message || error);

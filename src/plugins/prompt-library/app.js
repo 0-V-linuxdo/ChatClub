@@ -99,8 +99,8 @@ export default {
       const draw = () => {
         clear(container);
         if (!items.length) {
-          container.append(h("div.cc-empty", { style: { padding: "32px", textAlign: "center", color: "var(--muted)" } },
-            h("p", t("library.empty")), ui.button({ label: t("library.add"), icon: "plus", variant: "primary", onClick: () => openEditor(null) })));
+          // Both hosts (library window, settings section) already show an Add button above the table.
+          container.append(ui.emptyState(t("library.empty")));
           return;
         }
         container.append(settingsTable({
@@ -160,7 +160,7 @@ export default {
       group: "prompts",
       render(container, sctx) {
         const box = h("div");
-        container.append(h("div.cc-section-toolbar", h("span.desc"), ui.button({ label: t("library.add"), icon: "plus", variant: "primary", onClick: () => openEditor(null) })), box);
+        container.append(ui.card({ title: t("library.title"), body: h("div", h("div.cc-section-toolbar", h("span.desc", t("library.cardDesc")), ui.button({ label: t("library.add"), icon: "plus", variant: "primary", onClick: () => openEditor(null) })), box) }));
         sctx.onDispose(renderTable(box));
       },
     });

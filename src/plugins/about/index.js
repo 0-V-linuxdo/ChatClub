@@ -1,9 +1,10 @@
 import { definePlugin } from "../../kernel/define.js";
+import style from "./style.js";
 
 /** Official links (06 §13). 2.0 fills in its own; an empty url shows "to be announced". */
 export const LINKS = [
-  { id: "telegram", titleKey: "about.telegram", descKey: "about.telegram.desc", url: "" },
-  { id: "github", titleKey: "about.github", descKey: "about.github.desc", url: "" },
+  { id: "telegram", titleKey: "about.telegram", descKey: "about.telegram.desc", url: "https://t.me/chatclub_extension" },
+  { id: "github", titleKey: "about.github", descKey: "about.github.desc", url: "https://github.com/0-V-linuxdo/ChatClub" },
 ];
 
 export default definePlugin({
@@ -15,6 +16,7 @@ export default definePlugin({
   enabledByDefault: true,
   startAt: "init",
   usesExtensionPoints: ["settings.section"],
+  managedStyle: style,
   strings: {
     zh: {
       "plugin.About.description": "关于：版本号和官方链接。",

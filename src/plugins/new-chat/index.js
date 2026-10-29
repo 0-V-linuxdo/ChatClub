@@ -11,6 +11,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["Workspace", "Composer", "FrameBridge"],
   usesExtensionPoints: ["tabGroup.button", "topbar.item", "shortcut.action"],
+  shortcutActions: [{ id: "newChat", labelKey: "newChat.shortcut.one" }, { id: "newChatAll", labelKey: "newChat.shortcut.all" }],
   strings: {
     zh: {
       "plugin.NewChat.description": "新建对话：单列或全部列回到首页开始新会话；工作区里有对话时先把它留作记忆，再换新的工作区 id。",

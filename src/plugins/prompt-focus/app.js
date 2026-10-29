@@ -2,6 +2,8 @@
 
 const LEASE_MS = 180000;
 const USER_CLICK_WINDOW_MS = 400;
+// The frame's click report travels through the background, so wait a little before taking focus back.
+const STEAL_CHECK_MS = 300;
 
 export default {
   start(ctx) {
@@ -20,6 +22,20 @@ export default {
       leaseUntil = Date.now() + LEASE_MS;
       for (const key of frameKeys) setFrameLease(key, leaseUntil);
     };
+    const registeredFrames = () => transport.list().filter((f) => f.registered).map((f) => f.frameKey);
+    // Any focus on the composer (load, click, shortcut) takes the lease for every loaded frame;
+    // frames still loading get it when they register.
+    // Typing renews it, so a long draft never outlives the lease.
+    let lastGrant = 0;
+    const onComposerFocus = () => {
+      if (active() && Date.now() - lastGrant < 5000) return;
+      lastGrant = Date.now();
+      grant(registeredFrames());
+    };
+    for (const type of ["focusin", "keydown", "pointerdown"]) composer.element.addEventListener(type, onComposerFocus);
+    ctx.onDispose(() => {
+      for (const type of ["focusin", "keydown", "pointerdown"]) composer.element.removeEventListener(type, onComposerFocus);
+    });
     const yieldLease = () => {
       if (!leaseUntil) return;
       leaseUntil = 0;
@@ -52,18 +68,29 @@ export default {
       if (active()) composer.focus({ summonFloat: false });
     });
     // Focus moved into an iframe without a user click (e.g. the site focused its window).
+    // A chat that is still loading has no content script to report a click or refuse focus, so focus
+    // it takes is handed back at once; a loaded chat gets a moment for the user's click to arrive.
+    const frames = ctx.services.get("frames");
     const onBlur = () => {
       if (!active()) return;
-      setTimeout(() => {
+      const check = () => {
         if (!active() || Date.now() - lastFrameClick < USER_CLICK_WINDOW_MS) return;
         if (document.activeElement?.tagName === "IFRAME" && document.hasFocus()) composer.focus({ summonFloat: false });
-      }, 120);
+      };
+      setTimeout(() => {
+        const el = document.activeElement;
+        const key = el?.tagName === "IFRAME" ? frames?.frameKeyOf?.(el) : null;
+        if (key && !frames.isRegistered(key)) check();
+        else setTimeout(check, STEAL_CHECK_MS);
+      }, 0);
     };
     window.addEventListener("blur", onBlur);
     ctx.onDispose(() => window.removeEventListener("blur", onBlur));
-    // Typing or clicking elsewhere on the page ends the lease too.
+    // Clicking into another field on the page ends the lease too. Buttons (new chat, reload, menus)
+    // keep it, so a chat they load cannot take the caret from the composer.
     const onPagePointer = (event) => {
-      if (event.isTrusted && !event.target.closest?.(".cc-composer")) yieldLease();
+      if (!event.isTrusted || event.target.closest?.(".cc-composer")) return;
+      if (event.target.closest?.("input, textarea, select, [contenteditable=''], [contenteditable='true']")) yieldLease();
     };
     document.addEventListener("pointerdown", onPagePointer, true);
     ctx.onDispose(() => document.removeEventListener("pointerdown", onPagePointer, true));
@@ -73,9 +100,19 @@ export default {
       labelKey: "promptFocus.shortcut",
       run: () => {
         composer.focus();
-        leaseUntil = Date.now() + LEASE_MS;
+        grant(registeredFrames());
       },
     });
+
+    // The page opens with the caret in the composer, unless the user is already somewhere else
+    // or the auto-hidden top bar is tucked away (focusing would pull it out).
+    const shellEl = ctx.services.get("shell")?.shell;
+    setTimeout(() => {
+      const elsewhere = document.activeElement && document.activeElement !== document.body;
+      const tucked = shellEl?.dataset.topbar === "auto" && shellEl.dataset.topbarShown !== "true";
+      if (elsewhere || tucked) return;
+      composer.focus({ summonFloat: false });
+    }, 0);
 
     ctx.services.provide("promptFocus", { active, grant, yield: yieldLease });
   },

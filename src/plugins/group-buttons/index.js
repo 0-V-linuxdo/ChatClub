@@ -11,6 +11,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["AppShell", "Workspace"],
   usesExtensionPoints: ["tabGroup.button", "shortcut.action"],
+  shortcutActions: [{ id: "refreshPage", labelKey: "workspace.shortcut.refreshPage" }, { id: "reloadChat", labelKey: "workspace.shortcut.reloadChat" }],
   strings,
   app: () => import("./app.js"),
 });

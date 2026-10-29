@@ -2,6 +2,7 @@ export default {
   zh: {
     "plugin.Themes.description": "在线或本地 CSS 主题，叠加在外观设置之上。",
     "themes.card": "主题",
+    "themes.installed": "已安装的主题",
     "themes.enabled": "启用主题",
     "themes.online": "在线主题",
     "themes.online.desc": "关闭后只停用在线主题，本地主题不受影响。",
@@ -30,6 +31,7 @@ export default {
   en: {
     "plugin.Themes.description": "Online or local CSS themes layered on top of Appearance.",
     "themes.card": "Themes",
+    "themes.installed": "Installed themes",
     "themes.enabled": "Enable themes",
     "themes.online": "Online themes",
     "themes.online.desc": "Turning this off disables online themes only; local themes keep working.",

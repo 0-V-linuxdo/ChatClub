@@ -44,12 +44,25 @@ if (cc && !cc.has("base")) {
     else if (data.type === "closeRequested") cc.emit("closeRequested", {});
     else if (data.type === "focusBlocked") cc.emit("focusBlocked", {});
   });
+  // Focus calls from ChatClub's content scripts (this isolated world) are announced to the preload,
+  // which otherwise undoes focus that lands during the caret lease.
+  for (const proto of [HTMLElement.prototype, SVGElement.prototype]) {
+    const original = proto.focus;
+    proto.focus = function focus(...args) {
+      window.dispatchEvent(new CustomEvent("chatclub:ownFocus"));
+      return original.apply(this, args);
+    };
+  }
   cc.setLease = (kind, until) => window.dispatchEvent(new CustomEvent("chatclub:lease", { detail: JSON.stringify({ kind, until }) }));
 
   // Tell the page when the user clicks inside the chat (focus rules, auto-hide top bar).
   window.addEventListener("pointerdown", (event) => {
     if (event.isTrusted) cc.emit("userClick", {});
   }, true);
+  // Tell the page when the pointer moves into the chat: the page itself gets no event then (auto-hide top bar).
+  document.documentElement.addEventListener("pointerenter", (event) => {
+    if (event.isTrusted) cc.emit("pointerEnter", {});
+  });
 
   // Forward modifier shortcuts so they work while focus is inside the chat iframe.
   window.addEventListener("keydown", (event) => {

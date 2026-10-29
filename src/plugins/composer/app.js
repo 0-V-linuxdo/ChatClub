@@ -242,7 +242,11 @@ export default {
     /** Puts the caret in the composer (summoning it to the center when that is the preference). */
     const focusInput = ({ summonFloat = true } = {}) => {
       if (summonFloat) ctx.services.get("composerFloat")?.summon?.();
-      if (!floating && topbarHidden()) return false;
+      if (!floating && topbarHidden()) {
+        const autoHide = ctx.services.get("topbarAutoHide");
+        if (!autoHide?.reveal) return false;
+        autoHide.reveal();
+      }
       textarea.focus({ preventScroll: true });
       return true;
     };

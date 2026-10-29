@@ -3,6 +3,7 @@
 import { h, clear, icon } from "../../lib/dom.js";
 import * as ui from "../../lib/ui.js";
 import { renderMarkdown } from "../../lib/markdown.js";
+import { apiService } from "../../lib/prompt-templates.js";
 
 const RECT_KEY = "chatclub.summaryPanelSize.v4";
 
@@ -21,7 +22,7 @@ export function buildSummaryContext(sources, question = "") {
 export function createSummaryPanel(ctx, { collector, templates, activeTemplate, selection }) {
   const t = ctx.t;
   const shellUi = ctx.services.get("ui");
-  const api = ctx.services.get("apiProfiles");
+  const api = () => apiService(ctx);
   const workspace = ctx.services.get("workspace");
   const pocket = () => ctx.services.get("pocket");
   const fullText = () => ctx.services.get("fullText");
@@ -134,7 +135,7 @@ export function createSummaryPanel(ctx, { collector, templates, activeTemplate, 
       }
       return;
     }
-    const model = api.resolve(selection()).model;
+    const model = api().resolve(selection()).model;
     if (state.generating) {
       box.append(statusCard({ spinner: true, title: t("summary.generating", { model }), desc: t("summary.generating.desc", { model }) }));
       return;
@@ -232,17 +233,17 @@ export function createSummaryPanel(ctx, { collector, templates, activeTemplate, 
     state.view = "summary";
     state.generating = true;
     render();
-    const { profile, model } = api.resolve(selection());
+    const { profile, model } = api().resolve(selection());
     try {
       if (!profile?.apiKey && /api\.openai\.com/.test(profile?.endpoint ?? "")) throw new Error(t("summary.noKey"));
       const template = activeTemplate();
-      const { text } = await api.chat(selection(), { messages: [{ role: "system", content: template.prompt }, { role: "user", content: buildSummaryContext(state.sources, question) }] });
+      const { text } = await api().chat(selection(), { messages: [{ role: "system", content: template.prompt }, { role: "user", content: buildSummaryContext(state.sources, question) }] });
       if (!String(text || "").trim()) throw new Error(t("summary.emptyAnswer"));
       state.summary = { text: String(text).trim(), model };
     } catch (error) {
       const message = t("summary.failed", { model, reason: String(error?.message || error) });
       state.summary = { error: message };
-      ctx.reportAnomaly?.({ feature: "summary", operation: "generate", message });
+      if (error?.code !== "API_OFF") ctx.reportAnomaly?.({ feature: "summary", operation: "generate", message });
     } finally {
       state.generating = false;
       render();

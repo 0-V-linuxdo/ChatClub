@@ -10,6 +10,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["Composer", "FrameBridge", "Workspace"],
   usesExtensionPoints: ["frame.identityParams", "shortcut.action"],
+  shortcutActions: [{ id: "focusInput", labelKey: "promptFocus.shortcut" }],
   strings: {
     zh: {
       "plugin.PromptFocus.description": "输入框光标保持：发送后和 iframe 加载时不让聊天站点抢走焦点；用户点进 iframe 时立即让出；focusInput 快捷键随时把光标放回输入框。",

@@ -21,10 +21,12 @@ export default definePlugin({
   authors: ["ChatClub"],
   icon: "summary",
   tags: ["capture"],
+  shortcutActions: [{ id: "openSummaryPanel", labelKey: "summary.shortcut" }],
   enabledByDefault: true,
   requiresReload: true,
   startAt: "domReady",
-  dependencies: ["FrameBridge", "ApiProfiles", "Sites", "Workspace"],
+  dependencies: ["FrameBridge", "Sites", "Workspace"],
+  softDependencies: ["ApiProfiles"],
   storageKeys: ["chatclub.summaryPanelSize.v4"],
   usesExtensionPoints: ["topbar.item", "shortcut.action", "settings.section", "apiConsumer", "panel", "fullscreen.target"],
   settings: definePluginSettings({

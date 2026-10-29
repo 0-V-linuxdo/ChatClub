@@ -345,3 +345,27 @@ test("onSettingsChange fires for own keys", async () => {
   plugin.settings.store.size = 4;
   assert.deepEqual(changes, ["plugins.Watcher.size"]);
 });
+
+test("soft dependencies and optional providers start first but are never locked on", async () => {
+  const order = [];
+  const mk = (def) => definePlugin({ description: "d", authors: [], enabledByDefault: true, app: { start: () => order.push(def.name) }, ...def });
+  const { host } = await makeHost({ plugins: [
+    mk({ name: "User", softDependencies: ["Api"], usesExtensionPoints: ["keys.action"], contributes: { "keys.action": { id: "x" } } }),
+    mk({ name: "Api" }),
+    mk({ name: "Keys", provides: ["keys.action"], optionalProvider: true }),
+    mk({ name: "Hard", provides: ["hard.point"] }),
+    mk({ name: "HardUser", usesExtensionPoints: ["hard.point"] }),
+  ] });
+  await host.startPhase("init");
+  assert.ok(order.indexOf("Api") < order.indexOf("User"));
+  assert.ok(order.indexOf("Keys") < order.indexOf("User"));
+  assert.equal(host.plugins.Api.isDependency, false);
+  assert.equal(host.plugins.Keys.isDependency, false);
+  assert.equal(host.plugins.Hard.isDependency, true);
+  assert.equal((await host.togglePlugin("Api")).toggled, true);
+  assert.equal((await host.togglePlugin("Keys")).toggled, true);
+  assert.equal(host.isStarted("User"), true);
+  // The contribution is kept and seen again when the provider comes back.
+  await host.togglePlugin("Keys");
+  assert.deepEqual(host.extensionPoints.get("keys.action").sorted().map((e) => e.id), ["x"]);
+});

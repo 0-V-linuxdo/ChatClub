@@ -113,7 +113,7 @@ if (cc && !cc.has("message-navigator")) {
 .tick i { display: block; width: 18px; height: 3px; border-radius: 2px; background: rgba(120,120,128,.55); transition: width .15s, background .15s; }
 .tick.current i { width: 34px; background: var(--primary); }
 .menu { position: absolute; right: 44px; top: 50%; transform: translateY(-50%); width: min(18rem, calc(100vw - 68px)); max-height: min(72vh, 34rem); overflow-y: auto; border-radius: 8px; padding: 6px; box-sizing: border-box;
-  background: rgba(255,255,255,.78); color: #111; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 8px 30px rgba(0,0,0,.18); border: 1px solid rgba(0,0,0,.08); display: none; }
+  background: rgba(255,255,255,.96); color: #111; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: 0 8px 30px rgba(0,0,0,.18); border: 1px solid rgba(0,0,0,.08); display: none; }
 .menu.open { display: block; }
 .item { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 8px; border-radius: 6px; cursor: pointer; border: 0; width: 100%; background: transparent; color: inherit; font: inherit; text-align: left; }
 .item:hover, .item.current { background: rgba(127,127,127,.16); }
@@ -121,7 +121,7 @@ if (cc && !cc.has("message-navigator")) {
 .badge.user { background: var(--primary); }
 .badge.thinking { background: #a855f7; }
 .text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (prefers-color-scheme: dark) { .menu { background: rgba(32,33,35,.78); color: #eee; border-color: rgba(255,255,255,.1); } }
+@media (prefers-color-scheme: dark) { .menu { background: rgba(32,33,35,.96); color: #eee; border-color: rgba(255,255,255,.1); } }
 `;
   const ensureUi = () => {
     if (host?.isConnected) return;

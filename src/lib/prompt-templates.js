@@ -89,6 +89,32 @@ export function renderTemplateCard(container, opts) {
 }
 
 /** "Profile · model" choices for a feature's API select. */
+/**
+ * The ApiProfiles service, or a stand-in while that plugin is off: no providers, and calls fail
+ * with a message that says how to turn it back on.
+ */
+export function apiService(ctx) {
+  return ctx.services.get("apiProfiles") ?? {
+    off: true,
+    list: () => [],
+    modelOptions: () => [],
+    resolve: () => ({ profile: null, model: "" }),
+    takeLegacyAssignment: () => null,
+    chat: async () => {
+      throw Object.assign(new Error(ctx.t("templates.apiOff")), { code: "API_OFF" });
+    },
+  };
+}
+
+/** Settings row shown instead of the API picker while ApiProfiles is off. */
+export function apiOffNotice(ctx, sctx) {
+  return h("div.cc-section-toolbar", h("span.desc", ctx.t("templates.apiOff")),
+    ui.button({ label: ctx.t("templates.enableApi"), variant: "primary", onClick: async () => {
+      await ctx.host.togglePlugin("ApiProfiles");
+      sctx.rerender?.();
+    } }));
+}
+
 export function apiChoices(api) {
   const out = [];
   for (const p of api.list()) {
@@ -119,6 +145,8 @@ export const templateStrings = {
     "templates.deleteTitle": "删除模板“{title}”",
     "templates.api": "API 配置",
     "templates.manageApi": "管理 API 服务商",
+    "templates.apiOff": "「API 服务商」插件已关闭，开启后才能调用 AI。",
+    "templates.enableApi": "开启 API 服务商",
   },
   en: {
     "templates.card": "Prompt templates",
@@ -140,5 +168,7 @@ export const templateStrings = {
     "templates.deleteTitle": "Delete template “{title}”",
     "templates.api": "API settings",
     "templates.manageApi": "Manage API providers",
+    "templates.apiOff": "The API providers plugin is off. Turn it on to use AI.",
+    "templates.enableApi": "Turn on API providers",
   },
 };

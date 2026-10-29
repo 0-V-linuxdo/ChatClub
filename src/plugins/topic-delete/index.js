@@ -12,6 +12,7 @@ export default definePlugin({
   startAt: "domReady",
   dependencies: ["FrameBridge", "Sites", "Workspace"],
   usesExtensionPoints: ["tabGroup.button", "topbar.item", "shortcut.action", "settings.section"],
+  shortcutActions: [{ id: "deleteThread", labelKey: "del.shortcut" }],
   settings: definePluginSettings({
     topicDeleteSiteConfigs: { optionKey: "topicDeleteSiteConfigs", type: "custom", default: [] },
   }),

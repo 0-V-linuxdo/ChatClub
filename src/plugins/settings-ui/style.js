@@ -19,7 +19,7 @@ export default String.raw`
 .cc-settings-head .titles { flex: 1; min-width: 0; }
 .cc-settings-head h2 { margin: 0; font-size: var(--fs-title); font-weight: var(--fw-bold); }
 .cc-settings-head p { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-small); }
-.cc-settings-body { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 20px 24px 24px; }
+.cc-settings-body { --settings-body-pad-top: 20px; flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: var(--settings-body-pad-top) 24px 24px; }
 /* Inner tab strip: underlined text tabs, as on the Void++ plugin page. */
 .cc-subtabs { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
 .cc-subtabs button { position: relative; min-height: 32px; padding: 0 10px; border: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); font-weight: var(--fw-medium); }
@@ -33,6 +33,13 @@ export default String.raw`
 .cc-settings .cc-card + .cc-card { margin-top: 16px; }
 .cc-settings .cc-card-title { padding: 10px 12px; border-bottom: 1px solid var(--settings-card-line); font-size: 14px; font-weight: var(--fw-medium); }
 .cc-settings .cc-card-body { padding: 0 12px; }
+/* Every card body keeps 12px from its edges; field rows at the very top or bottom drop their own
+   padding on that side so the gap stays 12px instead of doubling. */
+.cc-settings .cc-card-body { padding-block: 12px; }
+.cc-settings .cc-card-body > .cc-field:first-child, .cc-settings .cc-card-body > :first-child > .cc-field:first-child { padding-top: 0; }
+.cc-settings .cc-card-body > .cc-field:last-child, .cc-settings .cc-card-body > :last-child > .cc-field:last-child { padding-bottom: 0; }
+.cc-settings .cc-card-body > :first-child, .cc-settings .cc-card-body > :first-child > :first-child { margin-top: 0; }
+.cc-settings .cc-card-body > :last-child, .cc-settings .cc-card-body > :last-child > :last-child { margin-bottom: 0; }
 .cc-settings .cc-field { padding: 12px 0; border-bottom-color: var(--settings-card-line); }
 .cc-settings .cc-field-name .label { font-size: 14px; font-weight: var(--fw-medium); }
 .cc-settings .cc-field-name .desc { font-size: var(--fs-small); line-height: 1.5; }

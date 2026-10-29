@@ -18,6 +18,7 @@ export default definePlugin({
   dependencies: ["AppShell", "Apps", "FrameBridge"],
   provides: ["tabGroup.button", "tab.contextMenu", "workspace.contentProvider", "fullscreen.target"],
   usesExtensionPoints: ["appearance.field", "shortcut.action", "appearance.group"],
+  shortcutActions: [{ id: "closeChat", labelKey: "workspace.shortcut.closeChat" }, { id: "enterFullscreen", labelKey: "workspace.shortcut.enterFullscreen" }, { id: "switchPlatformTab", labelKey: "workspace.shortcut.switchPlatformTab" }],
   managedStyle: style,
   strings,
   settings: definePluginSettings({

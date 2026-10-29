@@ -21,7 +21,8 @@ export default {
     const workspace = ctx.services.get("workspace");
     const transport = ctx.services.get("frames.transport");
     const frames = ctx.services.get("frames");
-    if (!workspace || !transport) return;
+    // Without a workspace (the options page) only the settings section is useful; the rest stays off.
+    const live = !!(workspace && transport);
     ctx.styles.register("message-navigator", STYLE);
 
     // ------------------------------------------------------------ configs
@@ -96,9 +97,9 @@ export default {
       }
       apply(tab, true).catch(() => {});
     };
-    ctx.events.on("frameRegistered", reapply);
-    ctx.events.on("Workspace:tabLoaded", reapply);
-    ctx.events.on("Workspace:changed", () => {
+    if (live) ctx.events.on("frameRegistered", reapply);
+    if (live) ctx.events.on("Workspace:tabLoaded", reapply);
+    if (live) ctx.events.on("Workspace:changed", () => {
       const live = new Set(workspace.groups().flatMap((g) => g.tabs.map((tb) => tb.frameKey)));
       for (const key of [...on]) if (!live.has(key)) on.delete(key);
     });
@@ -107,7 +108,7 @@ export default {
       for (const frameKey of on) reapply({ frameKey });
     }));
 
-    ctx.contribute("tabGroup.button", {
+    if (live) ctx.contribute("tabGroup.button", {
       id: "messageNavigator",
       icon: "navigator",
       labelKey: "nav.group",
@@ -120,7 +121,7 @@ export default {
       disabled: (g) => !g.tab?.frameKey,
       onClick: (g) => toggle(g.contextTab ?? g.tab),
     });
-    ctx.contribute("shortcut.action", {
+    if (live) ctx.contribute("shortcut.action", {
       id: "toggleMessageNavigator",
       labelKey: "nav.shortcut",
       run: (_match, source) => {
@@ -134,7 +135,7 @@ export default {
       },
     });
 
-    ctx.services.provide("messageNavigator", {
+    if (live) ctx.services.provide("messageNavigator", {
       /** Whether an app has an enabled navigator config (TopicTitle asks before reading the opening). */
       supports: (appId) => configs().some((c) => c.enabled !== false && c.appIds?.includes(appId)),
       isOn: (frameKey) => on.has(frameKey),

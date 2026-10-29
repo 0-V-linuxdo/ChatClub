@@ -11,6 +11,7 @@ export default definePlugin({
   required: true,
   startAt: "domReady",
   dependencies: ["SettingsUI"],
+  provides: ["plugins.toolbar", "plugins.cardAction"],
   usesExtensionPoints: ["settings.section"],
   managedStyle: style,
   strings,
